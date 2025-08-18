@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  infrastructure-localstack:
+    image: localstack/localstack:1.1
+    ports:
+      - "4566:4566"
+      - "4510:4510"
+    environment:
+      AWS_CBOR_DISABLE: "true"
+      PERSISTENCE: 1
+    volumes:
+      - localstack:/var/lib/localstack
+
+  http-logging-service:
+    image: ealen/echo-server
+    ports:
+      - 8080:80
+
+volumes:
+  localstack:
