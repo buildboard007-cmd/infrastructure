@@ -1,0 +1,38 @@
+*.js
+!setEnvVars.js
+!jest.config.js
+node_modules
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+cdk.local.out
+lib/resources/specs/spec.*.yaml
+
+# sonar
+.scannerwork
+
+# SAM
+.aws-sam
+
+# other
+.DS_STORE
+
+# test reports
+src/cov.out
+src/report.json
+
+# sqs testing
+results
+
+# scripts
+scripts/cache
+scripts/**/results.json
+
+*.iml
+.vscode/
+.idea/
+LOG_FILE_IS_UNDEFINED
+
+# go
+**/*/__debug*
