@@ -26,7 +26,7 @@ export class MainStack extends cdk.Stack {
 
         new cdk.CfnOutput(this, 'CorsLambdaArn', {
             value: subStack.corsLambdaArn,
-            exportName: `${props.stageEnvironment}-api-gateway-cors-lambda-arn`,
+            exportName: `api-gateway-cors-lambda-arn`,
             description: 'ARN of the CORS Lambda function for API Gateway'
         });
     }

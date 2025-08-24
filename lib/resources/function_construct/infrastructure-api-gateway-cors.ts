@@ -6,10 +6,11 @@ import {Duration} from "aws-cdk-lib";
 import {GetRetentionDays} from "../../utils/lambda-utils";
 import {ssmPolicy} from "../../utils/policy-utils";
 import {GetAccountId} from "../../utils/account-utils";
+import {getBaseLambdaEnvironment} from "../../utils/lambda-environment";
 
 export class InfrastructureApiGatewayCors extends Construct {
 
-    private readonly _func: GoFunction;
+    private readonly func: GoFunction;
 
     constructor(scope: Construct, id: string, props: FuncProps) {
         super(scope, id);
@@ -17,28 +18,25 @@ export class InfrastructureApiGatewayCors extends Construct {
         const account = GetAccountId(props.stageEnvironment);
         const functionName = `${props?.options.githubRepo}-api-gateway-cors`
 
-        this._func = new GoFunction(this, id, {
+        this.func = new GoFunction(this, id, {
             entry: path.join(__dirname, `../../../src/infrastructure-api-gateway-cors`),
             functionName: functionName,
             timeout: Duration.seconds(10),
-            environment: {
-                LOG_LEVEL: "error",
-                IS_LOCAL: "false",
-            },
+            environment: getBaseLambdaEnvironment(props.stageEnvironment),
             logRetention: GetRetentionDays(props),
             bundling: {
                 goBuildFlags: ['-ldflags "-s -w"'],
             },
         });
 
-        this._func.addToRolePolicy(ssmPolicy(account));
+        this.func.addToRolePolicy(ssmPolicy());
     }
 
     get function(): GoFunction {
-        return this._func
+        return this.func
     }
 
     get functionArn(): string {
-        return this._func.functionArn;
+        return this.func.functionArn;
     }
 }

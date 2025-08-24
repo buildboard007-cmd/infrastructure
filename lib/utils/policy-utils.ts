@@ -1,14 +1,16 @@
 import * as iam from "aws-cdk-lib/aws-iam";
 import {Effect, PolicyStatement} from "aws-cdk-lib/aws-iam";
-
-import {ITable} from "aws-cdk-lib/aws-dynamodb";
 import {Aws} from "aws-cdk-lib";
 
-export const ssmPolicy = (accountId: string) => {
+/**
+ * SSM Parameter Store access policy
+ * Updated to follow alerts-functions pattern with flexible region and environment support
+ */
+export const ssmPolicy = () => {
     return new iam.PolicyStatement({
         resources: [
-            `arn:aws:ssm:us-west-2:${accountId}:parameter/infrastructure/*`,
-            "*",
+            `arn:aws:ssm:us-west-2:${Aws.ACCOUNT_ID}:parameter/alerts-functions/*`,
+            "*"
         ],
         effect: iam.Effect.ALLOW,
         actions: [
@@ -19,78 +21,21 @@ export const ssmPolicy = (accountId: string) => {
     });
 }
 
-
-export const dynamodbPolicy = (table: ITable): PolicyStatement => {
-    const tableArn = table.tableArn!;
-    const tableIndexArn = `${tableArn}/index/*`
-    const tableStreamArn = table.tableArn!;
-
+/**
+ * RDS access policy for Lambda functions that need database connectivity
+ * Used when Lambda functions are deployed in same VPC as RDS
+ */
+export const rdsPolicy = (accountId: string): PolicyStatement => {
     return new iam.PolicyStatement({
         resources: [
-            tableArn,
-            tableIndexArn,
-            tableStreamArn,
+            `arn:aws:rds:*:${accountId}:db:*`,
+            `arn:aws:rds:*:${accountId}:cluster:*`,
         ],
-        actions: [
-            "dynamodb:BatchGetItem",
-            "dynamodb:BatchWriteItem",
-            "dynamodb:ConditionCheckItem",
-            "dynamodb:DeleteItem",
-            "dynamodb:DescribeTable",
-            "dynamodb:GetItem",
-            "dynamodb:GetRecords",
-            "dynamodb:GetShardIterator",
-            "dynamodb:PutItem",
-            "dynamodb:Query",
-            "dynamodb:Scan",
-            "dynamodb:UpdateItem",
-            "dynamodb:ListStreams",
-            "dynamodb:DescribeStream",
-            "dynamodb:GetRecords",
-            "dynamodb:GetShardIterator"
-        ],
-        effect: Effect.ALLOW,
-    });
-};
-
-export const cloudWatchPolicy = () => {
-    return new iam.PolicyStatement({
-        resources: ["*"],
         effect: Effect.ALLOW,
         actions: [
-            "logs:CreateLogGroup",
-            "logs:CreateLogStream",
-            "logs:PutLogEvents",
-            "logs:CreateLogDelivery",
-            "logs:GetLogDelivery",
-            "logs:UpdateLogDelivery",
-            "logs:DeleteLogDelivery",
-            "logs:ListLogDeliveries",
-            "logs:PutResourcePolicy",
-            "logs:DescribeResourcePolicies",
-            "logs:DescribeLogGroups",
+            "rds:DescribeDBInstances",
+            "rds:DescribeDBClusters",
         ],
-    });
-};
-
-export const stepFunctionPolicy = (): PolicyStatement => {
-    return new iam.PolicyStatement({
-        resources: ["*"],
-        actions: [
-            "states:DescribeExecution",
-            "states:StartExecution",
-            "states:StartSyncExecution",
-            "states:StopExecution",
-        ],
-        effect: Effect.ALLOW,
-    });
-};
-
-export const lambdaPolicy = (resources: string[]) => {
-    return new iam.PolicyStatement({
-        resources: resources,
-        effect: Effect.ALLOW,
-        actions: ["lambda:InvokeFunction"],
     });
 };
 
