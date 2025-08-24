@@ -13,6 +13,13 @@ export type StackOptions = {
     githubOwner: string,
     githubRepo: string,
     serviceName: string,
+    callbackUrls: {
+        [key in StageEnvironment]: string[];
+    },
+    logoutUrls: {
+        [key in StageEnvironment]: string[];
+    },
+    isTemporaryStack: boolean,
     localStageOptions: StageOptions,
     stageOptions: StageOptions[],
 };

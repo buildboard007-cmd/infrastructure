@@ -11,6 +11,7 @@
     "clean": "rm -fr cdk.out/ cdk.local.out/",
     "clean-build": "npm run clean && npm run build",
     "local-build": "cdk synth -a \"ts-node --prefer-ts-exts bin/local.ts\" -o cdk.local.out",
+    "api": "npm run local-build && sam local start-api -n envfile.json -t cdk.local.out/Infrastructure-AppStage.template.json",
     "sam-local": "npm run local-build && sam local start-lambda -n envfile.json -t cdk.local.out/Infrastructure-AppStage.template.json",
     "test": "jest",
     "go-test": "cd src && go test ./... -short -coverprofile=cov.out -covermode=count -trimpath | gsed 's|infrastructure/|infrastructure/src/|g' > report.json && gsed -i 's|infrastructure/|src/|g' cov.out",
@@ -22,9 +23,6 @@
     "local-deploy": "cdklocal -a \"ts-node --prefer-ts-exts bin/local.ts\" -o cdk.local.out deploy",
     "bootstrap": "./scripts/bootstrap-accounts.sh",
     "deploy": "./scripts/deploy-pipeline.sh",
-    "bootstrap:tools": "cdk bootstrap aws://401448503050/us-east-2 --profile tools --qualifier mbb313cmk",
-    "bootstrap:dev": "cdk bootstrap aws://521805123898/us-east-2 --profile dev --qualifier mbb313cmk --trust 401448503050",
-    "bootstrap:prod": "cdk bootstrap aws://186375394147/us-east-2 --profile prod --qualifier mbb313cmk --trust 401448503050",
     "validate": "./scripts/validate-before-push.sh",
     "synth": "cdk synth --app 'npx ts-node bin/app.ts'"
   },

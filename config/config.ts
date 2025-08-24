@@ -8,14 +8,41 @@ export const options: StackOptions = {
     toolsAccount: "401448503050",
     productionAccount: "186375394147",
     devAccount: "521805123898",
-    cdkBootstrapQualifier: "mbb313cmk",
+    cdkBootstrapQualifier: "hnb659fds",
     pipelineName: `${stackName}-pipeline`,
     stackName: stackName,
     githubConnectionArn: "arn:aws:codeconnections:us-east-2:401448503050:connection/03339418-8c24-4619-816d-ee23651c4d12",
-	githubBranch: "main",
-	githubOwner: "buildboard007-cmd",
-	githubRepo: "infrastructure",
+    githubBranch: "main",
+    githubOwner: "buildboard007-cmd",
+    githubRepo: "infrastructure",
     serviceName: "infrastructure",
+    callbackUrls: {
+        [StageEnvironment.LOCAL]: [
+            "http://localhost:3000/callback",
+        ],
+        [StageEnvironment.DEV]: [
+            "http://localhost:3000/callback",
+            "https://dev.buildboard.com/callback",
+            "https://oauth.pstmn.io/v1/callback", // Postman for testing
+        ],
+        [StageEnvironment.PROD]: [
+            "https://buildboard.com/callback",
+        ]
+    },
+    logoutUrls: {
+        [StageEnvironment.LOCAL]: [
+            "http://localhost:3000/callback",
+        ],
+        [StageEnvironment.DEV]: [
+            "http://localhost:3000",
+            "https://dev.buildboard.com/callback",
+            "https://dev.buildboard.com/callback",
+        ],
+        [StageEnvironment.PROD]: [
+            "https://buildboard.com",
+        ],
+    },
+    isTemporaryStack: false,
     localStageOptions: {
         environment: StageEnvironment.LOCAL,
         account: "000000000000",

@@ -21,6 +21,14 @@ type SSMDao struct {
 	Logger *logrus.Logger
 }
 
+// NewSSMRepository creates a new SSMRepository instance
+func NewSSMRepository(ssmClient SSMClientInterface) SSMRepository {
+	return &SSMDao{
+		SSM:    ssmClient,
+		Logger: logrus.New(),
+	}
+}
+
 func (client *SSMDao) GetParameters() (map[string]string, error) {
 	params := map[string]string{}
 	ssmClient := client.SSM
