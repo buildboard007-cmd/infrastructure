@@ -76,15 +76,13 @@ export const addLambdaExtension = (
     }
     if (!v || !v[httpMethod]) return;
     v[httpMethod]!["x-amazon-apigateway-integration"] = {
-        credentials: `arn:aws:iam::${account}:role/API_Gateway_Access_Role`,
         httpMethod: "POST",
-        uri: `arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${account}:function:${funcName}/invocations`,
+        uri: `arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${account}:function:${funcName}/invocations`,
         passthroughBehavior: "when_no_match",
         contentHandling: "CONVERT_TO_TEXT",
         type: "aws_proxy",
     };
-    // Security will be handled by CDK authorizer, not in OpenAPI spec
-    // v[httpMethod]!["security"] = [{CognitoAuthorizer: []}];
+    v[httpMethod]!["security"] = [{CognitoAuthorizer: []}];
 };
 
 export const addCors = (
@@ -110,9 +108,8 @@ export const addCors = (
             },
         },
         "x-amazon-apigateway-integration": {
-            credentials: `arn:aws:iam::${account}:role/API_Gateway_Access_Role`,
             httpMethod: "POST",
-            uri: `arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${account}:function:${corsFunctionName}/invocations`,
+            uri: `arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${account}:function:${corsFunctionName}/invocations`,
             passthroughBehavior: "when_no_match",
             type: "aws_proxy",
         },
