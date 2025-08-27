@@ -49,10 +49,10 @@ func (dao *LocationDao) CreateLocation(ctx context.Context, userID, orgID int64,
 	// Create the location
 	var locationID int64
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO iam.location (org_id, location_name, address, description, created_by, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+		INSERT INTO iam.location (org_id, location_name, address, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
 		RETURNING location_id, created_at, updated_at
-	`, orgID, location.LocationName, location.Address, location.Description, userID).Scan(
+	`, orgID, location.LocationName, location.Address, userID).Scan(
 		&locationID, &location.CreatedAt, &location.UpdatedAt)
 
 	if err != nil {
@@ -116,7 +116,7 @@ func (dao *LocationDao) CreateLocation(ctx context.Context, userID, orgID int64,
 // GetLocationsByOrg retrieves all locations for a specific organization
 func (dao *LocationDao) GetLocationsByOrg(ctx context.Context, orgID int64) ([]models.Location, error) {
 	query := `
-		SELECT location_id, org_id, location_name, address, description, created_by, created_at, updated_at
+		SELECT location_id, org_id, location_name, address, created_by, created_at, updated_at
 		FROM iam.location
 		WHERE org_id = $1
 		ORDER BY location_name ASC
@@ -140,7 +140,6 @@ func (dao *LocationDao) GetLocationsByOrg(ctx context.Context, orgID int64) ([]m
 			&location.OrgID,
 			&location.LocationName,
 			&location.Address,
-			&location.Description,
 			&location.CreatedBy,
 			&location.CreatedAt,
 			&location.UpdatedAt,
@@ -169,7 +168,7 @@ func (dao *LocationDao) GetLocationsByOrg(ctx context.Context, orgID int64) ([]m
 func (dao *LocationDao) GetLocationByID(ctx context.Context, locationID, orgID int64) (*models.Location, error) {
 	var location models.Location
 	query := `
-		SELECT location_id, org_id, location_name, address, description, created_by, created_at, updated_at
+		SELECT location_id, org_id, location_name, address, created_by, created_at, updated_at
 		FROM iam.location
 		WHERE location_id = $1 AND org_id = $2
 	`
@@ -179,7 +178,6 @@ func (dao *LocationDao) GetLocationByID(ctx context.Context, locationID, orgID i
 		&location.OrgID,
 		&location.LocationName,
 		&location.Address,
-		&location.Description,
 		&location.CreatedBy,
 		&location.CreatedAt,
 		&location.UpdatedAt,
@@ -209,16 +207,15 @@ func (dao *LocationDao) GetLocationByID(ctx context.Context, locationID, orgID i
 func (dao *LocationDao) UpdateLocation(ctx context.Context, locationID, orgID int64, location *models.Location) (*models.Location, error) {
 	query := `
 		UPDATE iam.location 
-		SET location_name = $1, address = $2, description = $3, updated_at = NOW()
-		WHERE location_id = $4 AND org_id = $5
-		RETURNING location_id, org_id, location_name, address, description, created_by, created_at, updated_at
+		SET location_name = $1, address = $2, updated_at = NOW()
+		WHERE location_id = $3 AND org_id = $4
+		RETURNING location_id, org_id, location_name, address, created_by, created_at, updated_at
 	`
 
 	var updatedLocation models.Location
 	err := dao.DB.QueryRowContext(ctx, query,
 		location.LocationName,
 		location.Address,
-		location.Description,
 		locationID,
 		orgID,
 	).Scan(
@@ -226,7 +223,6 @@ func (dao *LocationDao) UpdateLocation(ctx context.Context, locationID, orgID in
 		&updatedLocation.OrgID,
 		&updatedLocation.LocationName,
 		&updatedLocation.Address,
-		&updatedLocation.Description,
 		&updatedLocation.CreatedBy,
 		&updatedLocation.CreatedAt,
 		&updatedLocation.UpdatedAt,

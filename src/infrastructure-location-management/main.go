@@ -182,7 +182,6 @@ func handleCreateLocation(ctx context.Context, userID, orgID int64, body string)
 	location := &models.Location{
 		LocationName: createReq.LocationName,
 		Address:      createReq.Address,
-		Description:  createReq.Description,
 	}
 
 	// Create location (automatically assigns to creator with SuperAdmin role)
@@ -259,7 +258,6 @@ func handleUpdateLocation(ctx context.Context, locationID, orgID int64, body str
 	location := &models.Location{
 		LocationName: updateReq.LocationName,
 		Address:      updateReq.Address,
-		Description:  updateReq.Description,
 	}
 
 	updatedLocation, err := locationRepository.UpdateLocation(ctx, locationID, orgID, location)

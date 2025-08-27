@@ -46,7 +46,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"ClientId\": \"7pdi3v6gcq3pr1i8kv43of8dsg\",\n  \"Username\": \"buildboard007+mayur@gmail.com\",\n  \"Password\": \"TempPass123!\",\n  \"UserAttributes\": [\n    {\n      \"Name\": \"email\",\n      \"Value\": \"buildboard007+mayur@gmail.com\"\n    },\n    {\n      \"Name\": \"custom:isSuperAdmin\",\n      \"Value\": \"true\"\n    }\n  ]\n}"
+              "raw": "{\n  \"ClientId\": \"3f0fb5mpivctnvj85tucusf88e\",\n  \"Username\": \"buildboard007+mayur@gmail.com\",\n  \"Password\": \"Mayur@1234\",\n  \"UserAttributes\": [\n    {\n      \"Name\": \"email\",\n      \"Value\": \"buildboard007+mayur@gmail.com\"\n    },\n    {\n      \"Name\": \"custom:isSuperAdmin\",\n      \"Value\": \"true\"\n    }\n  ]\n}"
             },
             "url": {
               "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
@@ -94,7 +94,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"ClientId\": \"7pdi3v6gcq3pr1i8kv43of8dsg\",\n  \"Username\": \"buildboard007+mayur@gmail.com\",\n  \"ConfirmationCode\": \"REPLACE_WITH_CODE_FROM_EMAIL\"\n}"
+              "raw": "{\n  \"ClientId\": \"3f0fb5mpivctnvj85tucusf88e\",\n  \"Username\": \"buildboard007+mayur@gmail.com\",\n  \"ConfirmationCode\": \"REPLACE_WITH_CODE_FROM_EMAIL\"\n}"
             },
             "url": {
               "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
@@ -155,7 +155,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"AuthFlow\": \"USER_PASSWORD_AUTH\",\n  \"ClientId\": \"7pdi3v6gcq3pr1i8kv43of8dsg\",\n  \"AuthParameters\": {\n    \"USERNAME\": \"buildboard007+mayur@gmail.com\",\n    \"PASSWORD\": \"TempPass123!\"\n  }\n}"
+              "raw": "{\n  \"AuthFlow\": \"USER_PASSWORD_AUTH\",\n  \"ClientId\": \"3f0fb5mpivctnvj85tucusf88e\",\n  \"AuthParameters\": {\n    \"USERNAME\": \"buildboard007+mayur@gmail.com\",\n    \"PASSWORD\": \"Mayur@1234\"\n  }\n}"
             },
             "url": {
               "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
@@ -209,10 +209,10 @@
               }
             ],
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/org",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/org",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -266,10 +266,10 @@
               "raw": "{\n    \"org_name\": \"Acme Corporation\"\n}"
             },
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/org",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/org",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -330,13 +330,13 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"location_name\": \"Headquarters\",\n    \"address\": \"123 Main Street, New York, NY 10001\",\n    \"description\": \"Main office headquarters\"\n}"
+              "raw": "{\n    \"location_name\": \"Headquarters\",\n    \"address\": \"123 Main Street, New York, NY 10001\"\n}"
             },
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -382,10 +382,10 @@
               }
             ],
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -430,10 +430,10 @@
               }
             ],
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations/{{location_id}}",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations/{{location_id}}",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -485,13 +485,13 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"location_name\": \"Corporate Headquarters\",\n    \"address\": \"456 Business Avenue, New York, NY 10001\",\n    \"description\": \"Updated main office headquarters with new address\"\n}"
+              "raw": "{\n    \"location_name\": \"Corporate Headquarters\",\n    \"address\": \"456 Business Avenue, New York, NY 10001\"\n}"
             },
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations/{{location_id}}",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations/{{location_id}}",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -532,10 +532,10 @@
               }
             ],
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations/{{location_id}}",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations/{{location_id}}",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -592,10 +592,10 @@
               }
             ],
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/org",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/org",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -646,10 +646,10 @@
               }
             ],
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -688,10 +688,10 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/org",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/org",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
@@ -740,10 +740,10 @@
               "raw": "{\n    \"location_name\": \"A\",\n    \"address\": \"123 Test Street\",\n    \"description\": \"Location name too short - should fail validation\"\n}"
             },
             "url": {
-              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations",
               "protocol": "https",
               "host": [
-                "71vklxedra",
+                "74zc1md7sc",
                 "execute-api",
                 "us-east-2",
                 "amazonaws",
