@@ -35,7 +35,6 @@ export class MainStack extends cdk.Stack {
         const subStack = new SubStack(this, `SubStack`, {
             options: props.options,
             stageEnvironment: props.stageEnvironment,
-            builder: builder,
         });
 
         new cdk.CfnOutput(this, 'CorsLambdaArn', {

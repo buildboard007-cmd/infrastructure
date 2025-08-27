@@ -19,8 +19,7 @@ export class LambdaConstruct extends Construct {
 
         const funcProps: FuncProps = {
             options: props.options,
-            stageEnvironment: props.stageEnvironment,
-            builder: props.builder
+            stageEnvironment: props.stageEnvironment
         };
 
         this.infrastructureApiGatewayCors = new InfrastructureApiGatewayCors(this, 'InfrastructureApiGatewayCors', funcProps);

@@ -3,7 +3,7 @@ import {FuncProps} from "../../types/func-props";
 import {GoFunction} from "@aws-cdk/aws-lambda-go-alpha";
 import * as path from 'path';
 import {Duration} from "aws-cdk-lib";
-import {addLambdaExtension} from "../../utils/api-utils";
+// import {addLambdaExtension} from "../../utils/api-utils"; // No longer needed with programmatic API
 import {GetRetentionDays} from "../../utils/lambda-utils";
 import {GetAccountId} from "../../utils/account-utils";
 import {getBaseLambdaEnvironment} from "../../utils/lambda-environment";
@@ -30,21 +30,7 @@ export class InfrastructureOrganizationManagement extends Construct {
         })
         ;
 
-        // Add PUT method for updating organization
-        addLambdaExtension('/org',
-            props.builder,
-            props.options.defaultRegion,
-            account,
-            functionName,
-            'put');
-        
-        // Add GET method for retrieving organization
-        addLambdaExtension('/org',
-            props.builder,
-            props.options.defaultRegion,
-            account,
-            functionName,
-            'get');
+        // Lambda integrations are now handled in SubStack programmatically
 
     }
 

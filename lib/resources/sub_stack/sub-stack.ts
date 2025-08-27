@@ -6,24 +6,18 @@ import {KeyConstruct} from "../key_construct/key-construct";
 import {LambdaConstruct} from "../lambda_construct/lambda-construct";
 import {LambdaConstructProps} from "../../types/lambda-construct-props";
 import {CognitoConstruct} from "../cognito_construct/cognito-construct";
-import * as path from "path";
-import * as fs from "fs";
-import {OpenApiBuilder} from "openapi3-ts";
-import {ApiDefinition, BasePathMapping, DomainName, SpecRestApi} from "aws-cdk-lib/aws-apigateway";
-import {ServicePrincipal} from "aws-cdk-lib/aws-iam";
+import {BasePathMapping, DomainName, RestApi, LambdaIntegration} from "aws-cdk-lib/aws-apigateway";
 import {GetAccountId} from "../../utils/account-utils";
-import {addCors, addSecuritySchemeExtension} from "../../utils/api-utils";
 
 interface KeyProps extends NestedStackProps {
     options: StackOptions;
     stageEnvironment: StageEnvironment;
-    builder: OpenApiBuilder;
 }
 
 export class SubStack extends NestedStack {
     private readonly keyConstruct: KeyConstruct;
     private readonly lambdaConstruct: LambdaConstruct;
-    private readonly api: SpecRestApi;
+    private readonly api: RestApi;
 
     constructor(scope: Construct, id: string, props: KeyProps) {
         super(scope, id, props);
@@ -34,8 +28,7 @@ export class SubStack extends NestedStack {
 
         const lambdaConstructProps: LambdaConstructProps = {
             options: props.options,
-            stageEnvironment: props.stageEnvironment,
-            builder: props.builder
+            stageEnvironment: props.stageEnvironment
         };
 
         this.lambdaConstruct = new LambdaConstruct(this, "LambdaConstruct", lambdaConstructProps);
@@ -49,40 +42,29 @@ export class SubStack extends NestedStack {
 
         const account = GetAccountId(props.stageEnvironment);
         
-        // Add CORS support using infrastructure-api-gateway-cors Lambda
-        const corsFunctionName = `${props.options.githubRepo}-api-gateway-cors`;
-        const paths = Object.keys(props.builder.getSpec().paths);
-        for (const path of paths) {
-            addCors(path, props.builder, props.options.defaultRegion, account, corsFunctionName);
-        }
-
-        // Create API first without Cognito authentication to get base spec
-        const file = path.join(__dirname, `../specs/spec.${account}.out.yaml`);
-        fs.writeFileSync(file, props.builder.getSpecAsYaml());
-
-        this.api = new SpecRestApi(this, "InfrastructureAPI", {
-            apiDefinition: ApiDefinition.fromAsset(file),
+        // Create API Gateway programmatically to avoid deployment dependency issues
+        this.api = new RestApi(this, "InfrastructureAPI", {
+            restApiName: props.options.apiName,
+            description: props.options.apiName,
             deployOptions: {
                 stageName: props.options.apiStageName,
             },
-            description: props.options.apiName,
-            restApiName: props.options.apiName,
         });
 
-        // Note: Cognito authentication will be handled at the Lambda level
-        // to avoid CDK token resolution issues in the OpenAPI spec
+        // Create Lambda integrations
+        const orgManagementIntegration = new LambdaIntegration(this.lambdaConstruct.organizationManagementLambda);
+        const corsIntegration = new LambdaIntegration(this.lambdaConstruct.corsLambda);
 
-        // Grant API Gateway permission to invoke the CORS Lambda
-        this.lambdaConstruct.corsLambda.addPermission('ApiGatewayCorsPermission', {
-            principal: new ServicePrincipal('apigateway.amazonaws.com'),
-            sourceArn: this.api.arnForExecuteApi('*', '/*', '*'),
-        });
+        // Create /org resource
+        const orgResource = this.api.root.addResource('org');
+        orgResource.addMethod('GET', orgManagementIntegration);
+        orgResource.addMethod('PUT', orgManagementIntegration);
+        orgResource.addMethod('OPTIONS', corsIntegration);
 
-        // Grant API Gateway permission to invoke the Organization Management Lambda
-        this.lambdaConstruct.organizationManagementLambda.addPermission('ApiGatewayOrgManagementPermission', {
-            principal: new ServicePrincipal('apigateway.amazonaws.com'),
-            sourceArn: this.api.arnForExecuteApi('*', '/*', '*'),
-        });
+        // Create /search resource  
+        const searchResource = this.api.root.addResource('search');
+        searchResource.addMethod('GET', orgManagementIntegration); // Reusing for now, can be changed later
+        searchResource.addMethod('OPTIONS', corsIntegration);
 
         // Skip domain for LOCAL
         if (props.stageEnvironment != StageEnvironment.LOCAL) {
