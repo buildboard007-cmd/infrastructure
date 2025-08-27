@@ -47,6 +47,415 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /locations:
+    get:
+      summary: Get all locations
+      description: Retrieves all locations for the authenticated user's organization
+      responses:
+        "200":
+          description: Locations retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      summary: Create a new location
+      description: Creates a new location in the user's organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationRequest"
+      responses:
+        "201":
+          description: Location created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  
+  /locations/{id}:
+    get:
+      summary: Get a specific location
+      description: Retrieves a specific location by ID from the user's organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Location retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Update a location
+      description: Updates an existing location in the user's organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationRequest"
+      responses:
+        "200":
+          description: Location updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a location
+      description: Deletes an existing location from the user's organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          $ref: "#/components/responses/NoContent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /roles:
+    get:
+      summary: Get all roles
+      description: Retrieves all roles for the authenticated super admin's organization
+      responses:
+        "200":
+          description: Roles retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      summary: Create a new role
+      description: Creates a new role in the organization (super admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoleRequest"
+      responses:
+        "201":
+          description: Role created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  
+  /roles/{id}:
+    get:
+      summary: Get a specific role with permissions
+      description: Retrieves a specific role by ID with its permissions from the organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Role retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleWithPermissions"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Update a role
+      description: Updates an existing role in the organization (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoleRequest"
+      responses:
+        "200":
+          description: Role updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a role
+      description: Deletes an existing role from the organization (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          $ref: "#/components/responses/NoContent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /roles/{id}/permissions:
+    post:
+      summary: Assign permission to role
+      description: Assigns a permission to a role (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignPermissionRequest"
+      responses:
+        "200":
+          description: Permission assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Unassign permission from role
+      description: Removes a permission from a role (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnassignPermissionRequest"
+      responses:
+        "200":
+          description: Permission unassigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /permissions:
+    get:
+      summary: Get all permissions
+      description: Retrieves all permissions for the authenticated super admin's organization
+      responses:
+        "200":
+          description: Permissions retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PermissionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      summary: Create a new permission
+      description: Creates a new permission in the organization (super admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePermissionRequest"
+      responses:
+        "201":
+          description: Permission created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Permission"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  
+  /permissions/{id}:
+    get:
+      summary: Get a specific permission
+      description: Retrieves a specific permission by ID from the organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Permission retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Permission"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Update a permission
+      description: Updates an existing permission in the organization (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePermissionRequest"
+      responses:
+        "200":
+          description: Permission updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Permission"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a permission
+      description: Deletes an existing permission from the organization (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          $ref: "#/components/responses/NoContent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   responses:
     NoContent:
@@ -126,4 +535,293 @@ components:
           type: string
         message:
           type: string
+
+    Location:
+      type: object
+      properties:
+        location_id:
+          type: integer
+          format: int64
+          description: Unique identifier for the location
+        location_name:
+          type: string
+          description: Name of the location
+          minLength: 2
+          maxLength: 100
+        address:
+          type: string
+          description: Address of the location
+          maxLength: 500
+        org_id:
+          type: integer
+          format: int64
+          description: Organization ID this location belongs to
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the location was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the location was last updated
+      required:
+        - location_id
+        - location_name
+        - org_id
+        - created_at
+        - updated_at
+
+    LocationListResponse:
+      type: object
+      properties:
+        locations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Location"
+        total:
+          type: integer
+          description: Total number of locations
+      required:
+        - locations
+        - total
+
+    CreateLocationRequest:
+      type: object
+      properties:
+        location_name:
+          type: string
+          description: Name of the location
+          minLength: 2
+          maxLength: 100
+        address:
+          type: string
+          description: Address of the location
+          maxLength: 500
+      required:
+        - location_name
+
+    UpdateLocationRequest:
+      type: object
+      properties:
+        location_name:
+          type: string
+          description: New name for the location
+          minLength: 2
+          maxLength: 100
+        address:
+          type: string
+          description: New address for the location
+          maxLength: 500
+
+    Role:
+      type: object
+      properties:
+        role_id:
+          type: integer
+          format: int64
+          description: Unique identifier for the role
+        role_name:
+          type: string
+          description: Name of the role
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          description: Description of the role
+          maxLength: 500
+        org_id:
+          type: integer
+          format: int64
+          description: Organization ID this role belongs to
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the role was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the role was last updated
+      required:
+        - role_id
+        - role_name
+        - org_id
+        - created_at
+        - updated_at
+
+    RoleListResponse:
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+        total:
+          type: integer
+          description: Total number of roles
+      required:
+        - roles
+        - total
+
+    RoleWithPermissions:
+      type: object
+      properties:
+        role_id:
+          type: integer
+          format: int64
+          description: Unique identifier for the role
+        role_name:
+          type: string
+          description: Name of the role
+        description:
+          type: string
+          description: Description of the role
+        org_id:
+          type: integer
+          format: int64
+          description: Organization ID this role belongs to
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the role was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the role was last updated
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Permission"
+          description: Permissions assigned to this role
+      required:
+        - role_id
+        - role_name
+        - org_id
+        - created_at
+        - updated_at
+        - permissions
+
+    CreateRoleRequest:
+      type: object
+      properties:
+        role_name:
+          type: string
+          description: Name of the role
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          description: Description of the role
+          maxLength: 500
+      required:
+        - role_name
+
+    UpdateRoleRequest:
+      type: object
+      properties:
+        role_name:
+          type: string
+          description: New name for the role
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          description: New description for the role
+          maxLength: 500
+
+    Permission:
+      type: object
+      properties:
+        permission_id:
+          type: integer
+          format: int64
+          description: Unique identifier for the permission
+        permission_name:
+          type: string
+          description: Name of the permission
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          description: Description of the permission
+          maxLength: 500
+        org_id:
+          type: integer
+          format: int64
+          description: Organization ID this permission belongs to
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the permission was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the permission was last updated
+      required:
+        - permission_id
+        - permission_name
+        - org_id
+        - created_at
+        - updated_at
+
+    PermissionListResponse:
+      type: object
+      properties:
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Permission"
+        total:
+          type: integer
+          description: Total number of permissions
+      required:
+        - permissions
+        - total
+
+    CreatePermissionRequest:
+      type: object
+      properties:
+        permission_name:
+          type: string
+          description: Name of the permission
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          description: Description of the permission
+          maxLength: 500
+      required:
+        - permission_name
+
+    UpdatePermissionRequest:
+      type: object
+      properties:
+        permission_name:
+          type: string
+          description: New name for the permission
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          description: New description for the permission
+          maxLength: 500
+
+    AssignPermissionRequest:
+      type: object
+      properties:
+        permission_id:
+          type: integer
+          format: int64
+          description: ID of the permission to assign
+      required:
+        - permission_id
+
+    UnassignPermissionRequest:
+      type: object
+      properties:
+        permission_id:
+          type: integer
+          format: int64
+          description: ID of the permission to unassign
+      required:
+        - permission_id
 

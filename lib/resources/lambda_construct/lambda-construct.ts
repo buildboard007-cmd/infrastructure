@@ -7,6 +7,8 @@ import {InfrastructureUserSignup} from "../function_construct/infrastructure-use
 import {GoFunction} from "@aws-cdk/aws-lambda-go-alpha";
 import {InfrastructureOrganizationManagement} from "../function_construct/infrastructure-organization-management";
 import {InfrastructureLocationManagement} from "../function_construct/infrastructure-location-management";
+import {InfrastructureRolesManagementFunction} from "../function_construct/infrastructure-roles-management";
+import {InfrastructurePermissionsManagementFunction} from "../function_construct/infrastructure-permissions-management";
 
 export class LambdaConstruct extends Construct {
 
@@ -15,6 +17,8 @@ export class LambdaConstruct extends Construct {
     private readonly infrastructureUserSignup: InfrastructureUserSignup;
     private readonly infrastructureOrganizationManagement: InfrastructureOrganizationManagement;
     private readonly infrastructureLocationManagement: InfrastructureLocationManagement;
+    private readonly infrastructureRolesManagement: InfrastructureRolesManagementFunction;
+    private readonly infrastructurePermissionsManagement: InfrastructurePermissionsManagementFunction;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -29,6 +33,8 @@ export class LambdaConstruct extends Construct {
         this.infrastructureUserSignup = new InfrastructureUserSignup(this, 'InfrastructureUserSignup', funcProps);
         this.infrastructureOrganizationManagement = new InfrastructureOrganizationManagement(this, 'InfrastructureOrganizationManagement', funcProps);
         this.infrastructureLocationManagement = new InfrastructureLocationManagement(this, 'InfrastructureLocationManagement', funcProps);
+        this.infrastructureRolesManagement = new InfrastructureRolesManagementFunction(this, 'InfrastructureRolesManagement', funcProps);
+        this.infrastructurePermissionsManagement = new InfrastructurePermissionsManagementFunction(this, 'InfrastructurePermissionsManagement', funcProps);
     }
 
     get corsLambda(): GoFunction {
@@ -69,5 +75,21 @@ export class LambdaConstruct extends Construct {
 
     get locationManagementLambdaArn(): string {
         return this.infrastructureLocationManagement.functionArn;
+    }
+
+    get rolesManagementLambda(): GoFunction {
+        return this.infrastructureRolesManagement.function;
+    }
+
+    get rolesManagementLambdaArn(): string {
+        return this.infrastructureRolesManagement.functionArn;
+    }
+
+    get permissionsManagementLambda(): GoFunction {
+        return this.infrastructurePermissionsManagement.function;
+    }
+
+    get permissionsManagementLambdaArn(): string {
+        return this.infrastructurePermissionsManagement.functionArn;
     }
 }

@@ -60,6 +60,8 @@ export class SubStack extends NestedStack {
         // Create Lambda integrations
         const orgManagementIntegration = new LambdaIntegration(this.lambdaConstruct.organizationManagementLambda);
         const locationManagementIntegration = new LambdaIntegration(this.lambdaConstruct.locationManagementLambda);
+        const rolesManagementIntegration = new LambdaIntegration(this.lambdaConstruct.rolesManagementLambda);
+        const permissionsManagementIntegration = new LambdaIntegration(this.lambdaConstruct.permissionsManagementLambda);
         const corsIntegration = new LambdaIntegration(this.lambdaConstruct.corsLambda);
 
         // Create /org resource with Cognito authorization
@@ -95,6 +97,61 @@ export class SubStack extends NestedStack {
         });
         locationIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
+        // Create /roles resource with Cognito authorization
+        const rolesResource = this.api.root.addResource('roles');
+        rolesResource.addMethod('GET', rolesManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rolesResource.addMethod('POST', rolesManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rolesResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /roles/{id} resource for specific role operations
+        const roleIdResource = rolesResource.addResource('{id}');
+        roleIdResource.addMethod('GET', rolesManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        roleIdResource.addMethod('PUT', rolesManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        roleIdResource.addMethod('DELETE', rolesManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        roleIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /roles/{id}/permissions resource for role-permission management
+        const rolePermissionsResource = roleIdResource.addResource('permissions');
+        rolePermissionsResource.addMethod('POST', rolesManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rolePermissionsResource.addMethod('DELETE', rolesManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rolePermissionsResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /permissions resource with Cognito authorization
+        const permissionsResource = this.api.root.addResource('permissions');
+        permissionsResource.addMethod('GET', permissionsManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        permissionsResource.addMethod('POST', permissionsManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        permissionsResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /permissions/{id} resource for specific permission operations
+        const permissionIdResource = permissionsResource.addResource('{id}');
+        permissionIdResource.addMethod('GET', permissionsManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        permissionIdResource.addMethod('PUT', permissionsManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        permissionIdResource.addMethod('DELETE', permissionsManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        permissionIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
         // Skip domain for LOCAL
         if (props.stageEnvironment != StageEnvironment.LOCAL) {

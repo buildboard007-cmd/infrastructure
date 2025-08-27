@@ -9,12 +9,12 @@ package models
 
 import "database/sql"
 
-// Role represents a user's role at a specific location within an organization.
+// LocationRole represents a user's role at a specific location within an organization.
 // Roles define the level of access and responsibilities a user has.
 // Examples: 'admin', 'manager', 'employee'
 //
 // Database mapping: iam.role table
-type Role struct {
+type LocationRole struct {
 	RoleID      int64  `json:"role_id"`                    // Primary key from iam.role.role_id
 	RoleName    string `json:"role_name"`                  // Human-readable role name (unique across system)
 	Description string `json:"description,omitempty"`     // Optional detailed description of role responsibilities
@@ -29,7 +29,7 @@ type UserLocation struct {
 	LocationID   int64  `json:"location_id"`               // Primary key from iam.location.location_id
 	LocationName string `json:"location_name"`             // Human-readable location name
 	Address      string `json:"address,omitempty"`         // Optional physical address
-	Roles        []Role `json:"roles"`                     // All roles this user has at this location
+	Roles        []LocationRole `json:"roles"`                     // All roles this user has at this location
 }
 
 // UserProfile represents the complete user profile aggregated from the iam.user_summary view.

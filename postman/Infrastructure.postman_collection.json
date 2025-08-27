@@ -757,6 +757,656 @@
           }
         }
       ]
+    },
+    {
+      "name": "Roles Management",
+      "item": [
+        {
+          "name": "Create Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Role created with required fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('role_id');",
+                  "    pm.expect(responseJson).to.have.property('role_name');",
+                  "    pm.expect(responseJson).to.have.property('org_id');",
+                  "    ",
+                  "    // Store role_id for other requests",
+                  "    pm.globals.set('role_id', responseJson.role_id);",
+                  "    console.log('Created Role:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\\n    \"role_name\": \"Manager\",\\n    \"description\": \"Manages team and operations\"\\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "roles"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Roles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has roles array', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('roles');",
+                  "    pm.expect(responseJson).to.have.property('total');",
+                  "    pm.expect(responseJson.roles).to.be.an('array');",
+                  "    console.log('Roles:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "roles"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Role by ID with Permissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has role data with permissions', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('role_id');",
+                  "    pm.expect(responseJson).to.have.property('role_name');",
+                  "    pm.expect(responseJson).to.have.property('permissions');",
+                  "    pm.expect(responseJson.permissions).to.be.an('array');",
+                  "    console.log('Role with Permissions:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{role_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "roles",
+                "{{role_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Role updated successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('role_id');",
+                  "    pm.expect(responseJson).to.have.property('role_name');",
+                  "    console.log('Updated Role:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\\n    \"role_name\": \"Senior Manager\",\\n    \"description\": \"Senior level manager with extended responsibilities\"\\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{role_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "roles",
+                "{{role_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assign Permission to Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Permission assigned successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    console.log('Assignment Response:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\\n    \"permission_id\": {{permission_id}}\\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{role_id}}/permissions",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "roles",
+                "{{role_id}}",
+                "permissions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unassign Permission from Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Permission unassigned successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    console.log('Unassignment Response:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\\n    \"permission_id\": {{permission_id}}\\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{role_id}}/permissions",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "roles",
+                "{{role_id}}",
+                "permissions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 204', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "",
+                  "console.log('Role deleted successfully.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{role_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "roles",
+                "{{role_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Permissions Management",
+      "item": [
+        {
+          "name": "Create Permission",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Permission created with required fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('permission_id');",
+                  "    pm.expect(responseJson).to.have.property('permission_name');",
+                  "    pm.expect(responseJson).to.have.property('org_id');",
+                  "    ",
+                  "    // Store permission_id for other requests",
+                  "    pm.globals.set('permission_id', responseJson.permission_id);",
+                  "    console.log('Created Permission:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\\n    \"permission_name\": \"READ_REPORTS\",\\n    \"description\": \"Permission to read and view reports\"\\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "permissions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Permissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has permissions array', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('permissions');",
+                  "    pm.expect(responseJson).to.have.property('total');",
+                  "    pm.expect(responseJson.permissions).to.be.an('array');",
+                  "    console.log('Permissions:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "permissions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Permission by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has permission data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('permission_id');",
+                  "    pm.expect(responseJson).to.have.property('permission_name');",
+                  "    console.log('Permission Details:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions/{{permission_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "permissions",
+                "{{permission_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Permission",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Permission updated successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('permission_id');",
+                  "    pm.expect(responseJson).to.have.property('permission_name');",
+                  "    console.log('Updated Permission:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\\n    \"permission_name\": \"READ_ALL_REPORTS\",\\n    \"description\": \"Permission to read all reports including sensitive ones\"\\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions/{{permission_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "permissions",
+                "{{permission_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Permission",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 204', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "",
+                  "console.log('Permission deleted successfully.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions/{{permission_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "permissions",
+                "{{permission_id}}"
+              ]
+            }
+          }
+        }
+      ]
     }
   ]
 }
