@@ -5,8 +5,8 @@ import * as path from 'path';
 import {Duration} from "aws-cdk-lib";
 // import {addLambdaExtension} from "../../utils/api-utils"; // No longer needed with programmatic API
 import {GetRetentionDays} from "../../utils/lambda-utils";
-import {GetAccountId} from "../../utils/account-utils";
 import {getBaseLambdaEnvironment} from "../../utils/lambda-environment";
+import {ssmPolicy} from "../../utils/policy-utils";
 
 export class InfrastructureOrganizationManagement extends Construct {
 
@@ -15,7 +15,6 @@ export class InfrastructureOrganizationManagement extends Construct {
     constructor(scope: Construct, id: string, props: FuncProps) {
         super(scope, id);
 
-        const account = GetAccountId(props.stageEnvironment);
         const functionName = `${props?.options.githubRepo}-organization-management`
 
         this.func = new GoFunction(this, id, {
@@ -27,11 +26,9 @@ export class InfrastructureOrganizationManagement extends Construct {
             bundling: {
                 goBuildFlags: ['-ldflags "-s -w"'],
             },
-        })
-        ;
+        });
 
-        // Lambda integrations are now handled in SubStack programmatically
-
+        this.func.addToRolePolicy(ssmPolicy());
     }
 
     get function(): GoFunction {

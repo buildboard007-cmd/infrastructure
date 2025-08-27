@@ -1,0 +1,539 @@
+{
+  "info": {
+    "name": "SuperAdmin Signup Workflow",
+    "description": "Complete SuperAdmin signup workflow testing including Cognito registration, email confirmation, signin, and token validation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "superadmin-signup-workflow-001"
+  },
+  "item": [
+    {
+      "name": "1. SuperAdmin Signup",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Test the signup response",
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has UserSub', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('UserSub');",
+              "    ",
+              "    // Store UserSub for later use",
+              "    pm.environment.set('user_sub', jsonData.UserSub);",
+              "    console.log('UserSub stored:', jsonData.UserSub);",
+              "});",
+              "",
+              "pm.test('Code delivery is EMAIL', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.CodeDeliveryDetails.DeliveryMedium).to.eql('EMAIL');",
+              "});",
+              "",
+              "console.log('✅ SuperAdmin signup completed. Check email for confirmation code!');"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('🚀 Starting SuperAdmin signup...');",
+              "console.log('Test Email:', pm.environment.get('test_email'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-amz-json-1.1"
+          },
+          {
+            "key": "X-Amz-Target",
+            "value": "AWSCognitoIdentityProviderService.SignUp"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"ClientId\": \"{{cognito_client_id}}\",\n    \"Username\": \"{{test_email}}\",\n    \"Password\": \"{{test_password}}\",\n    \"UserAttributes\": [\n        {\n            \"Name\": \"email\",\n            \"Value\": \"{{test_email}}\"\n        },\n        {\n            \"Name\": \"custom:isSuperAdmin\",\n            \"Value\": \"true\"\n        }\n    ]\n}"
+        },
+        "url": {
+          "raw": "https://cognito-idp.{{aws_region}}.amazonaws.com/",
+          "protocol": "https",
+          "host": [
+            "cognito-idp",
+            "{{aws_region}}",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            ""
+          ]
+        },
+        "description": "Register a new SuperAdmin user with isSuperAdmin=true custom attribute"
+      }
+    },
+    {
+      "name": "2. Confirm Email",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Test the confirmation response",
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Email confirmed successfully', function () {",
+              "    // If we get here without error, confirmation succeeded",
+              "    pm.expect(pm.response.code).to.equal(200);",
+              "});",
+              "",
+              "console.log('✅ Email confirmation completed successfully!');"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('📧 Confirming email with code:', pm.environment.get('confirmation_code'));",
+              "",
+              "// Check if confirmation code is set",
+              "const confirmationCode = pm.environment.get('confirmation_code');",
+              "if (!confirmationCode || confirmationCode === '') {",
+              "    console.error('❌ Please set the confirmation_code environment variable with the code from your email!');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-amz-json-1.1"
+          },
+          {
+            "key": "X-Amz-Target",
+            "value": "AWSCognitoIdentityProviderService.ConfirmSignUp"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"ClientId\": \"{{cognito_client_id}}\",\n    \"Username\": \"{{test_email}}\",\n    \"ConfirmationCode\": \"{{confirmation_code}}\"\n}"
+        },
+        "url": {
+          "raw": "https://cognito-idp.{{aws_region}}.amazonaws.com/",
+          "protocol": "https",
+          "host": [
+            "cognito-idp",
+            "{{aws_region}}",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            ""
+          ]
+        },
+        "description": "Confirm email address using the code sent via email"
+      }
+    },
+    {
+      "name": "3. SuperAdmin Signin",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Test the signin response",
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Tokens received', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.AuthenticationResult).to.have.property('AccessToken');",
+              "    pm.expect(jsonData.AuthenticationResult).to.have.property('IdToken');",
+              "    pm.expect(jsonData.AuthenticationResult).to.have.property('RefreshToken');",
+              "    ",
+              "    // Store tokens for later use",
+              "    pm.environment.set('access_token', jsonData.AuthenticationResult.AccessToken);",
+              "    pm.environment.set('id_token', jsonData.AuthenticationResult.IdToken);",
+              "    pm.environment.set('refresh_token', jsonData.AuthenticationResult.RefreshToken);",
+              "    ",
+              "    console.log('✅ Tokens stored successfully');",
+              "});",
+              "",
+              "console.log('🔐 SuperAdmin signin completed!');"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('🔐 Signing in SuperAdmin user...');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-amz-json-1.1"
+          },
+          {
+            "key": "X-Amz-Target",
+            "value": "AWSCognitoIdentityProviderService.InitiateAuth"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"ClientId\": \"{{cognito_client_id}}\",\n    \"AuthFlow\": \"USER_PASSWORD_AUTH\",\n    \"AuthParameters\": {\n        \"USERNAME\": \"{{test_email}}\",\n        \"PASSWORD\": \"{{test_password}}\"\n    }\n}"
+        },
+        "url": {
+          "raw": "https://cognito-idp.{{aws_region}}.amazonaws.com/",
+          "protocol": "https",
+          "host": [
+            "cognito-idp",
+            "{{aws_region}}",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            ""
+          ]
+        },
+        "description": "Sign in with SuperAdmin credentials to get JWT tokens"
+      }
+    },
+    {
+      "name": "4. Validate JWT Token Claims",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Parse and validate JWT tokens",
+              "function parseJWT(token) {",
+              "    try {",
+              "        const base64Payload = token.split('.')[1];",
+              "        const payload = atob(base64Payload);",
+              "        return JSON.parse(payload);",
+              "    } catch (error) {",
+              "        console.error('Error parsing JWT:', error);",
+              "        return null;",
+              "    }",
+              "}",
+              "",
+              "const idToken = pm.environment.get('id_token');",
+              "const accessToken = pm.environment.get('access_token');",
+              "",
+              "if (idToken && accessToken) {",
+              "    const idTokenPayload = parseJWT(idToken);",
+              "    const accessTokenPayload = parseJWT(accessToken);",
+              "    ",
+              "    console.log('🔍 ID Token Claims:');",
+              "    console.log('  Standard Claims:');",
+              "    console.log('    sub:', idTokenPayload.sub);",
+              "    console.log('    email:', idTokenPayload.email);",
+              "    console.log('    email_verified:', idTokenPayload.email_verified);",
+              "    ",
+              "    console.log('  Custom Claims (from Token Customizer):');",
+              "    console.log('    isSuperAdmin:', idTokenPayload.isSuperAdmin);",
+              "    console.log('    user_id:', idTokenPayload.user_id);",
+              "    console.log('    org_name:', idTokenPayload.org_name);",
+              "    console.log('    status:', idTokenPayload.status);",
+              "    ",
+              "    console.log('🔍 Access Token Claims:');",
+              "    console.log('    isSuperAdmin:', accessTokenPayload.isSuperAdmin);",
+              "    console.log('    status:', accessTokenPayload.status);",
+              "    ",
+              "    // Validate SuperAdmin claims",
+              "    pm.test('ID Token has isSuperAdmin claim', function () {",
+              "        pm.expect(idTokenPayload.isSuperAdmin).to.equal(true);",
+              "    });",
+              "    ",
+              "    pm.test('ID Token has correct status', function () {",
+              "        pm.expect(idTokenPayload.status).to.equal('pending_org_setup');",
+              "    });",
+              "    ",
+              "    pm.test('ID Token has org_name', function () {",
+              "        pm.expect(idTokenPayload.org_name).to.equal('System');",
+              "    });",
+              "    ",
+              "    pm.test('ID Token has user_id', function () {",
+              "        pm.expect(idTokenPayload.user_id).to.be.a('number');",
+              "    });",
+              "    ",
+              "    pm.test('Access Token has isSuperAdmin claim', function () {",
+              "        pm.expect(accessTokenPayload.isSuperAdmin).to.equal(true);",
+              "    });",
+              "    ",
+              "    console.log('✅ Token validation completed!');",
+              "} else {",
+              "    console.error('❌ No tokens found. Please run the signin request first.');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('🔍 Validating JWT token claims...');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://httpbin.org/status/200",
+          "protocol": "https",
+          "host": [
+            "httpbin",
+            "org"
+          ],
+          "path": [
+            "status",
+            "200"
+          ]
+        },
+        "description": "This is a dummy request to validate JWT token claims in the test script"
+      }
+    },
+    {
+      "name": "5. Get Organization Info (API Test)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Test the organization API response",
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has organization data', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('org_id');",
+              "    pm.expect(jsonData).to.have.property('org_name');",
+              "    pm.expect(jsonData.org_name).to.equal('System');",
+              "});",
+              "",
+              "console.log('✅ Organization API test completed!');",
+              "console.log('Organization data:', pm.response.json());"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('🏢 Testing Organization Management API...');",
+              "console.log('API Gateway URL:', pm.environment.get('api_gateway_url'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{id_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{api_gateway_url}}/org",
+          "host": [
+            "{{api_gateway_url}}"
+          ],
+          "path": [
+            "org"
+          ]
+        },
+        "description": "Test the organization management API with the SuperAdmin JWT token"
+      }
+    },
+    {
+      "name": "6. Update Organization Name (API Test)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Test the organization update response",
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Organization name updated', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('org_name');",
+              "    pm.expect(jsonData.org_name).to.equal('My Test Organization');",
+              "});",
+              "",
+              "console.log('✅ Organization update completed!');",
+              "console.log('Updated organization:', pm.response.json());"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('✏️ Updating organization name...');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{id_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"org_name\": \"My Test Organization\"\n}"
+        },
+        "url": {
+          "raw": "{{api_gateway_url}}/org",
+          "host": [
+            "{{api_gateway_url}}"
+          ],
+          "path": [
+            "org"
+          ]
+        },
+        "description": "Update the organization name from 'System' to a custom name"
+      }
+    },
+    {
+      "name": "7. Cleanup - Delete Test User",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Test the delete response",
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "console.log('🧹 Test user cleanup completed!');"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "console.log('🧹 Cleaning up test user...');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-amz-json-1.1"
+          },
+          {
+            "key": "X-Amz-Target",
+            "value": "AWSCognitoIdentityProviderService.AdminDeleteUser"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"UserPoolId\": \"{{cognito_user_pool_id}}\",\n    \"Username\": \"{{test_email}}\"\n}"
+        },
+        "url": {
+          "raw": "https://cognito-idp.{{aws_region}}.amazonaws.com/",
+          "protocol": "https",
+          "host": [
+            "cognito-idp",
+            "{{aws_region}}",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            ""
+          ]
+        },
+        "description": "Clean up the test user after completing the workflow tests"
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Global pre-request script",
+          "console.log('🧪 SuperAdmin Signup Workflow Testing');",
+          "console.log('=====================================');"
+        ],
+        "type": "text/javascript"
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "// Global test script - runs after each request",
+          ""
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "collection_version",
+      "value": "1.0.0",
+      "type": "string"
+    }
+  ]
+}

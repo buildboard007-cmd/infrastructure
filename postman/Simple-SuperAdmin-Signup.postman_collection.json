@@ -1,0 +1,207 @@
+{
+  "info": {
+    "name": "Simple SuperAdmin Signup",
+    "description": "Simple SuperAdmin signup workflow with hardcoded values",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. SuperAdmin Signup",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-amz-json-1.1"
+          },
+          {
+            "key": "X-Amz-Target",
+            "value": "AWSCognitoIdentityProviderService.SignUp"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"ClientId\": \"3f0fb5mpivctnvj85tucusf88e\",\n    \"Username\": \"buildboard007+mayur@gmail.com\",\n    \"Password\": \"Mayur@1234\",\n    \"UserAttributes\": [\n        {\n            \"Name\": \"email\",\n            \"Value\": \"buildboard007+mayur@gmail.com\"\n        },\n        {\n            \"Name\": \"custom:isSuperAdmin\",\n            \"Value\": \"true\"\n        }\n    ]\n}"
+        },
+        "url": {
+          "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
+          "protocol": "https",
+          "host": [
+            "cognito-idp",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            ""
+          ]
+        }
+      }
+    },
+    {
+      "name": "2. Confirm Email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-amz-json-1.1"
+          },
+          {
+            "key": "X-Amz-Target",
+            "value": "AWSCognitoIdentityProviderService.ConfirmSignUp"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"ClientId\": \"3f0fb5mpivctnvj85tucusf88e\",\n    \"Username\": \"buildboard007+mayur@gmail.com\",\n    \"ConfirmationCode\": \"REPLACE_WITH_EMAIL_CODE\"\n}"
+        },
+        "url": {
+          "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
+          "protocol": "https",
+          "host": [
+            "cognito-idp",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            ""
+          ]
+        }
+      }
+    },
+    {
+      "name": "3. SuperAdmin Signin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-amz-json-1.1"
+          },
+          {
+            "key": "X-Amz-Target",
+            "value": "AWSCognitoIdentityProviderService.InitiateAuth"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"ClientId\": \"3f0fb5mpivctnvj85tucusf88e\",\n    \"AuthFlow\": \"USER_PASSWORD_AUTH\",\n    \"AuthParameters\": {\n        \"USERNAME\": \"buildboard007+mayur@gmail.com\",\n        \"PASSWORD\": \"Mayur@1234\"\n    }\n}"
+        },
+        "url": {
+          "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
+          "protocol": "https",
+          "host": [
+            "cognito-idp",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            ""
+          ]
+        }
+      }
+    },
+    {
+      "name": "4. Get Organization Info",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "REPLACE_WITH_ID_TOKEN"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/org",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "org"
+          ]
+        }
+      }
+    },
+    {
+      "name": "5. Update Organization Name",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "REPLACE_WITH_ID_TOKEN"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"org_name\": \"My Test Organization\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/org",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "org"
+          ]
+        }
+      }
+    },
+    {
+      "name": "6. Delete Test User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-amz-json-1.1"
+          },
+          {
+            "key": "X-Amz-Target",
+            "value": "AWSCognitoIdentityProviderService.AdminDeleteUser"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"UserPoolId\": \"us-east-2_8JFjvA7xM\",\n    \"Username\": \"buildboard007+mayur@gmail.com\"\n}"
+        },
+        "url": {
+          "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
+          "protocol": "https",
+          "host": [
+            "cognito-idp",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            ""
+          ]
+        }
+      }
+    }
+  ]
+}
