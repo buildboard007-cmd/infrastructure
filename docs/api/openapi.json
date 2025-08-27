@@ -1,0 +1,105 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Infrastructure API",
+    "description" : "Infrastructure API",
+    "version" : "2025-08-27T16:07:44Z"
+  },
+  "servers" : [ {
+    "url" : "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/{basePath}",
+    "variables" : {
+      "basePath" : {
+        "default" : "main"
+      }
+    }
+  } ],
+  "paths" : {
+    "/org" : {
+      "get" : {
+        "security" : [ {
+          "CognitoAuthorizer" : [ ]
+        } ]
+      },
+      "put" : {
+        "security" : [ {
+          "CognitoAuthorizer" : [ ]
+        } ]
+      },
+      "options" : { }
+    },
+    "/locations/{id}" : {
+      "get" : {
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "security" : [ {
+          "CognitoAuthorizer" : [ ]
+        } ]
+      },
+      "put" : {
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "security" : [ {
+          "CognitoAuthorizer" : [ ]
+        } ]
+      },
+      "delete" : {
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "security" : [ {
+          "CognitoAuthorizer" : [ ]
+        } ]
+      },
+      "options" : {
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ]
+      }
+    },
+    "/locations" : {
+      "get" : {
+        "security" : [ {
+          "CognitoAuthorizer" : [ ]
+        } ]
+      },
+      "post" : {
+        "security" : [ {
+          "CognitoAuthorizer" : [ ]
+        } ]
+      },
+      "options" : { }
+    }
+  },
+  "components" : {
+    "securitySchemes" : {
+      "CognitoAuthorizer" : {
+        "type" : "apiKey",
+        "name" : "Authorization",
+        "in" : "header",
+        "x-amazon-apigateway-authtype" : "cognito_user_pools"
+      }
+    }
+  }
+}

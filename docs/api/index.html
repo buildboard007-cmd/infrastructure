@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infrastructure API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui.css" />
+    <style>
+        html {
+            box-sizing: border-box;
+            overflow: -moz-scrollbars-vertical;
+            overflow-y: scroll;
+        }
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+        body {
+            margin:0;
+            background: #fafafa;
+        }
+        .topbar { display: none; }
+        .swagger-ui .info { margin: 20px 0; }
+        .swagger-ui .info .title { 
+            color: #3b4151;
+            font-size: 36px;
+        }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        // OpenAPI specification embedded
+        const spec = {
+            "openapi": "3.0.1",
+            "info": {
+                "title": "Infrastructure API",
+                "description": "Complete API for Infrastructure application including organization, location, role, and permission management",
+                "version": "1.0.0",
+                "contact": {
+                    "name": "Infrastructure API Support"
+                }
+            },
+            "servers": [{
+                "url": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main",
+                "description": "Development Server"
+            }],
+            "paths": {
+                "/org": {
+                    "get": {
+                        "summary": "Get organization information",
+                        "description": "Retrieves the organization information for the authenticated super admin user",
+                        "tags": ["Organization"],
+                        "security": [{"CognitoAuth": []}],
+                        "responses": {
+                            "200": {
+                                "description": "Organization information retrieved successfully"
+                            },
+                            "401": {"description": "Unauthorized"},
+                            "403": {"description": "Forbidden"}
+                        }
+                    },
+                    "put": {
+                        "summary": "Update organization information", 
+                        "description": "Updates organization name (super admin only)",
+                        "tags": ["Organization"],
+                        "security": [{"CognitoAuth": []}],
+                        "responses": {
+                            "200": {"description": "Organization updated successfully"},
+                            "400": {"description": "Bad request"},
+                            "401": {"description": "Unauthorized"},
+                            "403": {"description": "Forbidden"}
+                        }
+                    }
+                },
+                "/locations": {
+                    "get": {
+                        "summary": "Get all locations",
+                        "description": "Retrieves all locations for the authenticated user's organization",
+                        "tags": ["Locations"],
+                        "security": [{"CognitoAuth": []}],
+                        "responses": {
+                            "200": {"description": "Locations retrieved successfully"},
+                            "401": {"description": "Unauthorized"}
+                        }
+                    },
+                    "post": {
+                        "summary": "Create location",
+                        "description": "Creates a new location in the organization", 
+                        "tags": ["Locations"],
+                        "security": [{"CognitoAuth": []}],
+                        "responses": {
+                            "201": {"description": "Location created successfully"},
+                            "400": {"description": "Bad request"},
+                            "401": {"description": "Unauthorized"}
+                        }
+                    }
+                },
+                "/locations/{id}": {
+                    "get": {
+                        "summary": "Get location by ID",
+                        "tags": ["Locations"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "200": {"description": "Location retrieved successfully"},
+                            "404": {"description": "Location not found"}
+                        }
+                    },
+                    "put": {
+                        "summary": "Update location",
+                        "tags": ["Locations"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id", 
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "200": {"description": "Location updated successfully"},
+                            "404": {"description": "Location not found"}
+                        }
+                    },
+                    "delete": {
+                        "summary": "Delete location",
+                        "tags": ["Locations"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path", 
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "204": {"description": "Location deleted successfully"},
+                            "404": {"description": "Location not found"}
+                        }
+                    }
+                },
+                "/roles": {
+                    "get": {
+                        "summary": "Get all roles",
+                        "description": "Retrieves all roles for the organization (super admin only)",
+                        "tags": ["Roles Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "responses": {
+                            "200": {"description": "Roles retrieved successfully"},
+                            "401": {"description": "Unauthorized"},
+                            "403": {"description": "Forbidden - Super admin only"}
+                        }
+                    },
+                    "post": {
+                        "summary": "Create role",
+                        "description": "Creates a new role in the organization (super admin only)",
+                        "tags": ["Roles Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "responses": {
+                            "201": {"description": "Role created successfully"},
+                            "400": {"description": "Bad request"},
+                            "401": {"description": "Unauthorized"},
+                            "403": {"description": "Forbidden - Super admin only"}
+                        }
+                    }
+                },
+                "/roles/{id}": {
+                    "get": {
+                        "summary": "Get role with permissions",
+                        "description": "Retrieves a specific role with its assigned permissions",
+                        "tags": ["Roles Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "200": {"description": "Role retrieved successfully"},
+                            "404": {"description": "Role not found"}
+                        }
+                    },
+                    "put": {
+                        "summary": "Update role",
+                        "tags": ["Roles Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "200": {"description": "Role updated successfully"},
+                            "404": {"description": "Role not found"}
+                        }
+                    },
+                    "delete": {
+                        "summary": "Delete role",
+                        "tags": ["Roles Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "204": {"description": "Role deleted successfully"},
+                            "404": {"description": "Role not found"}
+                        }
+                    }
+                },
+                "/roles/{id}/permissions": {
+                    "post": {
+                        "summary": "Assign permission to role",
+                        "description": "Assigns a permission to a role (super admin only)",
+                        "tags": ["Roles Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "200": {"description": "Permission assigned successfully"},
+                            "404": {"description": "Role or permission not found"}
+                        }
+                    },
+                    "delete": {
+                        "summary": "Unassign permission from role",
+                        "description": "Removes a permission from a role (super admin only)",
+                        "tags": ["Roles Management"], 
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "200": {"description": "Permission unassigned successfully"},
+                            "404": {"description": "Role or permission not found"}
+                        }
+                    }
+                },
+                "/permissions": {
+                    "get": {
+                        "summary": "Get all permissions",
+                        "description": "Retrieves all permissions for the organization (super admin only)",
+                        "tags": ["Permissions Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "responses": {
+                            "200": {"description": "Permissions retrieved successfully"},
+                            "401": {"description": "Unauthorized"},
+                            "403": {"description": "Forbidden - Super admin only"}
+                        }
+                    },
+                    "post": {
+                        "summary": "Create permission",
+                        "description": "Creates a new permission in the organization (super admin only)",
+                        "tags": ["Permissions Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "responses": {
+                            "201": {"description": "Permission created successfully"},
+                            "400": {"description": "Bad request"},
+                            "401": {"description": "Unauthorized"},
+                            "403": {"description": "Forbidden - Super admin only"}
+                        }
+                    }
+                },
+                "/permissions/{id}": {
+                    "get": {
+                        "summary": "Get permission by ID",
+                        "tags": ["Permissions Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "200": {"description": "Permission retrieved successfully"},
+                            "404": {"description": "Permission not found"}
+                        }
+                    },
+                    "put": {
+                        "summary": "Update permission",
+                        "tags": ["Permissions Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "200": {"description": "Permission updated successfully"},
+                            "404": {"description": "Permission not found"}
+                        }
+                    },
+                    "delete": {
+                        "summary": "Delete permission", 
+                        "tags": ["Permissions Management"],
+                        "security": [{"CognitoAuth": []}],
+                        "parameters": [{
+                            "name": "id",
+                            "in": "path",
+                            "required": true,
+                            "schema": {"type": "integer"}
+                        }],
+                        "responses": {
+                            "204": {"description": "Permission deleted successfully"},
+                            "404": {"description": "Permission not found"}
+                        }
+                    }
+                }
+            },
+            "components": {
+                "securitySchemes": {
+                    "CognitoAuth": {
+                        "type": "http",
+                        "scheme": "bearer",
+                        "description": "AWS Cognito JWT token"
+                    }
+                }
+            },
+            "tags": [
+                {
+                    "name": "Organization",
+                    "description": "Organization management operations"
+                },
+                {
+                    "name": "Locations", 
+                    "description": "Location management operations"
+                },
+                {
+                    "name": "Roles Management",
+                    "description": "Role management and role-permission operations (Super Admin only)"
+                },
+                {
+                    "name": "Permissions Management",
+                    "description": "Permission management operations (Super Admin only)"
+                }
+            ]
+        };
+
+        window.onload = function() {
+            SwaggerUIBundle({
+                spec: spec,
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout"
+            });
+        };
+    </script>
+</body>
+</html>
