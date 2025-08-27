@@ -1,0 +1,573 @@
+{
+	"info": {
+		"_postman_id": "12345678-1234-1234-1234-123456789012",
+		"name": "Organization Management API",
+		"description": "Collection for testing the Organization Management endpoints with Cognito authentication",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Check if access token exists and is not expired",
+					"const accessToken = pm.environment.get('access_token');",
+					"const tokenExpiry = pm.environment.get('token_expiry');",
+					"const now = new Date().getTime();",
+					"",
+					"if (!accessToken || !tokenExpiry || now > tokenExpiry) {",
+					"    console.log('Access token missing or expired, need to authenticate first');",
+					"}"
+				]
+			}
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Get Cognito Auth URL",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// This will show you the Cognito Hosted UI URL",
+									"console.log('Visit this URL to authenticate:');",
+									"console.log(pm.environment.get('cognito_hosted_ui_url') + '/oauth2/authorize?client_id=' + pm.environment.get('cognito_client_id') + '&response_type=code&scope=email+openid+profile&redirect_uri=' + encodeURIComponent(pm.environment.get('redirect_uri')));",
+									"",
+									"pm.test('Auth URL generated', function () {",
+									"    pm.expect(pm.environment.get('cognito_hosted_ui_url')).to.not.be.undefined;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{cognito_hosted_ui_url}}/oauth2/authorize?client_id={{cognito_client_id}}&response_type=code&scope=email openid profile&redirect_uri={{redirect_uri}}",
+							"host": [
+								"{{cognito_hosted_ui_url}}"
+							],
+							"path": [
+								"oauth2",
+								"authorize"
+							],
+							"query": [
+								{
+									"key": "client_id",
+									"value": "{{cognito_client_id}}"
+								},
+								{
+									"key": "response_type",
+									"value": "code"
+								},
+								{
+									"key": "scope",
+									"value": "email openid profile"
+								},
+								{
+									"key": "redirect_uri",
+									"value": "{{redirect_uri}}"
+								}
+							]
+						},
+						"description": "This will redirect you to Cognito Hosted UI. After login, copy the authorization code from the redirect URL."
+					}
+				},
+				{
+					"name": "Exchange Code for Tokens",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    ",
+									"    // Store tokens in environment",
+									"    pm.environment.set('access_token', responseJson.access_token);",
+									"    pm.environment.set('id_token', responseJson.id_token);",
+									"    pm.environment.set('refresh_token', responseJson.refresh_token);",
+									"    ",
+									"    // Calculate expiry time (expires_in is in seconds)",
+									"    const expiryTime = new Date().getTime() + (responseJson.expires_in * 1000);",
+									"    pm.environment.set('token_expiry', expiryTime);",
+									"    ",
+									"    console.log('Tokens stored successfully');",
+									"    console.log('Access token expires at:', new Date(expiryTime));",
+									"    ",
+									"    pm.test('Tokens received', function () {",
+									"        pm.expect(responseJson.access_token).to.not.be.undefined;",
+									"        pm.expect(responseJson.id_token).to.not.be.undefined;",
+									"    });",
+									"} else {",
+									"    console.log('Token exchange failed:', pm.response.text());",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "authorization_code",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "{{cognito_client_id}}",
+									"type": "text"
+								},
+								{
+									"key": "code",
+									"value": "{{authorization_code}}",
+									"type": "text",
+									"description": "Set this after getting the code from the redirect URL"
+								},
+								{
+									"key": "redirect_uri",
+									"value": "{{redirect_uri}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{cognito_hosted_ui_url}}/oauth2/token",
+							"host": [
+								"{{cognito_hosted_ui_url}}"
+							],
+							"path": [
+								"oauth2",
+								"token"
+							]
+						},
+						"description": "Exchange the authorization code for access tokens. Make sure to set the 'authorization_code' environment variable with the code from the redirect URL."
+					}
+				},
+				{
+					"name": "Refresh Access Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    ",
+									"    // Update tokens in environment",
+									"    pm.environment.set('access_token', responseJson.access_token);",
+									"    pm.environment.set('id_token', responseJson.id_token);",
+									"    ",
+									"    // Calculate new expiry time",
+									"    const expiryTime = new Date().getTime() + (responseJson.expires_in * 1000);",
+									"    pm.environment.set('token_expiry', expiryTime);",
+									"    ",
+									"    console.log('Tokens refreshed successfully');",
+									"    ",
+									"    pm.test('Tokens refreshed', function () {",
+									"        pm.expect(responseJson.access_token).to.not.be.undefined;",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "refresh_token",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "{{cognito_client_id}}",
+									"type": "text"
+								},
+								{
+									"key": "refresh_token",
+									"value": "{{refresh_token}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{cognito_hosted_ui_url}}/oauth2/token",
+							"host": [
+								"{{cognito_hosted_ui_url}}"
+							],
+							"path": [
+								"oauth2",
+								"token"
+							]
+						},
+						"description": "Refresh the access token using the refresh token."
+					}
+				}
+			],
+			"description": "Authentication endpoints for getting Cognito tokens"
+		},
+		{
+			"name": "Organization Management",
+			"item": [
+				{
+					"name": "Get Organization Info",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has organization data', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('org_id');",
+									"    pm.expect(responseJson).to.have.property('org_name');",
+									"    pm.expect(responseJson).to.have.property('created_at');",
+									"    pm.expect(responseJson).to.have.property('updated_at');",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    console.log('Organization Info:', JSON.stringify(responseJson, null, 2));",
+									"    ",
+									"    // Store org_id for future requests",
+									"    pm.environment.set('org_id', responseJson.org_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/org",
+							"host": [
+								"{{api_gateway_url}}"
+							],
+							"path": [
+								"org"
+							]
+						},
+						"description": "Retrieve organization information for the authenticated super admin user."
+					}
+				},
+				{
+					"name": "Update Organization Name",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Organization updated successfully', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('org_id');",
+									"    pm.expect(responseJson).to.have.property('org_name');",
+									"    pm.expect(responseJson.org_name).to.not.equal('system');",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    console.log('Updated Organization:', JSON.stringify(responseJson, null, 2));",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"org_name\": \"My Company Inc\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/org",
+							"host": [
+								"{{api_gateway_url}}"
+							],
+							"path": [
+								"org"
+							]
+						},
+						"description": "Update the organization name from the default 'system' to the actual organization name. This also changes the user's status from 'pending_org_setup' to 'active'."
+					}
+				},
+				{
+					"name": "Update Organization Name (Invalid Data)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test('Error message returned', function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('error');",
+									"});",
+									"",
+									"console.log('Error response:', pm.response.text());"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"org_name\": \"XY\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/org",
+							"host": [
+								"{{api_gateway_url}}"
+							],
+							"path": [
+								"org"
+							]
+						},
+						"description": "Test validation - organization name must be at least 3 characters. This should return a 400 error."
+					}
+				},
+				{
+					"name": "CORS Preflight Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('CORS headers present', function () {",
+									"    pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.not.be.null;",
+									"    pm.expect(pm.response.headers.get('Access-Control-Allow-Methods')).to.not.be.null;",
+									"    pm.expect(pm.response.headers.get('Access-Control-Allow-Headers')).to.not.be.null;",
+									"});",
+									"",
+									"console.log('CORS Headers:');",
+									"console.log('Access-Control-Allow-Origin:', pm.response.headers.get('Access-Control-Allow-Origin'));",
+									"console.log('Access-Control-Allow-Methods:', pm.response.headers.get('Access-Control-Allow-Methods'));",
+									"console.log('Access-Control-Allow-Headers:', pm.response.headers.get('Access-Control-Allow-Headers'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "OPTIONS",
+						"header": [
+							{
+								"key": "Access-Control-Request-Method",
+								"value": "PUT",
+								"type": "text"
+							},
+							{
+								"key": "Access-Control-Request-Headers",
+								"value": "authorization,content-type",
+								"type": "text"
+							},
+							{
+								"key": "Origin",
+								"value": "https://localhost:3000",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/org",
+							"host": [
+								"{{api_gateway_url}}"
+							],
+							"path": [
+								"org"
+							]
+						},
+						"description": "Test CORS preflight request to ensure the infrastructure-api-gateway-cors Lambda is working correctly."
+					}
+				}
+			],
+			"description": "Organization management endpoints"
+		},
+		{
+			"name": "Error Scenarios",
+			"item": [
+				{
+					"name": "Unauthorized Request (No Token)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 401', function () {",
+									"    pm.response.to.have.status(401);",
+									"});",
+									"",
+									"console.log('Unauthorized response:', pm.response.text());"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_gateway_url}}/org",
+							"host": [
+								"{{api_gateway_url}}"
+							],
+							"path": [
+								"org"
+							]
+						},
+						"description": "Test unauthorized access without authentication token."
+					}
+				},
+				{
+					"name": "Invalid HTTP Method",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 405', function () {",
+									"    pm.response.to.have.status(405);",
+									"});",
+									"",
+									"console.log('Method not allowed response:', pm.response.text());"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/org",
+							"host": [
+								"{{api_gateway_url}}"
+							],
+							"path": [
+								"org"
+							]
+						},
+						"description": "Test unsupported HTTP method. Should return 405 Method Not Allowed."
+					}
+				}
+			],
+			"description": "Test error scenarios and edge cases"
+		}
+	],
+	"variable": [
+		{
+			"key": "api_gateway_url",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "cognito_hosted_ui_url",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "cognito_client_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "redirect_uri",
+			"value": "https://localhost:3000/callback",
+			"type": "string"
+		}
+	]
+}

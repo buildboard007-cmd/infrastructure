@@ -1,0 +1,150 @@
+openapi: 3.0.1
+
+info:
+  title: Infrastructure API
+  version: "1.0.0"
+
+paths:
+  /org:
+    get:
+      summary: Get organization information
+      description: Retrieves the organization information for the authenticated super admin user
+      responses:
+        "200":
+          description: Organization information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Update organization information
+      description: Updates the organization name. Only accessible by super admin users. This changes the organization name from the default "system" to the actual organization name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrganizationRequest"
+      responses:
+        "200":
+          description: Organization updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  
+  /search:
+    get:
+      summary: Get open search result (external api with jwt token).
+      responses:
+        "200":
+          description: List open search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Forbidden"
+        "403":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  responses:
+    NoContent:
+      description: No content
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+    NotFound:
+      description: The specified resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorList"
+
+  schemas:
+    Organization:
+      type: object
+      properties:
+        org_id:
+          type: integer
+          format: int64
+          description: Unique identifier for the organization
+        org_name:
+          type: string
+          description: Name of the organization
+          minLength: 3
+          maxLength: 150
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the organization was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the organization was last updated
+      required:
+        - org_id
+        - org_name
+        - created_at
+        - updated_at
+    
+    UpdateOrganizationRequest:
+      type: object
+      properties:
+        org_name:
+          type: string
+          description: New name for the organization
+          minLength: 3
+          maxLength: 150
+      required:
+        - org_name
+    
+    ErrorList:
+      type: array
+      items:
+        "$ref": "#/components/schemas/Error"
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
