@@ -224,23 +224,20 @@ func processSignup(request *SignupRequest) error {
 
 // processSuperAdminSignup handles the SuperAdmin signup flow
 func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
-	// Create a default "System" organization for SuperAdmins first
+	// Create a new organization for this SuperAdmin
+	// Each SuperAdmin gets their own organization
 	var orgID int64
+	
+	// Create a unique organization for this super admin
+	// Initial name will be "New Organization" and they can update it later
 	err := tx.QueryRow(`
 		INSERT INTO iam.organization (org_name, created_at, updated_at)
-		VALUES ('System', NOW(), NOW())
-		ON CONFLICT DO NOTHING
+		VALUES ('New Organization', NOW(), NOW())
 		RETURNING org_id
 	`).Scan(&orgID)
 
 	if err != nil {
-		// If insert failed due to conflict, get existing System org
-		err = tx.QueryRow(`
-			SELECT org_id FROM iam.organization WHERE org_name = 'System'
-		`).Scan(&orgID)
-		if err != nil {
-			return fmt.Errorf("failed to get or create System organization: %w", err)
-		}
+		return fmt.Errorf("failed to create organization for super admin: %w", err)
 	}
 
 	// Create SuperAdmin user record with pending_org_setup status
