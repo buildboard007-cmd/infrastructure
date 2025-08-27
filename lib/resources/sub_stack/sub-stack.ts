@@ -61,10 +61,6 @@ export class SubStack extends NestedStack {
         orgResource.addMethod('PUT', orgManagementIntegration);
         orgResource.addMethod('OPTIONS', corsIntegration);
 
-        // Create /search resource  
-        const searchResource = this.api.root.addResource('search');
-        searchResource.addMethod('GET', orgManagementIntegration); // Reusing for now, can be changed later
-        searchResource.addMethod('OPTIONS', corsIntegration);
 
         // Skip domain for LOCAL
         if (props.stageEnvironment != StageEnvironment.LOCAL) {
@@ -73,9 +69,9 @@ export class SubStack extends NestedStack {
                 props.stageEnvironment
             );
 
-            // need to figure out how to fail a CDK synth
-            if (!stageOptions) {
-                console.log("Didn't find a domain for the stage");
+            // Only create domain mapping if domain configuration is provided
+            if (!stageOptions || !stageOptions.domainName || stageOptions.domainName.trim() === "") {
+                console.log("No domain configuration found for stage, skipping domain mapping");
                 return;
             }
 
