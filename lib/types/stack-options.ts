@@ -7,6 +7,8 @@ export type StackOptions = {
     productionAccount: string,
     cdkBootstrapQualifier: string,
     stackName: string,
+    apiName: string,
+    apiStageName: string,
     pipelineName: string,
     githubConnectionArn: string,
     githubBranch: string,
@@ -27,7 +29,11 @@ export type StackOptions = {
 export type StageOptions = {
     environment: StageEnvironment,
     account: string,
-    logRetentionDays: number
+    logRetentionDays: number,
+    vpcId: string,
+    domainName: string,
+    domainNameAliasTarget: string,
+    domainNameAliasHostedZoneId: string,
 };
 
 export const findStageOption = (options: StackOptions, o: StageEnvironment) => {
