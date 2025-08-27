@@ -49,10 +49,10 @@ func (dao *LocationDao) CreateLocation(ctx context.Context, userID, orgID int64,
 	// Create the location
 	var locationID int64
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO iam.location (org_id, location_name, address, created_by, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		INSERT INTO iam.location (org_id, location_name, address)
+		VALUES ($1, $2, $3)
 		RETURNING location_id, created_at, updated_at
-	`, orgID, location.LocationName, location.Address, userID).Scan(
+	`, orgID, location.LocationName, location.Address).Scan(
 		&locationID, &location.CreatedAt, &location.UpdatedAt)
 
 	if err != nil {
@@ -65,11 +65,11 @@ func (dao *LocationDao) CreateLocation(ctx context.Context, userID, orgID int64,
 		return nil, fmt.Errorf("failed to create location: %w", err)
 	}
 
-	// Get SuperAdmin role ID
+	// Get SuperAdmin role ID for the organization
 	var superAdminRoleID int64
 	err = tx.QueryRowContext(ctx, `
-		SELECT role_id FROM iam.role WHERE role_name = 'SuperAdmin'
-	`).Scan(&superAdminRoleID)
+		SELECT role_id FROM iam.role WHERE role_name = 'SuperAdmin' AND org_id = $1
+	`, orgID).Scan(&superAdminRoleID)
 
 	if err != nil {
 		dao.Logger.WithError(err).Error("Failed to get SuperAdmin role ID")
@@ -78,8 +78,8 @@ func (dao *LocationDao) CreateLocation(ctx context.Context, userID, orgID int64,
 
 	// Assign the location to the creator with SuperAdmin role
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO iam.user_location (user_id, location_id, role_id, created_at, updated_at)
-		VALUES ($1, $2, $3, NOW(), NOW())
+		INSERT INTO iam.user_location_role (user_id, location_id, role_id)
+		VALUES ($1, $2, $3)
 	`, userID, locationID, superAdminRoleID)
 
 	if err != nil {
@@ -101,7 +101,6 @@ func (dao *LocationDao) CreateLocation(ctx context.Context, userID, orgID int64,
 	// Populate the response
 	location.LocationID = locationID
 	location.OrgID = orgID
-	location.CreatedBy = userID
 
 	dao.Logger.WithFields(logrus.Fields{
 		"location_id":   locationID,
@@ -116,7 +115,7 @@ func (dao *LocationDao) CreateLocation(ctx context.Context, userID, orgID int64,
 // GetLocationsByOrg retrieves all locations for a specific organization
 func (dao *LocationDao) GetLocationsByOrg(ctx context.Context, orgID int64) ([]models.Location, error) {
 	query := `
-		SELECT location_id, org_id, location_name, address, created_by, created_at, updated_at
+		SELECT location_id, org_id, location_name, address, created_at, updated_at
 		FROM iam.location
 		WHERE org_id = $1
 		ORDER BY location_name ASC
@@ -140,7 +139,6 @@ func (dao *LocationDao) GetLocationsByOrg(ctx context.Context, orgID int64) ([]m
 			&location.OrgID,
 			&location.LocationName,
 			&location.Address,
-			&location.CreatedBy,
 			&location.CreatedAt,
 			&location.UpdatedAt,
 		)
@@ -168,7 +166,7 @@ func (dao *LocationDao) GetLocationsByOrg(ctx context.Context, orgID int64) ([]m
 func (dao *LocationDao) GetLocationByID(ctx context.Context, locationID, orgID int64) (*models.Location, error) {
 	var location models.Location
 	query := `
-		SELECT location_id, org_id, location_name, address, created_by, created_at, updated_at
+		SELECT location_id, org_id, location_name, address, created_at, updated_at
 		FROM iam.location
 		WHERE location_id = $1 AND org_id = $2
 	`
@@ -178,7 +176,6 @@ func (dao *LocationDao) GetLocationByID(ctx context.Context, locationID, orgID i
 		&location.OrgID,
 		&location.LocationName,
 		&location.Address,
-		&location.CreatedBy,
 		&location.CreatedAt,
 		&location.UpdatedAt,
 	)
@@ -207,9 +204,9 @@ func (dao *LocationDao) GetLocationByID(ctx context.Context, locationID, orgID i
 func (dao *LocationDao) UpdateLocation(ctx context.Context, locationID, orgID int64, location *models.Location) (*models.Location, error) {
 	query := `
 		UPDATE iam.location 
-		SET location_name = $1, address = $2, updated_at = NOW()
+		SET location_name = $1, address = $2
 		WHERE location_id = $3 AND org_id = $4
-		RETURNING location_id, org_id, location_name, address, created_by, created_at, updated_at
+		RETURNING location_id, org_id, location_name, address, created_at, updated_at
 	`
 
 	var updatedLocation models.Location
@@ -223,7 +220,6 @@ func (dao *LocationDao) UpdateLocation(ctx context.Context, locationID, orgID in
 		&updatedLocation.OrgID,
 		&updatedLocation.LocationName,
 		&updatedLocation.Address,
-		&updatedLocation.CreatedBy,
 		&updatedLocation.CreatedAt,
 		&updatedLocation.UpdatedAt,
 	)
@@ -264,16 +260,16 @@ func (dao *LocationDao) DeleteLocation(ctx context.Context, locationID, orgID in
 	}
 	defer tx.Rollback()
 
-	// First, remove all user-location assignments
+	// First, remove all user-location-role assignments
 	_, err = tx.ExecContext(ctx, `
-		DELETE FROM iam.user_location WHERE location_id = $1
+		DELETE FROM iam.user_location_role WHERE location_id = $1
 	`, locationID)
 
 	if err != nil {
 		dao.Logger.WithFields(logrus.Fields{
 			"location_id": locationID,
 			"error":       err.Error(),
-		}).Error("Failed to remove user-location assignments")
+		}).Error("Failed to remove user-location-role assignments")
 		return fmt.Errorf("failed to remove user assignments: %w", err)
 	}
 
@@ -318,7 +314,7 @@ func (dao *LocationDao) DeleteLocation(ctx context.Context, locationID, orgID in
 func (dao *LocationDao) VerifyLocationAccess(ctx context.Context, userID, locationID int64) (bool, error) {
 	var count int
 	query := `
-		SELECT COUNT(*) FROM iam.user_location 
+		SELECT COUNT(*) FROM iam.user_location_role 
 		WHERE user_id = $1 AND location_id = $2
 	`
 

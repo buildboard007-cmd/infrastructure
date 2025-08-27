@@ -13,7 +13,6 @@ type Location struct {
 	Address     string    `json:"address,omitempty"` // Optional physical address
 	CreatedAt   time.Time `json:"created_at"`   // Creation timestamp
 	UpdatedAt   time.Time `json:"updated_at"`   // Last update timestamp
-	CreatedBy   int64     `json:"created_by"`   // User ID who created this location
 }
 
 // CreateLocationRequest represents the request payload for creating a new location
