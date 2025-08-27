@@ -83,7 +83,8 @@ export const addLambdaExtension = (
         contentHandling: "CONVERT_TO_TEXT",
         type: "aws_proxy",
     };
-    v[httpMethod]!["security"] = [{CognitoAuthorizer: []}];
+    // Security will be handled by CDK authorizer, not in OpenAPI spec
+    // v[httpMethod]!["security"] = [{CognitoAuthorizer: []}];
 };
 
 export const addCors = (

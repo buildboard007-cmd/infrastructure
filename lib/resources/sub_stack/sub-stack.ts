@@ -12,7 +12,7 @@ import {OpenApiBuilder} from "openapi3-ts";
 import {ApiDefinition, BasePathMapping, DomainName, SpecRestApi} from "aws-cdk-lib/aws-apigateway";
 import {ServicePrincipal} from "aws-cdk-lib/aws-iam";
 import {GetAccountId} from "../../utils/account-utils";
-import {addCors, addSecuritySchemeExtension} from "../../utils/api-utils";
+import {addCors} from "../../utils/api-utils";
 
 interface KeyProps extends NestedStackProps {
     options: StackOptions;
@@ -49,13 +49,8 @@ export class SubStack extends NestedStack {
 
         const account = GetAccountId(props.stageEnvironment);
         
-        // Add Cognito security scheme to API specification
-        addSecuritySchemeExtension(
-            props.builder, 
-            props.options.defaultRegion, 
-            account,
-            cognitoConstruct.userPool.userPoolArn
-        );
+        // Don't add security scheme to OpenAPI spec - we'll handle auth in CDK
+        // The User Pool ARN token can't be resolved in the spec file
         
         // Add CORS support using infrastructure-api-gateway-cors Lambda
         const corsFunctionName = `${props.options.githubRepo}-api-gateway-cors`;
