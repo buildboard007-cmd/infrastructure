@@ -59,6 +59,7 @@ export class SubStack extends NestedStack {
 
         // Create Lambda integrations
         const orgManagementIntegration = new LambdaIntegration(this.lambdaConstruct.organizationManagementLambda);
+        const locationManagementIntegration = new LambdaIntegration(this.lambdaConstruct.locationManagementLambda);
         const corsIntegration = new LambdaIntegration(this.lambdaConstruct.corsLambda);
 
         // Create /org resource with Cognito authorization
@@ -70,6 +71,29 @@ export class SubStack extends NestedStack {
             authorizer: cognitoAuthorizer
         });
         orgResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /locations resource with Cognito authorization
+        const locationsResource = this.api.root.addResource('locations');
+        locationsResource.addMethod('GET', locationManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        locationsResource.addMethod('POST', locationManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        locationsResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /locations/{id} resource for specific location operations
+        const locationIdResource = locationsResource.addResource('{id}');
+        locationIdResource.addMethod('GET', locationManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        locationIdResource.addMethod('PUT', locationManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        locationIdResource.addMethod('DELETE', locationManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        locationIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
 
         // Skip domain for LOCAL

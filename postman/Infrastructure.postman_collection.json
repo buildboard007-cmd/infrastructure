@@ -1,0 +1,762 @@
+{
+  "info": {
+    "_postman_id": "infrastructure-api-collection-001",
+    "name": "Infrastructure",
+    "description": "Complete API collection for Infrastructure application including SuperAdmin signup, organization management, and location management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "SuperAdmin Signup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has UserSub', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('UserSub');",
+                  "    console.log('UserSub:', jsonData.UserSub);",
+                  "});",
+                  "",
+                  "console.log('SuperAdmin signup completed. Check email for confirmation code.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-amz-json-1.1"
+              },
+              {
+                "key": "X-Amz-Target",
+                "value": "AWSCognitoIdentityProviderService.SignUp"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ClientId\": \"7pdi3v6gcq3pr1i8kv43of8dsg\",\n  \"Username\": \"buildboard007+mayur@gmail.com\",\n  \"Password\": \"TempPass123!\",\n  \"UserAttributes\": [\n    {\n      \"Name\": \"email\",\n      \"Value\": \"buildboard007+mayur@gmail.com\"\n    },\n    {\n      \"Name\": \"custom:isSuperAdmin\",\n      \"Value\": \"true\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
+              "protocol": "https",
+              "host": [
+                "cognito-idp",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Confirm Signup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "console.log('Email confirmation completed. User can now sign in.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-amz-json-1.1"
+              },
+              {
+                "key": "X-Amz-Target",
+                "value": "AWSCognitoIdentityProviderService.ConfirmSignUp"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ClientId\": \"7pdi3v6gcq3pr1i8kv43of8dsg\",\n  \"Username\": \"buildboard007+mayur@gmail.com\",\n  \"ConfirmationCode\": \"REPLACE_WITH_CODE_FROM_EMAIL\"\n}"
+            },
+            "url": {
+              "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
+              "protocol": "https",
+              "host": [
+                "cognito-idp",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "SuperAdmin Sign In",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Authentication result exists', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('AuthenticationResult');",
+                  "    ",
+                  "    // Store tokens for API calls",
+                  "    const authResult = jsonData.AuthenticationResult;",
+                  "    pm.globals.set('access_token', authResult.AccessToken);",
+                  "    pm.globals.set('id_token', authResult.IdToken);",
+                  "    pm.globals.set('refresh_token', authResult.RefreshToken);",
+                  "    ",
+                  "    console.log('Tokens stored in globals for API calls');",
+                  "});",
+                  "",
+                  "console.log('SuperAdmin sign in successful.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-amz-json-1.1"
+              },
+              {
+                "key": "X-Amz-Target",
+                "value": "AWSCognitoIdentityProviderService.InitiateAuth"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"AuthFlow\": \"USER_PASSWORD_AUTH\",\n  \"ClientId\": \"7pdi3v6gcq3pr1i8kv43of8dsg\",\n  \"AuthParameters\": {\n    \"USERNAME\": \"buildboard007+mayur@gmail.com\",\n    \"PASSWORD\": \"TempPass123!\"\n  }\n}"
+            },
+            "url": {
+              "raw": "https://cognito-idp.us-east-2.amazonaws.com/",
+              "protocol": "https",
+              "host": [
+                "cognito-idp",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organization Management",
+      "item": [
+        {
+          "name": "Get Organization Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has organization data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('org_id');",
+                  "    pm.expect(responseJson).to.have.property('org_name');",
+                  "    console.log('Organization Info:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/org",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "org"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Organization Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Organization updated successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('org_id');",
+                  "    pm.expect(responseJson).to.have.property('org_name');",
+                  "    console.log('Updated Organization:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"org_name\": \"Acme Corporation\"\n}"
+            },
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/org",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "org"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Location Management",
+      "item": [
+        {
+          "name": "Create Location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Location created with required fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('location_id');",
+                  "    pm.expect(responseJson).to.have.property('location_name');",
+                  "    pm.expect(responseJson).to.have.property('org_id');",
+                  "    pm.expect(responseJson).to.have.property('created_by');",
+                  "    ",
+                  "    // Store location_id for other requests",
+                  "    pm.globals.set('location_id', responseJson.location_id);",
+                  "    console.log('Created Location:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"location_name\": \"Headquarters\",\n    \"address\": \"123 Main Street, New York, NY 10001\",\n    \"description\": \"Main office headquarters\"\n}"
+            },
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "locations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Locations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has locations array', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('locations');",
+                  "    pm.expect(responseJson).to.have.property('total');",
+                  "    pm.expect(responseJson.locations).to.be.an('array');",
+                  "    console.log('Locations:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "locations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Location by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has location data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('location_id');",
+                  "    pm.expect(responseJson).to.have.property('location_name');",
+                  "    console.log('Location Details:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations/{{location_id}}",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "locations",
+                "{{location_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Location updated successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('location_id');",
+                  "    pm.expect(responseJson).to.have.property('location_name');",
+                  "    console.log('Updated Location:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"location_name\": \"Corporate Headquarters\",\n    \"address\": \"456 Business Avenue, New York, NY 10001\",\n    \"description\": \"Updated main office headquarters with new address\"\n}"
+            },
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations/{{location_id}}",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "locations",
+                "{{location_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 204', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "",
+                  "console.log('Location deleted successfully.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations/{{location_id}}",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "locations",
+                "{{location_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CORS Testing",
+      "item": [
+        {
+          "name": "CORS Preflight - Organization",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('CORS headers present', function () {",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.not.be.null;",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Allow-Methods')).to.not.be.null;",
+                  "    console.log('CORS Headers:', pm.response.headers);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "PUT"
+              },
+              {
+                "key": "Access-Control-Request-Headers",
+                "value": "authorization,content-type"
+              },
+              {
+                "key": "Origin",
+                "value": "https://localhost:3000"
+              }
+            ],
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/org",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "org"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CORS Preflight - Locations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('CORS headers present', function () {",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.not.be.null;",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Allow-Methods')).to.not.be.null;",
+                  "    console.log('CORS Headers:', pm.response.headers);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "POST"
+              },
+              {
+                "key": "Access-Control-Request-Headers",
+                "value": "authorization,content-type"
+              },
+              {
+                "key": "Origin",
+                "value": "https://localhost:3000"
+              }
+            ],
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "locations"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Error Scenarios",
+      "item": [
+        {
+          "name": "Unauthorized Request (No Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "console.log('Expected 401 Unauthorized response:', pm.response.text());"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/org",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "org"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Invalid Location Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "console.log('Expected validation error:', pm.response.text());"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"location_name\": \"A\",\n    \"address\": \"123 Test Street\",\n    \"description\": \"Location name too short - should fail validation\"\n}"
+            },
+            "url": {
+              "raw": "https://71vklxedra.execute-api.us-east-2.amazonaws.com/dev/locations",
+              "protocol": "https",
+              "host": [
+                "71vklxedra",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "dev",
+                "locations"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

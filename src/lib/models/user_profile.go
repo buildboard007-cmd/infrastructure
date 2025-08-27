@@ -20,12 +20,12 @@ type Role struct {
 	Description string `json:"description,omitempty"`     // Optional detailed description of role responsibilities
 }
 
-// Location represents a physical or logical location within an organization.
+// UserLocation represents a physical or logical location within an organization with user-specific role information.
 // Users can have different roles at different locations.
 // Examples: 'New York Office', 'Remote Team', 'Manufacturing Plant'
 //
 // Database mapping: iam.location table + associated roles via iam.user_location_role
-type Location struct {
+type UserLocation struct {
 	LocationID   int64  `json:"location_id"`               // Primary key from iam.location.location_id
 	LocationName string `json:"location_name"`             // Human-readable location name
 	Address      string `json:"address,omitempty"`         // Optional physical address
@@ -70,8 +70,8 @@ type UserProfile struct {
 	OrgName string `json:"org_name" db:"org_name"`       // Organization name for display
 	
 	// Location Context
-	CurrentLocationID sql.NullString `json:"current_location_id" db:"current_location_id"` // User's primary/current location
-	Locations         []Location     `json:"locations" db:"locations"`                      // All locations and roles for this user
+	CurrentLocationID sql.NullString   `json:"current_location_id" db:"current_location_id"` // User's primary/current location
+	Locations         []UserLocation `json:"locations" db:"locations"`                      // All locations and roles for this user
 }
 
 // GetFullName returns the user's full name as "FirstName LastName"

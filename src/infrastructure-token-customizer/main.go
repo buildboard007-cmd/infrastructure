@@ -311,7 +311,7 @@ func isValidTriggerSourceV2(triggerSource string) bool {
 //   - Uses map[string]bool for O(1) duplicate detection
 //   - Preserves role names exactly as stored in database
 //   - Returns deterministic (but unordered) slice of unique roles
-func extractAllRoles(locations []models.Location) []string {
+func extractAllRoles(locations []models.UserLocation) []string {
 	// Use map for efficient deduplication of role names
 	roleMap := make(map[string]bool)
 

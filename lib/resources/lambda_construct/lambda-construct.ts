@@ -6,6 +6,7 @@ import {InfrastructureTokenCustomizer} from "../function_construct/infrastructur
 import {InfrastructureUserSignup} from "../function_construct/infrastructure-user-signup";
 import {GoFunction} from "@aws-cdk/aws-lambda-go-alpha";
 import {InfrastructureOrganizationManagement} from "../function_construct/infrastructure-organization-management";
+import {InfrastructureLocationManagement} from "../function_construct/infrastructure-location-management";
 
 export class LambdaConstruct extends Construct {
 
@@ -13,6 +14,7 @@ export class LambdaConstruct extends Construct {
     private readonly infrastructureTokenCustomizer: InfrastructureTokenCustomizer;
     private readonly infrastructureUserSignup: InfrastructureUserSignup;
     private readonly infrastructureOrganizationManagement: InfrastructureOrganizationManagement;
+    private readonly infrastructureLocationManagement: InfrastructureLocationManagement;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -26,6 +28,7 @@ export class LambdaConstruct extends Construct {
         this.infrastructureTokenCustomizer = new InfrastructureTokenCustomizer(this, 'InfrastructureTokenCustomizer', funcProps);
         this.infrastructureUserSignup = new InfrastructureUserSignup(this, 'InfrastructureUserSignup', funcProps);
         this.infrastructureOrganizationManagement = new InfrastructureOrganizationManagement(this, 'InfrastructureOrganizationManagement', funcProps);
+        this.infrastructureLocationManagement = new InfrastructureLocationManagement(this, 'InfrastructureLocationManagement', funcProps);
     }
 
     get corsLambda(): GoFunction {
@@ -58,5 +61,13 @@ export class LambdaConstruct extends Construct {
 
     get organizationManagementLambdaArn(): string {
         return this.infrastructureOrganizationManagement.functionArn;
+    }
+
+    get locationManagementLambda(): GoFunction {
+        return this.infrastructureLocationManagement.function;
+    }
+
+    get locationManagementLambdaArn(): string {
+        return this.infrastructureLocationManagement.functionArn;
     }
 }

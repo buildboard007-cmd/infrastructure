@@ -170,11 +170,11 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 				"locations_json": locationsJSON,
 				"error":          err.Error(),
 			}).Warn("Error parsing locations JSON, using empty locations array")
-			profile.Locations = []models.Location{}
+			profile.Locations = []models.UserLocation{}
 		}
 	} else {
 		// No locations data or null - initialize empty array
-		profile.Locations = []models.Location{}
+		profile.Locations = []models.UserLocation{}
 	}
 
 	// Log successful profile fetch
