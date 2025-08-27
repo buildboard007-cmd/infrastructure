@@ -52,4 +52,12 @@ export class LambdaConstruct extends Construct {
     get userSignupLambdaArn(): string {
         return this.infrastructureUserSignup.functionArn;
     }
+
+    get organizationManagementLambda(): GoFunction {
+        return this.infrastructureOrganizationManagement.function;
+    }
+
+    get organizationManagementLambdaArn(): string {
+        return this.infrastructureOrganizationManagement.functionArn;
+    }
 }

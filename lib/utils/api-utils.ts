@@ -82,7 +82,7 @@ export const addLambdaExtension = (
         contentHandling: "CONVERT_TO_TEXT",
         type: "aws_proxy",
     };
-    v[httpMethod]!["security"] = [{CognitoAuthorizer: []}];
+    // Security will be handled at Lambda function level
 };
 
 export const addCors = (

@@ -78,6 +78,12 @@ export class SubStack extends NestedStack {
             sourceArn: this.api.arnForExecuteApi('*', '/*', '*'),
         });
 
+        // Grant API Gateway permission to invoke the Organization Management Lambda
+        this.lambdaConstruct.organizationManagementLambda.addPermission('ApiGatewayOrgManagementPermission', {
+            principal: new ServicePrincipal('apigateway.amazonaws.com'),
+            sourceArn: this.api.arnForExecuteApi('*', '/*', '*'),
+        });
+
         // Skip domain for LOCAL
         if (props.stageEnvironment != StageEnvironment.LOCAL) {
             const stageOptions = findStageOptions(
