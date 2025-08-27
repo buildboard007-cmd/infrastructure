@@ -39,30 +39,81 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	// Get user ID from the JWT token claims (added by token customizer)
 	// The API Gateway with Cognito authorizer adds the decoded JWT claims to the request context
-	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
+	// Debug: Log the entire authorizer context to understand the structure
+	logger.WithField("authorizer", request.RequestContext.Authorizer).Debug("Full authorizer context")
+	
+	var claims map[string]interface{}
+	var ok bool
+	
+	// Try different possible claim locations in the authorizer context
+	if authClaims, exists := request.RequestContext.Authorizer["claims"]; exists {
+		claims, ok = authClaims.(map[string]interface{})
+	}
+	
+	// If claims not found, try direct access to authorizer (some API Gateway configurations)
 	if !ok {
-		logger.Error("Failed to get claims from authorizer context")
+		claims = request.RequestContext.Authorizer
+		ok = (claims != nil)
+	}
+	
+	if !ok || claims == nil {
+		logger.WithField("authorizer", request.RequestContext.Authorizer).Error("Failed to get claims from authorizer context")
 		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing claims"), nil
 	}
 	
+	logger.WithField("claims", claims).Debug("Extracted claims from authorizer context")
+	
 	// Get the internal user_id from claims (added by token customizer)
-	userIDStr, ok := claims["user_id"].(string)
-	if !ok {
-		logger.Error("Failed to get user_id from claims")
+	// user_id could be a string or number, so let's try both
+	var userIDStr string
+	var userID int64
+	var err error
+	
+	if userIDValue, exists := claims["user_id"]; exists {
+		logger.WithField("user_id_raw", userIDValue).Debug("Raw user_id from claims")
+		
+		// Try as string first
+		if userIDStr, ok = userIDValue.(string); ok {
+			userID, err = strconv.ParseInt(userIDStr, 10, 64)
+			if err != nil {
+				logger.WithError(err).Error("Failed to parse user_id string")
+				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid user_id format"), nil
+			}
+		} else if userIDFloat, ok := userIDValue.(float64); ok {
+			// Try as float64 (JSON numbers are parsed as float64)
+			userID = int64(userIDFloat)
+		} else {
+			logger.WithField("user_id_type", fmt.Sprintf("%T", userIDValue)).Error("user_id has unexpected type")
+			return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Invalid user_id type"), nil
+		}
+	} else {
+		logger.WithField("available_claims", fmt.Sprintf("%+v", claims)).Error("user_id not found in claims")
 		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing user_id"), nil
 	}
-	
-	// Convert user_id to int64
-	userID, err := strconv.ParseInt(userIDStr, 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Failed to parse user_id")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid user_id format"), nil
-	}
+
+	logger.WithField("user_id", userID).Debug("Successfully extracted user_id")
 
 	// Check if user is super admin from claims
-	isSuperAdmin, _ := claims["isSuperAdmin"].(bool)
+	// isSuperAdmin could be boolean or string, so let's try both
+	var isSuperAdmin bool
+	if superAdminValue, exists := claims["isSuperAdmin"]; exists {
+		logger.WithField("isSuperAdmin_raw", superAdminValue).Debug("Raw isSuperAdmin from claims")
+		
+		if isSuperAdmin, ok = superAdminValue.(bool); !ok {
+			// Try as string "true"/"false"
+			if superAdminStr, ok := superAdminValue.(string); ok && superAdminStr == "true" {
+				isSuperAdmin = true
+			}
+		}
+	}
+	
+	logger.WithField("isSuperAdmin", isSuperAdmin).Debug("Extracted isSuperAdmin value")
+	
 	if !isSuperAdmin {
-		logger.WithField("user_id", userID).Warn("User is not a super admin")
+		logger.WithFields(logrus.Fields{
+			"user_id": userID,
+			"available_claims": fmt.Sprintf("%+v", claims),
+		}).Warn("User is not a super admin")
 		return util.CreateErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage organization"), nil
 	}
 
