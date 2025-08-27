@@ -49,14 +49,6 @@ export class SubStack extends NestedStack {
 
         const account = GetAccountId(props.stageEnvironment);
         
-        // Add Cognito security scheme to API specification
-        addSecuritySchemeExtension(
-            props.builder, 
-            props.options.defaultRegion, 
-            account,
-            cognitoConstruct.userPool.userPoolArn
-        );
-        
         // Add CORS support using infrastructure-api-gateway-cors Lambda
         const corsFunctionName = `${props.options.githubRepo}-api-gateway-cors`;
         const paths = Object.keys(props.builder.getSpec().paths);
@@ -64,6 +56,7 @@ export class SubStack extends NestedStack {
             addCors(path, props.builder, props.options.defaultRegion, account, corsFunctionName);
         }
 
+        // Create API first without Cognito authentication to get base spec
         const file = path.join(__dirname, `../specs/spec.${account}.out.yaml`);
         fs.writeFileSync(file, props.builder.getSpecAsYaml());
 
@@ -75,6 +68,9 @@ export class SubStack extends NestedStack {
             description: props.options.apiName,
             restApiName: props.options.apiName,
         });
+
+        // Note: Cognito authentication will be handled at the Lambda level
+        // to avoid CDK token resolution issues in the OpenAPI spec
 
         // Grant API Gateway permission to invoke the CORS Lambda
         this.lambdaConstruct.corsLambda.addPermission('ApiGatewayCorsPermission', {

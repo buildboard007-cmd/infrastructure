@@ -9,7 +9,7 @@ import {Aws} from "aws-cdk-lib";
 export const ssmPolicy = () => {
     return new iam.PolicyStatement({
         resources: [
-            `arn:aws:ssm:us-west-2:${Aws.ACCOUNT_ID}:parameter/alerts-functions/*`,
+            `arn:aws:ssm:us-west-2:${Aws.ACCOUNT_ID}:parameter/infrastructure/*`,
             "*"
         ],
         effect: iam.Effect.ALLOW,
