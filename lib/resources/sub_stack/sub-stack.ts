@@ -6,7 +6,7 @@ import {KeyConstruct} from "../key_construct/key-construct";
 import {LambdaConstruct} from "../lambda_construct/lambda-construct";
 import {LambdaConstructProps} from "../../types/lambda-construct-props";
 import {CognitoConstruct} from "../cognito_construct/cognito-construct";
-import {BasePathMapping, DomainName, RestApi, LambdaIntegration} from "aws-cdk-lib/aws-apigateway";
+import {BasePathMapping, DomainName, RestApi, LambdaIntegration, CognitoUserPoolsAuthorizer} from "aws-cdk-lib/aws-apigateway";
 import {GetAccountId} from "../../utils/account-utils";
 
 interface KeyProps extends NestedStackProps {
@@ -51,15 +51,25 @@ export class SubStack extends NestedStack {
             },
         });
 
+        // Create Cognito User Pool authorizer
+        const cognitoAuthorizer = new CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
+            cognitoUserPools: [cognitoConstruct.userPool],
+            authorizerName: 'CognitoAuthorizer'
+        });
+
         // Create Lambda integrations
         const orgManagementIntegration = new LambdaIntegration(this.lambdaConstruct.organizationManagementLambda);
         const corsIntegration = new LambdaIntegration(this.lambdaConstruct.corsLambda);
 
-        // Create /org resource
+        // Create /org resource with Cognito authorization
         const orgResource = this.api.root.addResource('org');
-        orgResource.addMethod('GET', orgManagementIntegration);
-        orgResource.addMethod('PUT', orgManagementIntegration);
-        orgResource.addMethod('OPTIONS', corsIntegration);
+        orgResource.addMethod('GET', orgManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        orgResource.addMethod('PUT', orgManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        orgResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
 
         // Skip domain for LOCAL
