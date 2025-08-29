@@ -13,11 +13,21 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/sirupsen/logrus"
 )
+
+// Handler struct contains all dependencies for the Lambda function
+type Handler struct {
+	DB            *sql.DB
+	Logger        *logrus.Logger
+	CognitoClient *cognitoidentityprovider.Client
+	UserPoolID    string
+}
 
 // Global variables for Lambda cold start optimization
 // These are initialized once during Lambda cold start and reused across invocations
@@ -28,15 +38,23 @@ var (
 	ssmParams     map[string]string  // Cached SSM parameters (database config)
 	sqlDB         *sql.DB            // PostgreSQL connection pool (reused across invocations)
 	orgRepository data.OrgRepository // Organization repository for data operations
+	handler       *Handler           // Main handler instance
 )
 
-func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	logger.WithFields(logrus.Fields{
-		"operation": "Handler",
+		"operation": "LambdaHandler",
 		"method":    request.HTTPMethod,
 		"path":      request.Path,
-	}).Info("Organization management request received")
+		"resource":  request.Resource,
+	}).Info("Infrastructure management request received")
 
+	// Route based on path prefix
+	if strings.HasPrefix(request.Path, "/users") || strings.HasPrefix(request.Resource, "/users") {
+		return handler.handleUserRoutes(ctx, request)
+	}
+
+	// Legacy organization management routes
 	// Get user ID from the JWT token claims (added by token customizer)
 	// The API Gateway with Cognito authorizer adds the decoded JWT claims to the request context
 	var claims map[string]interface{}
@@ -176,7 +194,7 @@ func handleGetOrganization(ctx context.Context, userID int64) events.APIGatewayP
 // main is the Lambda function entry point.
 // It simply starts the AWS Lambda runtime with our Handler function.
 func main() {
-	lambda.Start(Handler)
+	lambda.Start(LambdaHandler)
 }
 
 func init() {
@@ -256,6 +274,23 @@ func setupPostgresSQLClient(ssmParams map[string]string) error {
 	orgRepository = &data.OrgDao{
 		DB:     sqlDB,  // Shared database connection pool
 		Logger: logger, // Structured logger for debugging
+	}
+
+	// Initialize Cognito client
+	cognitoClient := clients.NewCognitoIdentityProviderClient(isLocal)
+	
+	// Get User Pool ID from SSM parameters
+	userPoolID := ssmParams[constants.COGNITO_USER_POOL_ID]
+	if userPoolID == "" {
+		logger.Fatal("COGNITO_USER_POOL_ID not found in SSM parameters")
+	}
+
+	// Initialize handler with all dependencies
+	handler = &Handler{
+		DB:            sqlDB,
+		Logger:        logger,
+		CognitoClient: cognitoClient,
+		UserPoolID:    userPoolID,
 	}
 
 	if logger.IsLevelEnabled(logrus.DebugLevel) {
