@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "infrastructure-api-collection-001",
     "name": "Infrastructure",
-    "description": "Complete API collection for Infrastructure application including SuperAdmin signup, organization management, and location management",
+    "description": "Complete API collection for Infrastructure application including SuperAdmin signup, organization management, location management, roles & permissions management, and user management",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -219,7 +219,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "org"
               ]
             }
@@ -276,7 +276,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "org"
               ]
             }
@@ -343,7 +343,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "locations"
               ]
             }
@@ -392,7 +392,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "locations"
               ]
             }
@@ -440,7 +440,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "locations",
                 "{{location_id}}"
               ]
@@ -498,7 +498,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "locations",
                 "{{location_id}}"
               ]
@@ -542,7 +542,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "locations",
                 "{{location_id}}"
               ]
@@ -602,7 +602,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "org"
               ]
             }
@@ -656,7 +656,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "locations"
               ]
             }
@@ -698,7 +698,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "org"
               ]
             }
@@ -750,7 +750,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "locations"
               ]
             }
@@ -803,7 +803,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\\n    \"role_name\": \"Manager\",\\n    \"description\": \"Manages team and operations\"\\n}"
+              "raw": "{\n    \"role_name\": \"Manager\",\n    \"description\": \"Manages team and operations\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles",
@@ -816,7 +816,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "roles"
               ]
             }
@@ -865,7 +865,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "roles"
               ]
             }
@@ -915,7 +915,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "roles",
                 "{{role_id}}"
               ]
@@ -960,7 +960,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\\n    \"role_name\": \"Senior Manager\",\\n    \"description\": \"Senior level manager with extended responsibilities\"\\n}"
+              "raw": "{\n    \"role_name\": \"Senior Manager\",\n    \"description\": \"Senior level manager with extended responsibilities\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{role_id}}",
@@ -973,7 +973,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "roles",
                 "{{role_id}}"
               ]
@@ -1017,7 +1017,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\\n    \"permission_id\": {{permission_id}}\\n}"
+              "raw": "{\n    \"permission_id\": {{permission_id}}\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{role_id}}/permissions",
@@ -1030,7 +1030,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "roles",
                 "{{role_id}}",
                 "permissions"
@@ -1075,7 +1075,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\\n    \"permission_id\": {{permission_id}}\\n}"
+              "raw": "{\n    \"permission_id\": {{permission_id}}\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{role_id}}/permissions",
@@ -1088,7 +1088,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "roles",
                 "{{role_id}}",
                 "permissions"
@@ -1133,7 +1133,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "roles",
                 "{{role_id}}"
               ]
@@ -1187,7 +1187,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\\n    \"permission_name\": \"READ_REPORTS\",\\n    \"description\": \"Permission to read and view reports\"\\n}"
+              "raw": "{\n    \"permission_name\": \"READ_REPORTS\",\n    \"description\": \"Permission to read and view reports\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions",
@@ -1200,7 +1200,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "permissions"
               ]
             }
@@ -1249,7 +1249,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "permissions"
               ]
             }
@@ -1297,7 +1297,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "permissions",
                 "{{permission_id}}"
               ]
@@ -1342,7 +1342,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\\n    \"permission_name\": \"READ_ALL_REPORTS\",\\n    \"description\": \"Permission to read all reports including sensitive ones\"\\n}"
+              "raw": "{\n    \"permission_name\": \"READ_ALL_REPORTS\",\n    \"description\": \"Permission to read all reports including sensitive ones\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions/{{permission_id}}",
@@ -1355,7 +1355,7 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "permissions",
                 "{{permission_id}}"
               ]
@@ -1399,9 +1399,462 @@
                 "com"
               ],
               "path": [
-                "dev",
+                "main",
                 "permissions",
                 "{{permission_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('User created with required fields', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('user_id');",
+                  "    pm.expect(responseJson).to.have.property('email');",
+                  "    pm.expect(responseJson).to.have.property('cognito_id');",
+                  "    pm.expect(responseJson).to.have.property('temporary_password');",
+                  "    pm.expect(responseJson).to.have.property('location_role_assignments');",
+                  "    pm.expect(responseJson.location_role_assignments).to.be.an('array');",
+                  "    ",
+                  "    // Store user_id for other requests",
+                  "    pm.globals.set('user_id', responseJson.user_id);",
+                  "    console.log('Created User:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"phone\": \"+1234567890\",\n    \"job_title\": \"Software Engineer\",\n    \"photo_url\": \"https://example.com/photos/john.jpg\",\n    \"location_role_assignments\": [\n        {\n            \"location_id\": {{location_id}},\n            \"role_id\": {{role_id}}\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has users array', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('users');",
+                  "    pm.expect(responseJson).to.have.property('total');",
+                  "    pm.expect(responseJson.users).to.be.an('array');",
+                  "    console.log('Users:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has user data with assignments', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('user_id');",
+                  "    pm.expect(responseJson).to.have.property('email');",
+                  "    pm.expect(responseJson).to.have.property('location_role_assignments');",
+                  "    pm.expect(responseJson.location_role_assignments).to.be.an('array');",
+                  "    console.log('User Details:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User updated successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('user_id');",
+                  "    pm.expect(responseJson).to.have.property('email');",
+                  "    pm.expect(responseJson).to.have.property('location_role_assignments');",
+                  "    console.log('Updated User:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Smith\",\n    \"phone\": \"+1234567890\",\n    \"job_title\": \"Senior Software Engineer\",\n    \"photo_url\": \"https://example.com/photos/john-updated.jpg\",\n    \"status\": \"active\",\n    \"location_role_assignments\": [\n        {\n            \"location_id\": {{location_id}},\n            \"role_id\": {{role_id}}\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User Status - Activate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User status updated successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    pm.expect(responseJson).to.have.property('status');",
+                  "    console.log('Status Update Response:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/status",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "users",
+                "{{user_id}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User Status - Suspend",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User status updated successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    pm.expect(responseJson).to.have.property('status');",
+                  "    console.log('Status Update Response:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"suspended\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/status",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "users",
+                "{{user_id}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User Status - Deactivate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User status updated successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    pm.expect(responseJson).to.have.property('status');",
+                  "    console.log('Status Update Response:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"inactive\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/status",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "users",
+                "{{user_id}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User deleted successfully', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    console.log('Delete Response:', JSON.stringify(responseJson, null, 2));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "users",
+                "{{user_id}}"
               ]
             }
           }
