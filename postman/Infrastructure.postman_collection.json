@@ -46,7 +46,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"ClientId\": \"3f0fb5mpivctnvj85tucusf88e\",\n  \"Username\": \"buildboard007+mayur@gmail.com\",\n  \"Password\": \"Mayur@1234\",\n  \"UserAttributes\": [\n    {\n      \"Name\": \"email\",\n      \"Value\": \"buildboard007+mayur@gmail.com\"\n    },\n    {\n      \"Name\": \"custom:isSuperAdmin\",\n      \"Value\": \"true\"\n    }\n  ]\n}"
+              "raw": "{\n  \"ClientId\": \"3f0fb5mpivctnvj85tucusf88e\",\n  \"Username\": \"buildboard007+mayur@gmail.com\",\n  \"Password\": \"Mayur@1234\",\n  \"UserAttributes\": [\n    {\n      \"Name\": \"email\",\n      \"Value\": \"buildboard007+mayur@gmail.com\"\n    },\n    {\n      \"Name\": \"custom:isSuperAdmin\",\n      \"Value\": \"true\"\n    }\n  ],\n  \"ClientMetadata\": {\n    \"firstName\": \"Mayur\",\n    \"lastName\": \"Lakhani\",\n    \"phone\": \"+1234567890\"\n  }\n}"
             },
             "url": {
               "raw": "https://cognito-idp.us-east-2.amazonaws.com/",

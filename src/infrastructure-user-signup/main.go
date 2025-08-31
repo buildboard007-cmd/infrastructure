@@ -63,6 +63,9 @@ var (
 type SignupRequest struct {
 	CognitoID     string // AWS Cognito user UUID (from 'sub' attribute)
 	Email         string // User's email address
+	FirstName     string // User's first name
+	LastName      string // User's last name
+	Phone         string // User's phone number (optional)
 	CorrelationID string // Unique ID for tracking this signup process
 	SignupType    string // "superadmin_signup" only - other types not supported
 }
@@ -118,6 +121,9 @@ func Handler(ctx context.Context, event events.CognitoEventUserPoolsPostConfirma
 		"correlation_id": signupRequest.CorrelationID,
 		"cognito_id":     signupRequest.CognitoID,
 		"email":          signupRequest.Email,
+		"first_name":     signupRequest.FirstName,
+		"last_name":      signupRequest.LastName,
+		"phone":          signupRequest.Phone,
 		"signup_type":    signupRequest.SignupType,
 		"operation":      "Handler",
 	}).Debug("Processing Cognito Post-Confirmation event")
@@ -161,12 +167,36 @@ func extractSignupData(event events.CognitoEventUserPoolsPostConfirmation, corre
 		return nil, fmt.Errorf("email attribute is missing from Cognito event")
 	}
 
+	// Extract additional user data from ClientMetadata (passed during signup)
+	// ClientMetadata is used to pass additional data that we don't want to store in Cognito
+	firstName := ""
+	lastName := ""
+	phone := ""
+	
+	if event.Request.ClientMetadata != nil {
+		firstName = event.Request.ClientMetadata["firstName"]
+		lastName = event.Request.ClientMetadata["lastName"]
+		phone = event.Request.ClientMetadata["phone"]
+	}
+	
+	// If ClientMetadata is not available, these fields will remain empty
+	// The database allows NULL for phone, and we'll use empty strings for names
+	if firstName == "" {
+		firstName = "FirstName" // Default placeholder
+	}
+	if lastName == "" {
+		lastName = "LastName" // Default placeholder
+	}
+
 	// Determine signup type based on trigger source and user attributes
 	signupType := determineSignupType(event)
 
 	return &SignupRequest{
 		CognitoID:     cognitoID,
 		Email:         email,
+		FirstName:     firstName,
+		LastName:      lastName,
+		Phone:         phone,
 		CorrelationID: correlationID,
 		SignupType:    signupType,
 	}, nil
@@ -241,20 +271,27 @@ func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 	}
 
 	// Create SuperAdmin user record with pending_org_setup status
+	// Handle phone as nullable field
+	var phone sql.NullString
+	if request.Phone != "" {
+		phone = sql.NullString{String: request.Phone, Valid: true}
+	}
+	
 	_, err = tx.Exec(`
-		INSERT INTO iam.users (
+		INSERT INTO iam.user (
 			cognito_id, 
 			org_id,
 			email, 
 			first_name, 
 			last_name,
+			phone,
 			status, 
 			isSuperAdmin,
 			created_at, 
 			updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-	`, request.CognitoID, orgID, request.Email, "Super", "Admin", StatusPendingOrgSetup, true)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+	`, request.CognitoID, orgID, request.Email, request.FirstName, request.LastName, phone, StatusPendingOrgSetup, true)
 
 	if err != nil {
 		return fmt.Errorf("failed to create SuperAdmin user record: %w", err)
@@ -264,6 +301,9 @@ func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 		"correlation_id": request.CorrelationID,
 		"cognito_id":     request.CognitoID,
 		"email":          request.Email,
+		"first_name":     request.FirstName,
+		"last_name":      request.LastName,
+		"phone":          request.Phone,
 		"status":         StatusPendingOrgSetup,
 		"isSuperAdmin":   true,
 		"operation":      "processSuperAdminSignup",
