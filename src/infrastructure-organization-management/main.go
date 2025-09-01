@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"infrastructure/lib/api"
+	"infrastructure/lib/auth"
 	"infrastructure/lib/clients"
 	"infrastructure/lib/constants"
 	"infrastructure/lib/data"
@@ -54,82 +56,30 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 		return handler.handleUserRoutes(ctx, request)
 	}
 
-	// Legacy organization management routes
-	// Get user ID from the JWT token claims (added by token customizer)
-	// The API Gateway with Cognito authorizer adds the decoded JWT claims to the request context
-	var claims map[string]interface{}
-	var ok bool
-	
-	// Try different possible claim locations in the authorizer context
-	if authClaims, exists := request.RequestContext.Authorizer["claims"]; exists {
-		claims, ok = authClaims.(map[string]interface{})
-	}
-	
-	// If claims not found, try direct access to authorizer (some API Gateway configurations)
-	if !ok {
-		claims = request.RequestContext.Authorizer
-		ok = (claims != nil)
-	}
-	
-	if !ok || claims == nil {
-		logger.Error("Failed to get claims from authorizer context")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing claims"), nil
-	}
-	
-	// Get the internal user_id from claims (added by token customizer)
-	// user_id could be a string or number, so let's try both
-	var userIDStr string
-	var userID int64
-	var err error
-	
-	if userIDValue, exists := claims["user_id"]; exists {
-		// Try as string first
-		if userIDStr, ok = userIDValue.(string); ok {
-			userID, err = strconv.ParseInt(userIDStr, 10, 64)
-			if err != nil {
-				logger.WithError(err).Error("Failed to parse user_id string")
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid user_id format"), nil
-			}
-		} else if userIDFloat, ok := userIDValue.(float64); ok {
-			// Try as float64 (JSON numbers are parsed as float64)
-			userID = int64(userIDFloat)
-		} else {
-			logger.Error("user_id has unexpected type")
-			return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Invalid user_id type"), nil
-		}
-	} else {
-		logger.Error("user_id not found in claims")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing user_id"), nil
+	// Organization management routes
+	// Extract claims from JWT token via API Gateway authorizer
+	claims, err := auth.ExtractClaimsFromRequest(request)
+	if err != nil {
+		logger.WithError(err).Error("Authentication failed")
+		return api.ErrorResponse(http.StatusUnauthorized, "Authentication failed", logger), nil
 	}
 
-	// Check if user is super admin from claims
-	// isSuperAdmin could be boolean or string, so let's try both
-	var isSuperAdmin bool
-	if superAdminValue, exists := claims["isSuperAdmin"]; exists {
-		if isSuperAdmin, ok = superAdminValue.(bool); !ok {
-			// Try as string "true"/"false"
-			if superAdminStr, ok := superAdminValue.(string); ok && superAdminStr == "true" {
-				isSuperAdmin = true
-			}
-		}
-	}
-	
-	if !isSuperAdmin {
-		logger.WithField("user_id", userID).Warn("User is not a super admin")
-		return util.CreateErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage organization"), nil
+	if !claims.IsSuperAdmin {
+		logger.WithField("user_id", claims.UserID).Warn("User is not a super admin")
+		return api.ErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage organization", logger), nil
 	}
 
 	// Handle PUT request to update organization
 	if request.HTTPMethod == http.MethodPut {
-		return handleUpdateOrganization(ctx, userID, request.Body), nil
+		return handleUpdateOrganization(ctx, claims.UserID, request.Body), nil
 	}
 	
 	// Handle GET request to retrieve organization
 	if request.HTTPMethod == http.MethodGet {
-		return handleGetOrganization(ctx, userID), nil
+		return handleGetOrganization(ctx, claims.UserID), nil
 	}
 
-	return util.CreateErrorResponse(http.StatusMethodNotAllowed, "Method not allowed"), nil
+	return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 }
 
 // handleUpdateOrganization handles the PUT request to update organization info
@@ -138,12 +88,12 @@ func handleUpdateOrganization(ctx context.Context, userID int64, body string) ev
 	var updateReq models.UpdateOrganizationRequest
 	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
 		logger.WithError(err).Error("Failed to parse request body")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid request body")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	// Validate request
 	if updateReq.OrgName == "" || len(updateReq.OrgName) < 3 || len(updateReq.OrgName) > 150 {
-		return util.CreateErrorResponse(http.StatusBadRequest, "Organization name must be between 3 and 150 characters")
+		return api.ErrorResponse(http.StatusBadRequest, "Organization name must be between 3 and 150 characters", logger)
 	}
 
 	// Update organization
@@ -155,20 +105,12 @@ func handleUpdateOrganization(ctx context.Context, userID int64, body string) ev
 	if err != nil {
 		logger.WithError(err).Error("Failed to update organization")
 		if err.Error() == "unauthorized: user is not a super admin" {
-			return util.CreateErrorResponse(http.StatusForbidden, err.Error())
+			return api.ErrorResponse(http.StatusForbidden, err.Error(), logger)
 		}
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to update organization")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update organization", logger)
 	}
 
-	// Return success response
-	responseBody, _ := json.Marshal(updatedOrg)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, updatedOrg, logger)
 }
 
 // handleGetOrganization handles the GET request to retrieve organization info
@@ -177,18 +119,10 @@ func handleGetOrganization(ctx context.Context, userID int64) events.APIGatewayP
 	org, err := orgRepository.GetOrganizationByUserID(ctx, userID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get organization")
-		return util.CreateErrorResponse(http.StatusNotFound, "Organization not found")
+		return api.ErrorResponse(http.StatusNotFound, "Organization not found", logger)
 	}
 
-	// Return success response
-	responseBody, _ := json.Marshal(org)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, org, logger)
 }
 
 // main is the Lambda function entry point.

@@ -100,7 +100,7 @@ type CustomClaims struct {
 	Phone             string `json:"phone,omitempty"`               // Optional contact phone
 	JobTitle          string `json:"job_title,omitempty"`           // Optional professional title
 	Status            string `json:"status"`                        // Account status (active/inactive/suspended)
-	PhotoURL          string `json:"photo_url,omitempty"`           // Optional profile photo URL
+	AvatarURL         string `json:"avatar_url,omitempty"`          // Optional profile photo URL
 	OrgID             string `json:"org_id"`                        // Organization identifier
 	OrgName           string `json:"org_name"`                      // Organization display name
 	CurrentLocationID string `json:"current_location_id,omitempty"` // User's primary location ID
@@ -201,7 +201,7 @@ func Handler(ctx context.Context, event events.CognitoEventUserPoolsPreTokenGenV
 		"phone":               customClaims.Phone,             // Optional contact info
 		"job_title":           customClaims.JobTitle,          // Optional professional title
 		"status":              customClaims.Status,            // Account status (active/inactive/suspended)
-		"photo_url":           customClaims.PhotoURL,          // Optional profile photo
+		"avatar_url":          customClaims.AvatarURL,         // Optional profile photo
 		"org_id":              customClaims.OrgID,             // Organization identifier
 		"org_name":            customClaims.OrgName,           // Organization display name
 		"current_location_id": customClaims.CurrentLocationID, // Primary location
@@ -383,9 +383,9 @@ func buildCustomClaims(profile *models.UserProfile) (*CustomClaims, error) {
 		jobTitle = profile.JobTitle.String
 	}
 
-	photoURL := ""
-	if profile.PhotoURL.Valid {
-		photoURL = profile.PhotoURL.String
+	avatarURL := ""
+	if profile.AvatarURL.Valid {
+		avatarURL = profile.AvatarURL.String
 	}
 
 	currentLocationID := ""
@@ -404,7 +404,7 @@ func buildCustomClaims(profile *models.UserProfile) (*CustomClaims, error) {
 		Phone:             phone,                // Optional contact information
 		JobTitle:          jobTitle,             // Optional professional title
 		Status:            profile.Status,       // Account status (active/inactive/suspended)
-		PhotoURL:          photoURL,             // Optional profile photo
+		AvatarURL:         avatarURL,            // Optional profile photo
 		OrgID:             profile.OrgID,        // Organization identifier
 		OrgName:           profile.OrgName,      // Organization display name
 		CurrentLocationID: currentLocationID,    // Primary location ID

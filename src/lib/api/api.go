@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -79,4 +80,17 @@ func ValidationErrorResponse(message string, errors []string, logger *logrus.Log
 			"Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
 		},
 	}
+}
+
+// ParseJSONBody parses JSON request body into a struct
+func ParseJSONBody(body string, target interface{}) error {
+	if body == "" {
+		return fmt.Errorf("empty request body")
+	}
+	
+	if err := json.Unmarshal([]byte(body), target); err != nil {
+		return fmt.Errorf("invalid JSON: %w", err)
+	}
+	
+	return nil
 }

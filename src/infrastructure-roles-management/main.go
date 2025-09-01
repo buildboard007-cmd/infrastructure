@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"infrastructure/lib/api"
+	"infrastructure/lib/auth"
 	"infrastructure/lib/clients"
 	"infrastructure/lib/constants"
 	"infrastructure/lib/data"
@@ -38,81 +40,16 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		"path":      request.Path,
 	}).Info("Roles management request received")
 
-	// Get user ID and org ID from the JWT token claims
-	var claims map[string]interface{}
-	var ok bool
-
-	// Try different possible claim locations in the authorizer context
-	if authClaims, exists := request.RequestContext.Authorizer["claims"]; exists {
-		claims, ok = authClaims.(map[string]interface{})
+	// Extract claims from JWT token via API Gateway authorizer
+	claims, err := auth.ExtractClaimsFromRequest(request)
+	if err != nil {
+		logger.WithError(err).Error("Authentication failed")
+		return api.ErrorResponse(http.StatusUnauthorized, "Authentication failed", logger), nil
 	}
 
-	// If claims not found, try direct access to authorizer
-	if !ok {
-		claims = request.RequestContext.Authorizer
-		ok = (claims != nil)
-	}
-
-	if !ok || claims == nil {
-		logger.Error("Failed to get claims from authorizer context")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing claims"), nil
-	}
-
-	// Get the internal user_id from claims
-	var userID int64
-	if userIDValue, exists := claims["user_id"]; exists {
-		if userIDStr, ok := userIDValue.(string); ok {
-			var err error
-			userID, err = strconv.ParseInt(userIDStr, 10, 64)
-			if err != nil {
-				logger.WithError(err).Error("Failed to parse user_id string")
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid user_id format"), nil
-			}
-		} else if userIDFloat, ok := userIDValue.(float64); ok {
-			userID = int64(userIDFloat)
-		} else {
-			logger.Error("user_id has unexpected type")
-			return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Invalid user_id type"), nil
-		}
-	} else {
-		logger.Error("user_id not found in claims")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing user_id"), nil
-	}
-
-	// Get the org_id from claims
-	var orgID int64
-	if orgIDValue, exists := claims["org_id"]; exists {
-		if orgIDStr, ok := orgIDValue.(string); ok {
-			var err error
-			orgID, err = strconv.ParseInt(orgIDStr, 10, 64)
-			if err != nil {
-				logger.WithError(err).Error("Failed to parse org_id string")
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid org_id format"), nil
-			}
-		} else if orgIDFloat, ok := orgIDValue.(float64); ok {
-			orgID = int64(orgIDFloat)
-		} else {
-			logger.Error("org_id has unexpected type")
-			return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Invalid org_id type"), nil
-		}
-	} else {
-		logger.Error("org_id not found in claims")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing org_id"), nil
-	}
-
-	// Check if user is super admin
-	var isSuperAdmin bool
-	if superAdminValue, exists := claims["isSuperAdmin"]; exists {
-		if isSuperAdmin, ok = superAdminValue.(bool); !ok {
-			if superAdminStr, ok := superAdminValue.(string); ok && superAdminStr == "true" {
-				isSuperAdmin = true
-			}
-		}
-	}
-
-	if !isSuperAdmin {
-		logger.WithField("user_id", userID).Warn("User is not a super admin")
-		return util.CreateErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage roles"), nil
+	if !claims.IsSuperAdmin {
+		logger.WithField("user_id", claims.UserID).Warn("User is not a super admin")
+		return api.ErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage roles", logger), nil
 	}
 
 	// Route based on HTTP method and path
@@ -125,12 +62,12 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			// POST /roles/{id}/permissions - Assign permission to role
 			roleID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid role ID"), nil
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid role ID", logger), nil
 			}
-			return handleAssignPermission(ctx, roleID, orgID, request.Body), nil
+			return handleAssignPermission(ctx, roleID, claims.OrgID, request.Body), nil
 		} else {
 			// POST /roles - Create new role
-			return handleCreateRole(ctx, userID, orgID, request.Body), nil
+			return handleCreateRole(ctx, claims.UserID, claims.OrgID, request.Body), nil
 		}
 		
 	case http.MethodGet:
@@ -138,12 +75,12 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			// GET /roles/{id} - Get specific role with permissions
 			roleID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid role ID"), nil
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid role ID", logger), nil
 			}
-			return handleGetRoleWithPermissions(ctx, roleID, orgID), nil
+			return handleGetRoleWithPermissions(ctx, roleID, claims.OrgID), nil
 		} else {
 			// GET /roles - Get all roles for org
-			return handleGetRoles(ctx, orgID), nil
+			return handleGetRoles(ctx, claims.OrgID), nil
 		}
 		
 	case http.MethodPut:
@@ -151,11 +88,11 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			// PUT /roles/{id} - Update role
 			roleID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid role ID"), nil
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid role ID", logger), nil
 			}
-			return handleUpdateRole(ctx, roleID, orgID, request.Body), nil
+			return handleUpdateRole(ctx, roleID, claims.OrgID, request.Body), nil
 		} else {
-			return util.CreateErrorResponse(http.StatusBadRequest, "Role ID required for update"), nil
+			return api.ErrorResponse(http.StatusBadRequest, "Role ID required for update", logger), nil
 		}
 		
 	case http.MethodDelete:
@@ -163,22 +100,22 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			// DELETE /roles/{id}/permissions - Unassign permission from role
 			roleID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid role ID"), nil
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid role ID", logger), nil
 			}
-			return handleUnassignPermission(ctx, roleID, orgID, request.Body), nil
+			return handleUnassignPermission(ctx, roleID, claims.OrgID, request.Body), nil
 		} else if len(pathSegments) >= 2 && pathSegments[1] != "" {
 			// DELETE /roles/{id} - Delete role
 			roleID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid role ID"), nil
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid role ID", logger), nil
 			}
-			return handleDeleteRole(ctx, roleID, orgID), nil
+			return handleDeleteRole(ctx, roleID, claims.OrgID), nil
 		} else {
-			return util.CreateErrorResponse(http.StatusBadRequest, "Role ID required for deletion"), nil
+			return api.ErrorResponse(http.StatusBadRequest, "Role ID required for deletion", logger), nil
 		}
 		
 	default:
-		return util.CreateErrorResponse(http.StatusMethodNotAllowed, "Method not allowed"), nil
+		return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 	}
 }
 
@@ -187,12 +124,12 @@ func handleCreateRole(ctx context.Context, userID, orgID int64, body string) eve
 	var createReq models.CreateRoleRequest
 	if err := json.Unmarshal([]byte(body), &createReq); err != nil {
 		logger.WithError(err).Error("Failed to parse create role request")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid request body")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	// Validate required fields
 	if createReq.RoleName == "" || len(createReq.RoleName) < 2 || len(createReq.RoleName) > 100 {
-		return util.CreateErrorResponse(http.StatusBadRequest, "Role name must be between 2 and 100 characters")
+		return api.ErrorResponse(http.StatusBadRequest, "Role name must be between 2 and 100 characters", logger)
 	}
 
 	// Create role object
@@ -205,18 +142,10 @@ func handleCreateRole(ctx context.Context, userID, orgID int64, body string) eve
 	createdRole, err := roleRepository.CreateRole(ctx, orgID, role)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create role")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to create role")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create role", logger)
 	}
 
-	// Return success response
-	responseBody, _ := json.Marshal(createdRole)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusCreated,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusCreated, createdRole, logger)
 }
 
 // handleGetRoles handles GET /roles
@@ -224,7 +153,7 @@ func handleGetRoles(ctx context.Context, orgID int64) events.APIGatewayProxyResp
 	roles, err := roleRepository.GetRolesByOrg(ctx, orgID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get roles")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to get roles")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get roles", logger)
 	}
 
 	response := models.RoleListResponse{
@@ -232,14 +161,7 @@ func handleGetRoles(ctx context.Context, orgID int64) events.APIGatewayProxyResp
 		Total: len(roles),
 	}
 
-	responseBody, _ := json.Marshal(response)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, response, logger)
 }
 
 // handleGetRoleWithPermissions handles GET /roles/{id}
@@ -247,20 +169,13 @@ func handleGetRoleWithPermissions(ctx context.Context, roleID, orgID int64) even
 	roleWithPermissions, err := roleRepository.GetRoleWithPermissions(ctx, roleID, orgID)
 	if err != nil {
 		if err.Error() == "role not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Role not found")
+			return api.ErrorResponse(http.StatusNotFound, "Role not found", logger)
 		}
 		logger.WithError(err).Error("Failed to get role with permissions")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to get role")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get role", logger)
 	}
 
-	responseBody, _ := json.Marshal(roleWithPermissions)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, roleWithPermissions, logger)
 }
 
 // handleUpdateRole handles PUT /roles/{id}
@@ -268,7 +183,7 @@ func handleUpdateRole(ctx context.Context, roleID, orgID int64, body string) eve
 	var updateReq models.UpdateRoleRequest
 	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
 		logger.WithError(err).Error("Failed to parse update role request")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid request body")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	// Create role object with updates
@@ -280,20 +195,13 @@ func handleUpdateRole(ctx context.Context, roleID, orgID int64, body string) eve
 	updatedRole, err := roleRepository.UpdateRole(ctx, roleID, orgID, role)
 	if err != nil {
 		if err.Error() == "role not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Role not found")
+			return api.ErrorResponse(http.StatusNotFound, "Role not found", logger)
 		}
 		logger.WithError(err).Error("Failed to update role")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to update role")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update role", logger)
 	}
 
-	responseBody, _ := json.Marshal(updatedRole)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, updatedRole, logger)
 }
 
 // handleDeleteRole handles DELETE /roles/{id}
@@ -301,18 +209,13 @@ func handleDeleteRole(ctx context.Context, roleID, orgID int64) events.APIGatewa
 	err := roleRepository.DeleteRole(ctx, roleID, orgID)
 	if err != nil {
 		if err.Error() == "role not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Role not found")
+			return api.ErrorResponse(http.StatusNotFound, "Role not found", logger)
 		}
 		logger.WithError(err).Error("Failed to delete role")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to delete role")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to delete role", logger)
 	}
 
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusNoContent,
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusNoContent, nil, logger)
 }
 
 // handleAssignPermission handles POST /roles/{id}/permissions
@@ -320,25 +223,20 @@ func handleAssignPermission(ctx context.Context, roleID, orgID int64, body strin
 	var assignReq models.AssignPermissionRequest
 	if err := json.Unmarshal([]byte(body), &assignReq); err != nil {
 		logger.WithError(err).Error("Failed to parse assign permission request")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid request body")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	err := rolePermissionRepository.AssignPermissionToRole(ctx, roleID, assignReq.PermissionID, orgID)
 	if err != nil {
 		if err.Error() == "role not found" || err.Error() == "permission not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Role or permission not found")
+			return api.ErrorResponse(http.StatusNotFound, "Role or permission not found", logger)
 		}
 		logger.WithError(err).Error("Failed to assign permission to role")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to assign permission")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to assign permission", logger)
 	}
 
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       `{"message":"Permission assigned successfully"}`,
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	response := map[string]string{"message": "Permission assigned successfully"}
+	return api.SuccessResponse(http.StatusOK, response, logger)
 }
 
 // handleUnassignPermission handles DELETE /roles/{id}/permissions
@@ -346,25 +244,20 @@ func handleUnassignPermission(ctx context.Context, roleID, orgID int64, body str
 	var unassignReq models.UnassignPermissionRequest
 	if err := json.Unmarshal([]byte(body), &unassignReq); err != nil {
 		logger.WithError(err).Error("Failed to parse unassign permission request")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid request body")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	err := rolePermissionRepository.UnassignPermissionFromRole(ctx, roleID, unassignReq.PermissionID, orgID)
 	if err != nil {
 		if err.Error() == "role or permission not found" || err.Error() == "permission not assigned to role" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Role, permission not found or permission not assigned")
+			return api.ErrorResponse(http.StatusNotFound, "Role, permission not found or permission not assigned", logger)
 		}
 		logger.WithError(err).Error("Failed to unassign permission from role")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to unassign permission")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to unassign permission", logger)
 	}
 
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       `{"message":"Permission unassigned successfully"}`,
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	response := map[string]string{"message": "Permission unassigned successfully"}
+	return api.SuccessResponse(http.StatusOK, response, logger)
 }
 
 // main is the Lambda function entry point

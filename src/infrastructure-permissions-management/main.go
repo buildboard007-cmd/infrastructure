@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"infrastructure/lib/api"
+	"infrastructure/lib/auth"
 	"infrastructure/lib/clients"
 	"infrastructure/lib/constants"
 	"infrastructure/lib/data"
@@ -37,81 +39,16 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		"path":      request.Path,
 	}).Info("Permissions management request received")
 
-	// Get user ID and org ID from the JWT token claims
-	var claims map[string]interface{}
-	var ok bool
-
-	// Try different possible claim locations in the authorizer context
-	if authClaims, exists := request.RequestContext.Authorizer["claims"]; exists {
-		claims, ok = authClaims.(map[string]interface{})
+	// Extract claims from JWT token via API Gateway authorizer
+	claims, err := auth.ExtractClaimsFromRequest(request)
+	if err != nil {
+		logger.WithError(err).Error("Authentication failed")
+		return api.ErrorResponse(http.StatusUnauthorized, "Authentication failed", logger), nil
 	}
 
-	// If claims not found, try direct access to authorizer
-	if !ok {
-		claims = request.RequestContext.Authorizer
-		ok = (claims != nil)
-	}
-
-	if !ok || claims == nil {
-		logger.Error("Failed to get claims from authorizer context")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing claims"), nil
-	}
-
-	// Get the internal user_id from claims
-	var userID int64
-	if userIDValue, exists := claims["user_id"]; exists {
-		if userIDStr, ok := userIDValue.(string); ok {
-			var err error
-			userID, err = strconv.ParseInt(userIDStr, 10, 64)
-			if err != nil {
-				logger.WithError(err).Error("Failed to parse user_id string")
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid user_id format"), nil
-			}
-		} else if userIDFloat, ok := userIDValue.(float64); ok {
-			userID = int64(userIDFloat)
-		} else {
-			logger.Error("user_id has unexpected type")
-			return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Invalid user_id type"), nil
-		}
-	} else {
-		logger.Error("user_id not found in claims")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing user_id"), nil
-	}
-
-	// Get the org_id from claims
-	var orgID int64
-	if orgIDValue, exists := claims["org_id"]; exists {
-		if orgIDStr, ok := orgIDValue.(string); ok {
-			var err error
-			orgID, err = strconv.ParseInt(orgIDStr, 10, 64)
-			if err != nil {
-				logger.WithError(err).Error("Failed to parse org_id string")
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid org_id format"), nil
-			}
-		} else if orgIDFloat, ok := orgIDValue.(float64); ok {
-			orgID = int64(orgIDFloat)
-		} else {
-			logger.Error("org_id has unexpected type")
-			return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Invalid org_id type"), nil
-		}
-	} else {
-		logger.Error("org_id not found in claims")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing org_id"), nil
-	}
-
-	// Check if user is super admin
-	var isSuperAdmin bool
-	if superAdminValue, exists := claims["isSuperAdmin"]; exists {
-		if isSuperAdmin, ok = superAdminValue.(bool); !ok {
-			if superAdminStr, ok := superAdminValue.(string); ok && superAdminStr == "true" {
-				isSuperAdmin = true
-			}
-		}
-	}
-
-	if !isSuperAdmin {
-		logger.WithField("user_id", userID).Warn("User is not a super admin")
-		return util.CreateErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage permissions"), nil
+	if !claims.IsSuperAdmin {
+		logger.WithField("user_id", claims.UserID).Warn("User is not a super admin")
+		return api.ErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage permissions", logger), nil
 	}
 
 	// Route based on HTTP method and path
@@ -121,19 +58,19 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	switch request.HTTPMethod {
 	case http.MethodPost:
 		// POST /permissions - Create new permission
-		return handleCreatePermission(ctx, userID, orgID, request.Body), nil
+		return handleCreatePermission(ctx, claims.UserID, claims.OrgID, request.Body), nil
 		
 	case http.MethodGet:
 		if len(pathSegments) >= 2 && pathSegments[1] != "" {
 			// GET /permissions/{id} - Get specific permission
 			permissionID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid permission ID"), nil
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid permission ID", logger), nil
 			}
-			return handleGetPermission(ctx, permissionID, orgID), nil
+			return handleGetPermission(ctx, permissionID, claims.OrgID), nil
 		} else {
 			// GET /permissions - Get all permissions for org
-			return handleGetPermissions(ctx, orgID), nil
+			return handleGetPermissions(ctx, claims.OrgID), nil
 		}
 		
 	case http.MethodPut:
@@ -141,11 +78,11 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			// PUT /permissions/{id} - Update permission
 			permissionID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid permission ID"), nil
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid permission ID", logger), nil
 			}
-			return handleUpdatePermission(ctx, permissionID, orgID, request.Body), nil
+			return handleUpdatePermission(ctx, permissionID, claims.OrgID, request.Body), nil
 		} else {
-			return util.CreateErrorResponse(http.StatusBadRequest, "Permission ID required for update"), nil
+			return api.ErrorResponse(http.StatusBadRequest, "Permission ID required for update", logger), nil
 		}
 		
 	case http.MethodDelete:
@@ -153,15 +90,15 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			// DELETE /permissions/{id} - Delete permission
 			permissionID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid permission ID"), nil
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid permission ID", logger), nil
 			}
-			return handleDeletePermission(ctx, permissionID, orgID), nil
+			return handleDeletePermission(ctx, permissionID, claims.OrgID), nil
 		} else {
-			return util.CreateErrorResponse(http.StatusBadRequest, "Permission ID required for deletion"), nil
+			return api.ErrorResponse(http.StatusBadRequest, "Permission ID required for deletion", logger), nil
 		}
 		
 	default:
-		return util.CreateErrorResponse(http.StatusMethodNotAllowed, "Method not allowed"), nil
+		return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 	}
 }
 
@@ -170,12 +107,12 @@ func handleCreatePermission(ctx context.Context, userID, orgID int64, body strin
 	var createReq models.CreatePermissionRequest
 	if err := json.Unmarshal([]byte(body), &createReq); err != nil {
 		logger.WithError(err).Error("Failed to parse create permission request")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid request body")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	// Validate required fields
 	if createReq.PermissionName == "" || len(createReq.PermissionName) < 2 || len(createReq.PermissionName) > 100 {
-		return util.CreateErrorResponse(http.StatusBadRequest, "Permission name must be between 2 and 100 characters")
+		return api.ErrorResponse(http.StatusBadRequest, "Permission name must be between 2 and 100 characters", logger)
 	}
 
 	// Create permission object
@@ -188,18 +125,10 @@ func handleCreatePermission(ctx context.Context, userID, orgID int64, body strin
 	createdPermission, err := permissionRepository.CreatePermission(ctx, orgID, permission)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create permission")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to create permission")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create permission", logger)
 	}
 
-	// Return success response
-	responseBody, _ := json.Marshal(createdPermission)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusCreated,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusCreated, createdPermission, logger)
 }
 
 // handleGetPermissions handles GET /permissions
@@ -207,7 +136,7 @@ func handleGetPermissions(ctx context.Context, orgID int64) events.APIGatewayPro
 	permissions, err := permissionRepository.GetPermissionsByOrg(ctx, orgID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get permissions")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to get permissions")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get permissions", logger)
 	}
 
 	response := models.PermissionListResponse{
@@ -215,14 +144,7 @@ func handleGetPermissions(ctx context.Context, orgID int64) events.APIGatewayPro
 		Total:       len(permissions),
 	}
 
-	responseBody, _ := json.Marshal(response)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, response, logger)
 }
 
 // handleGetPermission handles GET /permissions/{id}
@@ -230,20 +152,13 @@ func handleGetPermission(ctx context.Context, permissionID, orgID int64) events.
 	permission, err := permissionRepository.GetPermissionByID(ctx, permissionID, orgID)
 	if err != nil {
 		if err.Error() == "permission not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Permission not found")
+			return api.ErrorResponse(http.StatusNotFound, "Permission not found", logger)
 		}
 		logger.WithError(err).Error("Failed to get permission")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to get permission")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get permission", logger)
 	}
 
-	responseBody, _ := json.Marshal(permission)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, permission, logger)
 }
 
 // handleUpdatePermission handles PUT /permissions/{id}
@@ -251,7 +166,7 @@ func handleUpdatePermission(ctx context.Context, permissionID, orgID int64, body
 	var updateReq models.UpdatePermissionRequest
 	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
 		logger.WithError(err).Error("Failed to parse update permission request")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid request body")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	// Create permission object with updates
@@ -263,20 +178,13 @@ func handleUpdatePermission(ctx context.Context, permissionID, orgID int64, body
 	updatedPermission, err := permissionRepository.UpdatePermission(ctx, permissionID, orgID, permission)
 	if err != nil {
 		if err.Error() == "permission not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Permission not found")
+			return api.ErrorResponse(http.StatusNotFound, "Permission not found", logger)
 		}
 		logger.WithError(err).Error("Failed to update permission")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to update permission")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update permission", logger)
 	}
 
-	responseBody, _ := json.Marshal(updatedPermission)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, updatedPermission, logger)
 }
 
 // handleDeletePermission handles DELETE /permissions/{id}
@@ -284,18 +192,13 @@ func handleDeletePermission(ctx context.Context, permissionID, orgID int64) even
 	err := permissionRepository.DeletePermission(ctx, permissionID, orgID)
 	if err != nil {
 		if err.Error() == "permission not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Permission not found")
+			return api.ErrorResponse(http.StatusNotFound, "Permission not found", logger)
 		}
 		logger.WithError(err).Error("Failed to delete permission")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to delete permission")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to delete permission", logger)
 	}
 
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusNoContent,
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusNoContent, nil, logger)
 }
 
 // main is the Lambda function entry point

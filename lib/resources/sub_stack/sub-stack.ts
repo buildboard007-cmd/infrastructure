@@ -62,6 +62,7 @@ export class SubStack extends NestedStack {
         const locationManagementIntegration = new LambdaIntegration(this.lambdaConstruct.locationManagementLambda);
         const rolesManagementIntegration = new LambdaIntegration(this.lambdaConstruct.rolesManagementLambda);
         const permissionsManagementIntegration = new LambdaIntegration(this.lambdaConstruct.permissionsManagementLambda);
+        const projectManagementIntegration = new LambdaIntegration(this.lambdaConstruct.projectManagementLambda);
         const corsIntegration = new LambdaIntegration(this.lambdaConstruct.corsLambda);
 
         // Create /org resource with Cognito authorization
@@ -152,6 +153,92 @@ export class SubStack extends NestedStack {
             authorizer: cognitoAuthorizer
         });
         permissionIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /projects resource with Cognito authorization
+        const projectsResource = this.api.root.addResource('projects');
+        projectsResource.addMethod('GET', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectsResource.addMethod('POST', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectsResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /projects/{projectId} resource for specific project operations
+        const projectIdResource = projectsResource.addResource('{projectId}');
+        projectIdResource.addMethod('GET', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectIdResource.addMethod('PUT', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectIdResource.addMethod('DELETE', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /projects/{projectId}/managers resource for project manager management
+        const projectManagersResource = projectIdResource.addResource('managers');
+        projectManagersResource.addMethod('GET', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectManagersResource.addMethod('POST', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectManagersResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /projects/{projectId}/managers/{managerId} resource for specific manager operations
+        const projectManagerIdResource = projectManagersResource.addResource('{managerId}');
+        projectManagerIdResource.addMethod('GET', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectManagerIdResource.addMethod('PUT', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectManagerIdResource.addMethod('DELETE', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectManagerIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /projects/{projectId}/attachments resource for project attachment management
+        const projectAttachmentsResource = projectIdResource.addResource('attachments');
+        projectAttachmentsResource.addMethod('GET', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectAttachmentsResource.addMethod('POST', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectAttachmentsResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /projects/{projectId}/attachments/{attachmentId} resource for specific attachment operations
+        const projectAttachmentIdResource = projectAttachmentsResource.addResource('{attachmentId}');
+        projectAttachmentIdResource.addMethod('GET', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectAttachmentIdResource.addMethod('DELETE', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectAttachmentIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /projects/{projectId}/users resource for project user role management
+        const projectUsersResource = projectIdResource.addResource('users');
+        projectUsersResource.addMethod('GET', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectUsersResource.addMethod('POST', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectUsersResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /projects/{projectId}/users/{assignmentId} resource for specific user role operations
+        const projectUserAssignmentIdResource = projectUsersResource.addResource('{assignmentId}');
+        projectUserAssignmentIdResource.addMethod('PUT', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectUserAssignmentIdResource.addMethod('DELETE', projectManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectUserAssignmentIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
         // Skip domain for LOCAL
         if (props.stageEnvironment != StageEnvironment.LOCAL) {

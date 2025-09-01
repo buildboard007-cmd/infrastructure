@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"infrastructure/lib/api"
+	"infrastructure/lib/auth"
 	"infrastructure/lib/clients"
 	"infrastructure/lib/constants"
 	"infrastructure/lib/data"
@@ -37,81 +39,16 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		"path":      request.Path,
 	}).Info("Location management request received")
 
-	// Get user ID and org ID from the JWT token claims
-	var claims map[string]interface{}
-	var ok bool
-
-	// Try different possible claim locations in the authorizer context
-	if authClaims, exists := request.RequestContext.Authorizer["claims"]; exists {
-		claims, ok = authClaims.(map[string]interface{})
+	// Extract claims from JWT token via API Gateway authorizer
+	claims, err := auth.ExtractClaimsFromRequest(request)
+	if err != nil {
+		logger.WithError(err).Error("Authentication failed")
+		return api.ErrorResponse(http.StatusUnauthorized, "Authentication failed", logger), nil
 	}
 
-	// If claims not found, try direct access to authorizer
-	if !ok {
-		claims = request.RequestContext.Authorizer
-		ok = (claims != nil)
-	}
-
-	if !ok || claims == nil {
-		logger.Error("Failed to get claims from authorizer context")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing claims"), nil
-	}
-
-	// Get the internal user_id from claims
-	var userID int64
-	if userIDValue, exists := claims["user_id"]; exists {
-		if userIDStr, ok := userIDValue.(string); ok {
-			var err error
-			userID, err = strconv.ParseInt(userIDStr, 10, 64)
-			if err != nil {
-				logger.WithError(err).Error("Failed to parse user_id string")
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid user_id format"), nil
-			}
-		} else if userIDFloat, ok := userIDValue.(float64); ok {
-			userID = int64(userIDFloat)
-		} else {
-			logger.Error("user_id has unexpected type")
-			return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Invalid user_id type"), nil
-		}
-	} else {
-		logger.Error("user_id not found in claims")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing user_id"), nil
-	}
-
-	// Get the org_id from claims
-	var orgID int64
-	if orgIDValue, exists := claims["org_id"]; exists {
-		if orgIDStr, ok := orgIDValue.(string); ok {
-			var err error
-			orgID, err = strconv.ParseInt(orgIDStr, 10, 64)
-			if err != nil {
-				logger.WithError(err).Error("Failed to parse org_id string")
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid org_id format"), nil
-			}
-		} else if orgIDFloat, ok := orgIDValue.(float64); ok {
-			orgID = int64(orgIDFloat)
-		} else {
-			logger.Error("org_id has unexpected type")
-			return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Invalid org_id type"), nil
-		}
-	} else {
-		logger.Error("org_id not found in claims")
-		return util.CreateErrorResponse(http.StatusUnauthorized, "Unauthorized: Missing org_id"), nil
-	}
-
-	// Check if user is super admin
-	var isSuperAdmin bool
-	if superAdminValue, exists := claims["isSuperAdmin"]; exists {
-		if isSuperAdmin, ok = superAdminValue.(bool); !ok {
-			if superAdminStr, ok := superAdminValue.(string); ok && superAdminStr == "true" {
-				isSuperAdmin = true
-			}
-		}
-	}
-
-	if !isSuperAdmin {
-		logger.WithField("user_id", userID).Warn("User is not a super admin")
-		return util.CreateErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage locations"), nil
+	if !claims.IsSuperAdmin {
+		logger.WithField("user_id", claims.UserID).Warn("User is not a super admin")
+		return api.ErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage locations", logger), nil
 	}
 
 	// Route based on HTTP method and path
@@ -121,19 +58,19 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	switch request.HTTPMethod {
 	case http.MethodPost:
 		// POST /locations - Create new location
-		return handleCreateLocation(ctx, userID, orgID, request.Body), nil
+		return handleCreateLocation(ctx, claims.UserID, claims.OrgID, request.Body), nil
 		
 	case http.MethodGet:
 		if len(pathSegments) >= 2 && pathSegments[1] != "" {
 			// GET /locations/{id} - Get specific location
 			locationID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid location ID"), nil
+					return api.ErrorResponse(http.StatusBadRequest, "Invalid location ID", logger), nil
 			}
-			return handleGetLocation(ctx, locationID, orgID), nil
+			return handleGetLocation(ctx, locationID, claims.OrgID), nil
 		} else {
 			// GET /locations - Get all locations for org
-			return handleGetLocations(ctx, orgID), nil
+			return handleGetLocations(ctx, claims.OrgID), nil
 		}
 		
 	case http.MethodPut:
@@ -141,11 +78,11 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			// PUT /locations/{id} - Update location
 			locationID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid location ID"), nil
+					return api.ErrorResponse(http.StatusBadRequest, "Invalid location ID", logger), nil
 			}
-			return handleUpdateLocation(ctx, locationID, orgID, request.Body), nil
+			return handleUpdateLocation(ctx, locationID, claims.OrgID, request.Body), nil
 		} else {
-			return util.CreateErrorResponse(http.StatusBadRequest, "Location ID required for update"), nil
+			return api.ErrorResponse(http.StatusBadRequest, "Location ID required for update", logger), nil
 		}
 		
 	case http.MethodDelete:
@@ -153,15 +90,15 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			// DELETE /locations/{id} - Delete location
 			locationID, err := strconv.ParseInt(pathSegments[1], 10, 64)
 			if err != nil {
-				return util.CreateErrorResponse(http.StatusBadRequest, "Invalid location ID"), nil
+					return api.ErrorResponse(http.StatusBadRequest, "Invalid location ID", logger), nil
 			}
-			return handleDeleteLocation(ctx, locationID, orgID), nil
+			return handleDeleteLocation(ctx, locationID, claims.OrgID), nil
 		} else {
-			return util.CreateErrorResponse(http.StatusBadRequest, "Location ID required for deletion"), nil
+			return api.ErrorResponse(http.StatusBadRequest, "Location ID required for deletion", logger), nil
 		}
 		
 	default:
-		return util.CreateErrorResponse(http.StatusMethodNotAllowed, "Method not allowed"), nil
+		return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 	}
 }
 
@@ -170,12 +107,12 @@ func handleCreateLocation(ctx context.Context, userID, orgID int64, body string)
 	var createReq models.CreateLocationRequest
 	if err := json.Unmarshal([]byte(body), &createReq); err != nil {
 		logger.WithError(err).Error("Failed to parse create location request")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid request body")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	// Validate required fields
 	if createReq.LocationName == "" || len(createReq.LocationName) < 2 || len(createReq.LocationName) > 100 {
-		return util.CreateErrorResponse(http.StatusBadRequest, "Location name must be between 2 and 100 characters")
+		return api.ErrorResponse(http.StatusBadRequest, "Location name must be between 2 and 100 characters", logger)
 	}
 
 	// Create location object
@@ -188,18 +125,10 @@ func handleCreateLocation(ctx context.Context, userID, orgID int64, body string)
 	createdLocation, err := locationRepository.CreateLocation(ctx, userID, orgID, location)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create location")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to create location")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create location", logger)
 	}
 
-	// Return success response
-	responseBody, _ := json.Marshal(createdLocation)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusCreated,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusCreated, createdLocation, logger)
 }
 
 // handleGetLocations handles GET /locations
@@ -207,7 +136,7 @@ func handleGetLocations(ctx context.Context, orgID int64) events.APIGatewayProxy
 	locations, err := locationRepository.GetLocationsByOrg(ctx, orgID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get locations")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to get locations")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get locations", logger)
 	}
 
 	response := models.LocationListResponse{
@@ -215,14 +144,7 @@ func handleGetLocations(ctx context.Context, orgID int64) events.APIGatewayProxy
 		Total:     len(locations),
 	}
 
-	responseBody, _ := json.Marshal(response)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, response, logger)
 }
 
 // handleGetLocation handles GET /locations/{id}
@@ -230,20 +152,13 @@ func handleGetLocation(ctx context.Context, locationID, orgID int64) events.APIG
 	location, err := locationRepository.GetLocationByID(ctx, locationID, orgID)
 	if err != nil {
 		if err.Error() == "location not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Location not found")
+			return api.ErrorResponse(http.StatusNotFound, "Location not found", logger)
 		}
 		logger.WithError(err).Error("Failed to get location")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to get location")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get location", logger)
 	}
 
-	responseBody, _ := json.Marshal(location)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, location, logger)
 }
 
 // handleUpdateLocation handles PUT /locations/{id}
@@ -251,7 +166,7 @@ func handleUpdateLocation(ctx context.Context, locationID, orgID int64, body str
 	var updateReq models.UpdateLocationRequest
 	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
 		logger.WithError(err).Error("Failed to parse update location request")
-		return util.CreateErrorResponse(http.StatusBadRequest, "Invalid request body")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	// Create location object with updates
@@ -263,20 +178,13 @@ func handleUpdateLocation(ctx context.Context, locationID, orgID int64, body str
 	updatedLocation, err := locationRepository.UpdateLocation(ctx, locationID, orgID, location)
 	if err != nil {
 		if err.Error() == "location not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Location not found")
+			return api.ErrorResponse(http.StatusNotFound, "Location not found", logger)
 		}
 		logger.WithError(err).Error("Failed to update location")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to update location")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update location", logger)
 	}
 
-	responseBody, _ := json.Marshal(updatedLocation)
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusOK, updatedLocation, logger)
 }
 
 // handleDeleteLocation handles DELETE /locations/{id}
@@ -284,18 +192,13 @@ func handleDeleteLocation(ctx context.Context, locationID, orgID int64) events.A
 	err := locationRepository.DeleteLocation(ctx, locationID, orgID)
 	if err != nil {
 		if err.Error() == "location not found" {
-			return util.CreateErrorResponse(http.StatusNotFound, "Location not found")
+			return api.ErrorResponse(http.StatusNotFound, "Location not found", logger)
 		}
 		logger.WithError(err).Error("Failed to delete location")
-		return util.CreateErrorResponse(http.StatusInternalServerError, "Failed to delete location")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to delete location", logger)
 	}
 
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusNoContent,
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	}
+	return api.SuccessResponse(http.StatusNoContent, nil, logger)
 }
 
 // main is the Lambda function entry point

@@ -9,6 +9,7 @@ import {InfrastructureOrganizationManagement} from "../function_construct/infras
 import {InfrastructureLocationManagement} from "../function_construct/infrastructure-location-management";
 import {InfrastructureRolesManagementFunction} from "../function_construct/infrastructure-roles-management";
 import {InfrastructurePermissionsManagementFunction} from "../function_construct/infrastructure-permissions-management";
+import {InfrastructureProjectManagement} from "../function_construct/infrastructure-project-management";
 
 export class LambdaConstruct extends Construct {
 
@@ -19,6 +20,7 @@ export class LambdaConstruct extends Construct {
     private readonly infrastructureLocationManagement: InfrastructureLocationManagement;
     private readonly infrastructureRolesManagement: InfrastructureRolesManagementFunction;
     private readonly infrastructurePermissionsManagement: InfrastructurePermissionsManagementFunction;
+    private readonly infrastructureProjectManagement: InfrastructureProjectManagement;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -35,6 +37,7 @@ export class LambdaConstruct extends Construct {
         this.infrastructureLocationManagement = new InfrastructureLocationManagement(this, 'InfrastructureLocationManagement', funcProps);
         this.infrastructureRolesManagement = new InfrastructureRolesManagementFunction(this, 'InfrastructureRolesManagement', funcProps);
         this.infrastructurePermissionsManagement = new InfrastructurePermissionsManagementFunction(this, 'InfrastructurePermissionsManagement', funcProps);
+        this.infrastructureProjectManagement = new InfrastructureProjectManagement(this, 'InfrastructureProjectManagement', funcProps);
     }
 
     get corsLambda(): GoFunction {
@@ -91,5 +94,13 @@ export class LambdaConstruct extends Construct {
 
     get permissionsManagementLambdaArn(): string {
         return this.infrastructurePermissionsManagement.functionArn;
+    }
+
+    get projectManagementLambda(): GoFunction {
+        return this.infrastructureProjectManagement.function;
+    }
+
+    get projectManagementLambdaArn(): string {
+        return this.infrastructureProjectManagement.functionArn;
     }
 }

@@ -1,6 +1,3 @@
--- Construction Management Database Creation Scripts for PostgreSQL
--- Execute these scripts in order
-
 CREATE SCHEMA iam;
 CREATE SCHEMA project;
 
@@ -13,7 +10,7 @@ SET search_path TO iam, project, public;
 CREATE TABLE iam.organizations (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    company_type VARCHAR(50) NOT NULL CHECK (company_type IN ('general_contractor', 'subcontractor', 'architect', 'owner', 'consultant')),
+    org_type VARCHAR(50) NOT NULL CHECK (org_type IN ('general_contractor', 'subcontractor', 'architect', 'owner', 'consultant')),
     license_number VARCHAR(100),
     address TEXT,
     phone VARCHAR(20),
@@ -27,7 +24,7 @@ CREATE TABLE iam.organizations (
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE
 );
 
-CREATE INDEX idx_organizations_company_type ON iam.organizations (company_type);
+CREATE INDEX idx_organizations_company_type ON iam.organizations (org_type);
 CREATE INDEX idx_organizations_status ON iam.organizations (status);
 CREATE INDEX idx_organizations_is_deleted ON iam.organizations (is_deleted);
 
@@ -115,6 +112,7 @@ CREATE TABLE iam.roles (
     description TEXT,
     role_type VARCHAR(50) NOT NULL DEFAULT 'custom' CHECK (role_type IN ('system', 'custom')),
     construction_role_category VARCHAR(50) NOT NULL CHECK (construction_role_category IN ('management', 'field', 'office', 'external', 'admin')),
+    access_level VARCHAR(50) NOT NULL DEFAULT 'location' CHECK (access_level IN ('organization', 'location', 'project')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT NOT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -125,6 +123,7 @@ CREATE TABLE iam.roles (
 
 CREATE INDEX idx_roles_org_id ON iam.roles (org_id);
 CREATE INDEX idx_roles_type_category ON iam.roles (role_type, construction_role_category);
+CREATE INDEX idx_roles_access_level ON iam.roles (access_level);
 CREATE INDEX idx_roles_is_deleted ON iam.roles (is_deleted);
 
 -- Permissions Table
@@ -166,8 +165,8 @@ CREATE TABLE iam.role_permissions (
 
 CREATE INDEX idx_role_permissions_is_deleted ON iam.role_permissions (is_deleted);
 
--- User Organization Roles Table
-CREATE TABLE iam.user_organization_roles (
+-- Organization User Roles Table (RENAMED from user_organization_roles)
+CREATE TABLE iam.org_user_roles (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     role_id BIGINT NOT NULL,
@@ -176,13 +175,34 @@ CREATE TABLE iam.user_organization_roles (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by BIGINT NOT NULL,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-    CONSTRAINT fk_user_org_roles_user FOREIGN KEY (user_id) REFERENCES iam.users(id),
-    CONSTRAINT fk_user_org_roles_role FOREIGN KEY (role_id) REFERENCES iam.roles(id)
+    CONSTRAINT fk_org_user_roles_user FOREIGN KEY (user_id) REFERENCES iam.users(id),
+    CONSTRAINT fk_org_user_roles_role FOREIGN KEY (role_id) REFERENCES iam.roles(id)
 );
 
-CREATE INDEX idx_user_org_roles_user_id ON iam.user_organization_roles (user_id);
-CREATE INDEX idx_user_org_roles_role_id ON iam.user_organization_roles (role_id);
-CREATE INDEX idx_user_org_roles_is_deleted ON iam.user_organization_roles (is_deleted);
+CREATE INDEX idx_org_user_roles_user_id ON iam.org_user_roles (user_id);
+CREATE INDEX idx_org_user_roles_role_id ON iam.org_user_roles (role_id);
+CREATE INDEX idx_org_user_roles_is_deleted ON iam.org_user_roles (is_deleted);
+
+-- Location User Roles Table (NEW TABLE)
+CREATE TABLE iam.location_user_roles (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    location_id BIGINT NOT NULL,
+    role_id BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT NOT NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT fk_location_user_roles_user FOREIGN KEY (user_id) REFERENCES iam.users(id),
+    CONSTRAINT fk_location_user_roles_location FOREIGN KEY (location_id) REFERENCES iam.locations(id),
+    CONSTRAINT fk_location_user_roles_role FOREIGN KEY (role_id) REFERENCES iam.roles(id)
+);
+
+CREATE INDEX idx_location_user_roles_user_id ON iam.location_user_roles (user_id);
+CREATE INDEX idx_location_user_roles_location_id ON iam.location_user_roles (location_id);
+CREATE INDEX idx_location_user_roles_role_id ON iam.location_user_roles (role_id);
+CREATE INDEX idx_location_user_roles_is_deleted ON iam.location_user_roles (is_deleted);
 
 -- 3. PROJECT Schema Tables (Construction Management)
 
@@ -194,18 +214,29 @@ CREATE TABLE project.projects (
     project_number VARCHAR(50),
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    project_type VARCHAR(50) NOT NULL CHECK (project_type IN ('commercial', 'residential', 'industrial', 'infrastructure', 'renovation')),
+    project_type VARCHAR(50) NOT NULL CHECK (project_type IN ('commercial', 'residential', 'industrial', 'hospitality', 'healthcare', 'institutional', 'mixed-use', 'civil-infrastructure', 'recreation', 'aviation', 'specialized')),
+    project_stage VARCHAR(50) CHECK (project_stage IN ('bidding', 'course-of-construction', 'pre-construction', 'post-construction', 'warranty')),
+    work_scope VARCHAR(50) CHECK (work_scope IN ('new', 'renovation', 'restoration', 'maintenance')),
+    project_sector VARCHAR(50) CHECK (project_sector IN ('commercial', 'residential', 'industrial', 'hospitality', 'healthcare', 'institutional', 'mixed-use', 'civil-infrastructure', 'recreation', 'aviation', 'specialized')),
+    delivery_method VARCHAR(50) CHECK (delivery_method IN ('design-build', 'design-bid-build', 'construction-manager-at-risk', 'integrated-project-delivery', 'construction-manager-as-agent', 'public-private-partnership', 'other')),
     project_phase VARCHAR(50) NOT NULL DEFAULT 'pre_construction' CHECK (project_phase IN ('pre_construction', 'design', 'permitting', 'construction', 'closeout', 'warranty')),
     start_date DATE,
-    end_date DATE,
+    planned_end_date DATE,
     actual_start_date DATE,
     actual_end_date DATE,
+    substantial_completion_date DATE,
+    project_finish_date DATE,
+    warranty_start_date DATE,
+    warranty_end_date DATE,
     budget DECIMAL(15,2),
     contract_value DECIMAL(15,2),
+    square_footage INTEGER,
     address TEXT,
     city VARCHAR(100),
     state VARCHAR(50),
     zip_code VARCHAR(20),
+    country VARCHAR(100) DEFAULT 'USA',
+    language VARCHAR(10) DEFAULT 'en',
     latitude DECIMAL(10,8),
     longitude DECIMAL(11,8),
     status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'on_hold', 'completed', 'cancelled')),
@@ -222,11 +253,61 @@ CREATE INDEX idx_projects_org_id ON project.projects (org_id);
 CREATE INDEX idx_projects_location_id ON project.projects (location_id);
 CREATE INDEX idx_projects_number ON project.projects (project_number);
 CREATE INDEX idx_projects_type_phase ON project.projects (project_type, project_phase);
-CREATE INDEX idx_projects_dates ON project.projects (start_date, end_date);
+CREATE INDEX idx_projects_stage ON project.projects (project_stage);
+CREATE INDEX idx_projects_sector ON project.projects (project_sector);
+CREATE INDEX idx_projects_delivery_method ON project.projects (delivery_method);
+CREATE INDEX idx_projects_dates ON project.projects (start_date, planned_end_date);
 CREATE INDEX idx_projects_status ON project.projects (status);
 CREATE INDEX idx_projects_is_deleted ON project.projects (is_deleted);
 
--- Project User Roles Table
+-- Project Managers Table
+CREATE TABLE project.project_managers (
+    id BIGSERIAL PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    company VARCHAR(255) NOT NULL,
+    role VARCHAR(100) NOT NULL CHECK (role IN ('general-contractor', 'owners-representative', 'program-manager', 'consultant', 'architect', 'engineer', 'inspector')),
+    email VARCHAR(255) NOT NULL,
+    office_contact VARCHAR(20),
+    mobile_contact VARCHAR(20),
+    is_primary BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT NOT NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT fk_project_managers_project FOREIGN KEY (project_id) REFERENCES project.projects(id)
+);
+
+CREATE INDEX idx_project_managers_project_id ON project.project_managers (project_id);
+CREATE INDEX idx_project_managers_email ON project.project_managers (email);
+CREATE INDEX idx_project_managers_role ON project.project_managers (role);
+CREATE INDEX idx_project_managers_is_deleted ON project.project_managers (is_deleted);
+
+-- Project Attachments Table
+CREATE TABLE project.project_attachments (
+    id BIGSERIAL PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size BIGINT,
+    file_type VARCHAR(50),
+    attachment_type VARCHAR(50) NOT NULL CHECK (attachment_type IN ('logo', 'project_photo', 'document', 'drawing', 'other')),
+    uploaded_by BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT NOT NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT fk_project_attachments_project FOREIGN KEY (project_id) REFERENCES project.projects(id),
+    CONSTRAINT fk_project_attachments_uploaded_by FOREIGN KEY (uploaded_by) REFERENCES iam.users(id)
+);
+
+CREATE INDEX idx_project_attachments_project_id ON project.project_attachments (project_id);
+CREATE INDEX idx_project_attachments_type ON project.project_attachments (attachment_type);
+CREATE INDEX idx_project_attachments_is_deleted ON project.project_attachments (is_deleted);
+
+-- Project User Roles Table (CONSISTENT NAMING)
 CREATE TABLE project.project_user_roles (
     id BIGSERIAL PRIMARY KEY,
     project_id BIGINT NOT NULL,
@@ -567,10 +648,13 @@ CREATE TRIGGER update_user_location_access_updated_at BEFORE UPDATE ON iam.user_
 CREATE TRIGGER update_roles_updated_at BEFORE UPDATE ON iam.roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_permissions_updated_at BEFORE UPDATE ON iam.permissions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_role_permissions_updated_at BEFORE UPDATE ON iam.role_permissions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_user_organization_roles_updated_at BEFORE UPDATE ON iam.user_organization_roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_org_user_roles_updated_at BEFORE UPDATE ON iam.org_user_roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_location_user_roles_updated_at BEFORE UPDATE ON iam.location_user_roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Project Schema triggers
 CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON project.projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_project_managers_updated_at BEFORE UPDATE ON project.project_managers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_project_attachments_updated_at BEFORE UPDATE ON project.project_attachments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_project_user_roles_updated_at BEFORE UPDATE ON project.project_user_roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_rfis_updated_at BEFORE UPDATE ON project.rfis FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_rfi_attachments_updated_at BEFORE UPDATE ON project.rfi_attachments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

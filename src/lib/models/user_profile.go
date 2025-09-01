@@ -57,13 +57,13 @@ type UserProfile struct {
 	LastName  string         `json:"last_name" db:"last_name"`     // User's last name
 	Phone     sql.NullString `json:"phone" db:"phone"`             // Optional contact phone number
 	JobTitle  sql.NullString `json:"job_title" db:"job_title"`     // Optional professional title
-	PhotoURL  sql.NullString `json:"photo_url" db:"photo_url"`     // Optional profile photo URL
+	AvatarURL sql.NullString `json:"avatar_url" db:"avatar_url"`   // Optional profile photo URL
 	
 	// Account Status
 	Status string `json:"status" db:"status"`             // Account status: 'active', 'inactive', 'suspended'
 	
 	// Role Information
-	IsSuperAdmin bool `json:"isSuperAdmin" db:"isSuperAdmin"` // SuperAdmin role flag
+	IsSuperAdmin bool `json:"is_super_admin" db:"is_super_admin"` // SuperAdmin role flag
 	
 	// Organizational Context
 	OrgID   string `json:"org_id" db:"org_id"`           // Organization ID this user belongs to

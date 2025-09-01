@@ -261,7 +261,7 @@ func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 	// Create a unique organization for this super admin
 	// Initial name will be "New Organization" and they can update it later
 	err := tx.QueryRow(`
-		INSERT INTO iam.organizations (name, company_type, status, created_by, updated_by)
+		INSERT INTO iam.organizations (name, org_type, status, created_by, updated_by)
 		VALUES ('New Organization', 'general_contractor', 'pending_setup', 1, 1)
 		RETURNING id
 	`).Scan(&orgID)

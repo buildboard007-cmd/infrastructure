@@ -396,10 +396,10 @@ func (dao *UserManagementDao) DeleteUser(ctx context.Context, userID, orgID int6
 }
 
 // GetUserLocationRoleAssignments retrieves user's location-role assignments
-// Based on new schema: user_location_access + user_organization_roles
+// Based on new schema: user_location_access + org_user_roles + location_user_roles
 func (dao *UserManagementDao) GetUserLocationRoleAssignments(ctx context.Context, userID int64) ([]models.UserLocationRoleAssignment, error) {
 	// For now, return empty assignments as the schema has changed significantly
-	// This will need to be reimplemented with the new user_location_access and user_organization_roles tables
+	// This will need to be reimplemented with the new user_location_access, org_user_roles, and location_user_roles tables
 	dao.Logger.WithField("user_id", userID).Debug("GetUserLocationRoleAssignments called - returning empty due to schema changes")
 	return []models.UserLocationRoleAssignment{}, nil
 }

@@ -86,25 +86,27 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 	// Optimized query using pre-built view with all user relationships
 	query := `
 		SELECT 
-			user_id,
-			cognito_id,
-			email,
-			first_name,
-			last_name,
-			phone,
-			job_title,
-			status,
-			photo_url,
-			org_id,
-			org_name,
-			current_location_id,
-			isSuperAdmin,
-			locations
-		FROM iam.user_summary
-		WHERE cognito_id = $1 
+			u.id,
+			u.cognito_id,
+			u.email,
+			u.first_name,
+			u.last_name,
+			u.phone,
+			u.job_title,
+			u.status,
+			u.avatar_url,
+			u.org_id,
+			o.name,
+			u.current_location_id,
+			u.is_super_admin,
+			'[]'::text as locations
+		FROM iam.users u
+		JOIN iam.organizations o ON u.org_id = o.id
+		WHERE u.cognito_id = $1 
+		  AND u.is_deleted = FALSE
 		  AND (
-			  status = 'active'
-			  OR (status = 'pending_org_setup' AND isSuperAdmin = true)
+			  u.status = 'active'
+			  OR (u.status = 'pending_org_setup' AND u.is_super_admin = true)
 		  );
 `
 
@@ -130,7 +132,7 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 		&profile.Phone,             // sql.NullString for optional field
 		&profile.JobTitle,          // sql.NullString for optional field
 		&profile.Status,            // Account status (active/inactive/suspended)
-		&profile.PhotoURL,          // sql.NullString for optional field
+		&profile.AvatarURL,         // sql.NullString for optional field
 		&profile.OrgID,             // Organization identifier
 		&profile.OrgName,           // Organization display name
 		&profile.CurrentLocationID, // sql.NullString for optional primary location
