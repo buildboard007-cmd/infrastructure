@@ -102,8 +102,8 @@ func (h *Handler) createUser(ctx context.Context, request events.APIGatewayProxy
 	if createRequest.JobTitle != "" {
 		user.JobTitle = sql.NullString{String: createRequest.JobTitle, Valid: true}
 	}
-	if createRequest.PhotoURL != "" {
-		user.PhotoURL = sql.NullString{String: createRequest.PhotoURL, Valid: true}
+	if createRequest.AvatarURL != "" {
+		user.AvatarURL = sql.NullString{String: createRequest.AvatarURL, Valid: true}
 	}
 
 	// Create user in database
@@ -261,8 +261,8 @@ func (h *Handler) updateUser(ctx context.Context, request events.APIGatewayProxy
 	if updateRequest.JobTitle != "" {
 		user.JobTitle = sql.NullString{String: updateRequest.JobTitle, Valid: true}
 	}
-	if updateRequest.PhotoURL != "" {
-		user.PhotoURL = sql.NullString{String: updateRequest.PhotoURL, Valid: true}
+	if updateRequest.AvatarURL != "" {
+		user.AvatarURL = sql.NullString{String: updateRequest.AvatarURL, Valid: true}
 	}
 	if updateRequest.Status != "" {
 		user.Status = updateRequest.Status

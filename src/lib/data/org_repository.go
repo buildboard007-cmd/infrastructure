@@ -29,9 +29,9 @@ func (dao *OrgDao) UpdateOrganization(ctx context.Context, userID int64, org *mo
 	var isSuperAdmin bool
 	
 	checkQuery := `
-		SELECT org_id, isSuperAdmin
+		SELECT org_id, is_super_admin
 		FROM iam.users
-		WHERE user_id = $1
+		WHERE id = $1
 	`
 	
 	err := dao.DB.QueryRowContext(ctx, checkQuery, userID).Scan(&orgID, &isSuperAdmin)
@@ -62,10 +62,10 @@ func (dao *OrgDao) UpdateOrganization(ctx context.Context, userID int64, org *mo
 	
 	// Update the organization
 	updateQuery := `
-		UPDATE iam.organization
-		SET org_name = $1, updated_at = NOW()
-		WHERE org_id = $2
-		RETURNING org_id, org_name, created_at, updated_at
+		UPDATE iam.organizations
+		SET name = $1, updated_by = $2
+		WHERE id = $3
+		RETURNING id, name, created_at, updated_at
 	`
 	
 	var updatedOrg models.Organization
@@ -73,6 +73,7 @@ func (dao *OrgDao) UpdateOrganization(ctx context.Context, userID int64, org *mo
 		ctx,
 		updateQuery,
 		org.OrgName,
+		userID,
 		orgID,
 	).Scan(
 		&updatedOrg.OrgID,
@@ -93,11 +94,11 @@ func (dao *OrgDao) UpdateOrganization(ctx context.Context, userID int64, org *mo
 	// Also update user status from pending_org_setup to active if it was pending
 	statusUpdateQuery := `
 		UPDATE iam.users
-		SET status = 'active', updated_at = NOW()
-		WHERE user_id = $1 AND status = 'pending_org_setup'
+		SET status = 'active', updated_by = $1
+		WHERE id = $2 AND status = 'pending_org_setup'
 	`
 	
-	_, err = dao.DB.ExecContext(ctx, statusUpdateQuery, userID)
+	_, err = dao.DB.ExecContext(ctx, statusUpdateQuery, userID, userID)
 	if err != nil {
 		dao.Logger.WithFields(logrus.Fields{
 			"operation": "UpdateOrganization",
@@ -120,10 +121,10 @@ func (dao *OrgDao) UpdateOrganization(ctx context.Context, userID int64, org *mo
 // GetOrganizationByUserID retrieves an organization by user ID
 func (dao *OrgDao) GetOrganizationByUserID(ctx context.Context, userID int64) (*models.Organization, error) {
 	query := `
-		SELECT o.org_id, o.org_name, o.created_at, o.updated_at
-		FROM iam.organization o
-		INNER JOIN iam.users u ON u.org_id = o.org_id
-		WHERE u.user_id = $1
+		SELECT o.id, o.name, o.created_at, o.updated_at
+		FROM iam.organizations o
+		INNER JOIN iam.users u ON u.org_id = o.id
+		WHERE u.id = $1
 	`
 	
 	var org models.Organization

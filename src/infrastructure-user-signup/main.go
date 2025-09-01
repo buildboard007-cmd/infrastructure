@@ -261,9 +261,9 @@ func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 	// Create a unique organization for this super admin
 	// Initial name will be "New Organization" and they can update it later
 	err := tx.QueryRow(`
-		INSERT INTO iam.organization (org_name, created_at, updated_at)
-		VALUES ('New Organization', NOW(), NOW())
-		RETURNING org_id
+		INSERT INTO iam.organizations (name, company_type, status, created_by, updated_by)
+		VALUES ('New Organization', 'general_contractor', 'pending_setup', 1, 1)
+		RETURNING id
 	`).Scan(&orgID)
 
 	if err != nil {
@@ -278,7 +278,7 @@ func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 	}
 	
 	_, err = tx.Exec(`
-		INSERT INTO iam.user (
+		INSERT INTO iam.users (
 			cognito_id, 
 			org_id,
 			email, 
@@ -286,12 +286,12 @@ func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 			last_name,
 			phone,
 			status, 
-			isSuperAdmin,
-			created_at, 
-			updated_at
+			is_super_admin,
+			created_by,
+			updated_by
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-	`, request.CognitoID, orgID, request.Email, request.FirstName, request.LastName, phone, StatusPendingOrgSetup, true)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`, request.CognitoID, orgID, request.Email, request.FirstName, request.LastName, phone, StatusPendingOrgSetup, true, 1, 1)
 
 	if err != nil {
 		return fmt.Errorf("failed to create SuperAdmin user record: %w", err)
