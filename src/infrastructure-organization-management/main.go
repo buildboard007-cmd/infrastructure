@@ -15,20 +15,16 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/sirupsen/logrus"
 )
 
 // Handler struct contains all dependencies for the Lambda function
 type Handler struct {
-	DB            *sql.DB
-	Logger        *logrus.Logger
-	CognitoClient *cognitoidentityprovider.Client
-	UserPoolID    string
+	DB     *sql.DB
+	Logger *logrus.Logger
 }
 
 // Global variables for Lambda cold start optimization
@@ -51,11 +47,6 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 		"resource":  request.Resource,
 	}).Info("Infrastructure management request received")
 
-	// Route based on path prefix
-	if strings.HasPrefix(request.Path, "/users") || strings.HasPrefix(request.Resource, "/users") {
-		return handler.handleUserRoutes(ctx, request)
-	}
-
 	// Organization management routes
 	// Extract claims from JWT token via API Gateway authorizer
 	claims, err := auth.ExtractClaimsFromRequest(request)
@@ -73,7 +64,7 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 	if request.HTTPMethod == http.MethodPut {
 		return handleUpdateOrganization(ctx, claims.UserID, claims.OrgID, request.Body), nil
 	}
-	
+
 	// Handle GET request to retrieve organization
 	if request.HTTPMethod == http.MethodGet {
 		return handleGetOrganization(ctx, claims.UserID), nil
@@ -81,7 +72,6 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 
 	return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 }
-
 
 // handleUpdateOrganization handles the PUT request to update organization info
 func handleUpdateOrganization(ctx context.Context, userID, orgID int64, body string) events.APIGatewayProxyResponse {
@@ -102,7 +92,6 @@ func handleUpdateOrganization(ctx context.Context, userID, orgID int64, body str
 
 	return api.SuccessResponse(http.StatusOK, updatedOrg, logger)
 }
-
 
 // handleGetOrganization handles the GET request to retrieve organization info
 func handleGetOrganization(ctx context.Context, userID int64) events.APIGatewayProxyResponse {
@@ -201,21 +190,10 @@ func setupPostgresSQLClient(ssmParams map[string]string) error {
 		Logger: logger, // Structured logger for debugging
 	}
 
-	// Initialize Cognito client
-	cognitoClient := clients.NewCognitoIdentityProviderClient(isLocal)
-	
-	// Get User Pool ID from SSM parameters
-	userPoolID := ssmParams[constants.COGNITO_USER_POOL_ID]
-	if userPoolID == "" {
-		logger.Fatal("COGNITO_USER_POOL_ID not found in SSM parameters")
-	}
-
 	// Initialize handler with all dependencies
 	handler = &Handler{
-		DB:            sqlDB,
-		Logger:        logger,
-		CognitoClient: cognitoClient,
-		UserPoolID:    userPoolID,
+		DB:     sqlDB,
+		Logger: logger,
 	}
 
 	if logger.IsLevelEnabled(logrus.DebugLevel) {
