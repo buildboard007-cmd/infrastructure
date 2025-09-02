@@ -17,6 +17,7 @@ type ProjectRepository interface {
 	CreateProject(ctx context.Context, orgID int64, project *models.CreateProjectRequest, userID int64) (*models.CreateProjectResponse, error)
 	CreateProjectLegacy(ctx context.Context, orgID int64, project *models.LegacyCreateProjectRequest, userID int64) (*models.Project, error)
 	GetProjectsByOrg(ctx context.Context, orgID int64) ([]models.Project, error)
+	GetProjectsByLocationID(ctx context.Context, locationID, orgID int64) ([]models.Project, error)
 	GetProjectByID(ctx context.Context, projectID, orgID int64) (*models.Project, error)
 	UpdateProject(ctx context.Context, projectID, orgID int64, project *models.UpdateProjectRequest, userID int64) (*models.Project, error)
 	DeleteProject(ctx context.Context, projectID, orgID int64, userID int64) error
@@ -407,6 +408,66 @@ func (dao *ProjectDao) GetProjectsByOrg(ctx context.Context, orgID int64) ([]mod
 		"org_id": orgID,
 		"count":  len(projects),
 	}).Debug("Successfully retrieved projects for organization")
+
+	return projects, nil
+}
+
+// GetProjectsByLocationID retrieves all projects for a specific location within an organization
+func (dao *ProjectDao) GetProjectsByLocationID(ctx context.Context, locationID, orgID int64) ([]models.Project, error) {
+	query := `
+		SELECT id, org_id, location_id, project_number, name, description, project_type,
+		       project_stage, work_scope, project_sector, delivery_method, project_phase,
+		       start_date, planned_end_date, actual_start_date, actual_end_date,
+		       substantial_completion_date, project_finish_date, warranty_start_date, warranty_end_date,
+		       budget, contract_value, square_footage, address, city, state, zip_code,
+		       country, language, latitude, longitude, status, created_at, created_by, updated_at, updated_by
+		FROM project.projects
+		WHERE location_id = $1 AND org_id = $2 AND is_deleted = FALSE
+		ORDER BY created_at DESC
+	`
+
+	rows, err := dao.DB.QueryContext(ctx, query, locationID, orgID)
+	if err != nil {
+		dao.Logger.WithFields(logrus.Fields{
+			"location_id": locationID,
+			"org_id":      orgID,
+			"error":       err.Error(),
+		}).Error("Failed to query projects by location")
+		return nil, fmt.Errorf("failed to query projects by location: %w", err)
+	}
+	defer rows.Close()
+
+	var projects []models.Project
+	for rows.Next() {
+		var project models.Project
+		err := rows.Scan(
+			&project.ProjectID, &project.OrgID, &project.LocationID, &project.ProjectNumber,
+			&project.Name, &project.Description, &project.ProjectType, &project.ProjectStage,
+			&project.WorkScope, &project.ProjectSector, &project.DeliveryMethod, &project.ProjectPhase,
+			&project.StartDate, &project.PlannedEndDate, &project.ActualStartDate, &project.ActualEndDate,
+			&project.SubstantialCompletionDate, &project.ProjectFinishDate, &project.WarrantyStartDate, &project.WarrantyEndDate,
+			&project.Budget, &project.ContractValue, &project.SquareFootage, &project.Address,
+			&project.City, &project.State, &project.ZipCode, &project.Country, &project.Language,
+			&project.Latitude, &project.Longitude, &project.Status, &project.CreatedAt,
+			&project.CreatedBy, &project.UpdatedAt, &project.UpdatedBy,
+		)
+		if err != nil {
+			dao.Logger.WithError(err).Error("Failed to scan project row")
+			return nil, fmt.Errorf("failed to scan project: %w", err)
+		}
+		projects = append(projects, project)
+	}
+
+	if err = rows.Err(); err != nil {
+		dao.Logger.WithError(err).Error("Error iterating project rows")
+		return nil, fmt.Errorf("error iterating projects: %w", err)
+	}
+
+	dao.Logger.WithFields(logrus.Fields{
+		"location_id": locationID,
+		"org_id":      orgID,
+		"count":       len(projects),
+	}).Debug("Successfully retrieved projects for location")
 
 	return projects, nil
 }

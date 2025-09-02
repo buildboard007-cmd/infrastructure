@@ -148,14 +148,36 @@ func handleCreateProject(ctx context.Context, request events.APIGatewayProxyRequ
 	return api.SuccessResponse(http.StatusCreated, response, logger), nil
 }
 
-// handleGetProjects handles GET /projects
+// handleGetProjects handles GET /projects with optional location_id query parameter
 func handleGetProjects(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
 	orgID := claims.OrgID
 
-	projects, err := projectRepository.GetProjectsByOrg(ctx, orgID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to get projects")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects", logger), nil
+	// Check if location_id query parameter is provided
+	locationIDStr, hasLocationID := request.QueryStringParameters["location_id"]
+	
+	var projects []models.Project
+	var err error
+	
+	if hasLocationID && locationIDStr != "" {
+		// Get projects by location ID
+		locationID, parseErr := strconv.ParseInt(locationIDStr, 10, 64)
+		if parseErr != nil {
+			logger.WithError(parseErr).Error("Invalid location_id parameter")
+			return api.ErrorResponse(http.StatusBadRequest, "Invalid location_id parameter", logger), nil
+		}
+		
+		projects, err = projectRepository.GetProjectsByLocationID(ctx, locationID, orgID)
+		if err != nil {
+			logger.WithError(err).Error("Failed to get projects by location")
+			return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects by location", logger), nil
+		}
+	} else {
+		// Get all projects for organization
+		projects, err = projectRepository.GetProjectsByOrg(ctx, orgID)
+		if err != nil {
+			logger.WithError(err).Error("Failed to get projects")
+			return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects", logger), nil
+		}
 	}
 
 	response := models.ProjectListResponse{

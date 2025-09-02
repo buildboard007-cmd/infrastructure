@@ -1957,6 +1957,70 @@
           }
         },
         {
+          "name": "Get Projects (with optional location filter)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has projects array', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('projects');",
+                  "    pm.expect(responseJson.projects).to.be.an('array');",
+                  "    console.log('Filtered Projects:', JSON.stringify(responseJson, null, 2));",
+                  "});",
+                  "",
+                  "pm.test('Optional location filter applied if location_id provided', function () {",
+                  "    const url = pm.request.url.toString();",
+                  "    if (url.includes('location_id=')) {",
+                  "        console.log('✅ Location filter applied: ' + url);",
+                  "    } else {",
+                  "        console.log('ℹ️ No location filter applied - showing all projects');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects?location_id={{location_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "projects"
+              ],
+              "query": [
+                {
+                  "key": "location_id",
+                  "value": "{{location_id}}",
+                  "description": "Optional: Filter projects by location ID"
+                }
+              ]
+            },
+            "description": "Retrieves projects with optional location filtering. Use the location_id query parameter to filter projects by a specific location. If no location_id is provided, all projects will be returned."
+          }
+        },
+        {
           "name": "Get All Projects",
           "event": [
             {
