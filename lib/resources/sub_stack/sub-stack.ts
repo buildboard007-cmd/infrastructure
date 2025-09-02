@@ -65,7 +65,7 @@ export class SubStack extends NestedStack {
         const projectManagementIntegration = new LambdaIntegration(this.lambdaConstruct.projectManagementLambda);
         const corsIntegration = new LambdaIntegration(this.lambdaConstruct.corsLambda);
 
-        // Create /org resource with Cognito authorization
+        // Create /org resource with Cognito authorization (legacy endpoint)
         const orgResource = this.api.root.addResource('org');
         orgResource.addMethod('GET', orgManagementIntegration, {
             authorizer: cognitoAuthorizer
@@ -74,6 +74,29 @@ export class SubStack extends NestedStack {
             authorizer: cognitoAuthorizer
         });
         orgResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /organizations resource with Cognito authorization
+        const organizationsResource = this.api.root.addResource('organizations');
+        organizationsResource.addMethod('GET', orgManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        organizationsResource.addMethod('POST', orgManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        organizationsResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /organizations/{id} resource for specific organization operations
+        const organizationIdResource = organizationsResource.addResource('{id}');
+        organizationIdResource.addMethod('GET', orgManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        organizationIdResource.addMethod('PUT', orgManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        organizationIdResource.addMethod('DELETE', orgManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        organizationIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
         // Create /locations resource with Cognito authorization
         const locationsResource = this.api.root.addResource('locations');

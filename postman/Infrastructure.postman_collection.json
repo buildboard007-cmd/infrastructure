@@ -210,8 +210,8 @@
                   "",
                   "pm.test('Response has organization data', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('org_id');",
-                  "    pm.expect(responseJson).to.have.property('org_name');",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('name');",
                   "    console.log('Organization Info:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
@@ -258,8 +258,8 @@
                   "",
                   "pm.test('Organization updated successfully', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('org_id');",
-                  "    pm.expect(responseJson).to.have.property('org_name');",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('name');",
                   "    console.log('Updated Organization:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
@@ -283,7 +283,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"org_name\": \"Acme Corporation\"\n}"
+              "raw": "{\n    \"name\": \"Acme Corporation\",\n    \"org_type\": \"general_contractor\",\n    \"license_number\": \"GC-12345\",\n    \"address\": \"123 Business Street, New York, NY 10001\",\n    \"phone\": \"+1-555-0123\",\n    \"email\": \"contact@acme.com\",\n    \"website\": \"https://acme.com\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/org",
@@ -320,13 +320,13 @@
                   "",
                   "pm.test('Location created with required fields', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('location_id');",
-                  "    pm.expect(responseJson).to.have.property('location_name');",
-                  "    pm.expect(responseJson).to.have.property('org_id');",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('name');",
+                  "    pm.expect(responseJson).to.have.property('id');",
                   "    pm.expect(responseJson).to.have.property('created_by');",
                   "    ",
                   "    // Store location_id for other requests",
-                  "    pm.globals.set('location_id', responseJson.location_id);",
+                  "    pm.globals.set('location_id', responseJson.id);",
                   "    console.log('Created Location:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
@@ -350,7 +350,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"location_name\": \"Headquarters\",\n    \"address\": \"123 Main Street, New York, NY 10001\"\n}"
+              "raw": "{\n    \"name\": \"Headquarters\",\n    \"location_type\": \"office\",\n    \"address\": \"123 Main Street\",\n    \"city\": \"New York\",\n    \"state\": \"NY\",\n    \"zip_code\": \"10001\",\n    \"country\": \"USA\",\n    \"status\": \"active\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations",
@@ -431,8 +431,8 @@
                   "",
                   "pm.test('Response has location data', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('location_id');",
-                  "    pm.expect(responseJson).to.have.property('location_name');",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('name');",
                   "    console.log('Location Details:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
@@ -480,8 +480,8 @@
                   "",
                   "pm.test('Location updated successfully', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('location_id');",
-                  "    pm.expect(responseJson).to.have.property('location_name');",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('name');",
                   "    console.log('Updated Location:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
@@ -505,7 +505,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"location_name\": \"Corporate Headquarters\",\n    \"address\": \"456 Business Avenue, New York, NY 10001\"\n}"
+              "raw": "{\n    \"name\": \"Corporate Headquarters\",\n    \"location_type\": \"office\",\n    \"address\": \"456 Business Avenue\",\n    \"city\": \"New York\",\n    \"state\": \"NY\",\n    \"zip_code\": \"10001\",\n    \"country\": \"USA\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations/{{location_id}}",
@@ -757,7 +757,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"location_name\": \"A\",\n    \"address\": \"123 Test Street\",\n    \"description\": \"Location name too short - should fail validation\"\n}"
+              "raw": "{\n    \"name\": \"A\",\n    \"address\": \"123 Test Street\",\n    \"description\": \"Location name too short - should fail validation\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/locations",
@@ -796,7 +796,7 @@
                   "    const responseJson = pm.response.json();",
                   "    pm.expect(responseJson).to.have.property('role_id');",
                   "    pm.expect(responseJson).to.have.property('role_name');",
-                  "    pm.expect(responseJson).to.have.property('org_id');",
+                  "    pm.expect(responseJson).to.have.property('id');",
                   "    ",
                   "    // Store role_id for other requests",
                   "    pm.globals.set('role_id', responseJson.role_id);",
@@ -1180,7 +1180,7 @@
                   "    const responseJson = pm.response.json();",
                   "    pm.expect(responseJson).to.have.property('permission_id');",
                   "    pm.expect(responseJson).to.have.property('permission_name');",
-                  "    pm.expect(responseJson).to.have.property('org_id');",
+                  "    pm.expect(responseJson).to.have.property('id');",
                   "    ",
                   "    // Store permission_id for other requests",
                   "    pm.globals.set('permission_id', responseJson.permission_id);",

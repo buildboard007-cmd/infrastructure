@@ -69,48 +69,135 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 		return api.ErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage organization", logger), nil
 	}
 
-	// Handle PUT request to update organization
-	if request.HTTPMethod == http.MethodPut {
-		return handleUpdateOrganization(ctx, claims.UserID, request.Body), nil
-	}
+	// Route based on HTTP method and path
+	pathSegments := strings.Split(strings.Trim(request.Path, "/"), "/")
 	
-	// Handle GET request to retrieve organization
-	if request.HTTPMethod == http.MethodGet {
-		return handleGetOrganization(ctx, claims.UserID), nil
+	// Handle different routes
+	switch request.HTTPMethod {
+	case http.MethodPost:
+		// POST /organizations - Create new organization
+		return handleCreateOrganization(ctx, claims.UserID, request.Body), nil
+		
+	case http.MethodGet:
+		if len(pathSegments) >= 2 && pathSegments[1] != "" {
+			// GET /organizations/{id} - Get specific organization
+			orgID, err := strconv.ParseInt(pathSegments[1], 10, 64)
+			if err != nil {
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid organization ID", logger), nil
+			}
+			return handleGetOrganizationByID(ctx, orgID), nil
+		} else {
+			// GET /organizations - Get organization by user
+			return handleGetOrganization(ctx, claims.UserID), nil
+		}
+		
+	case http.MethodPut:
+		if len(pathSegments) >= 2 && pathSegments[1] != "" {
+			// PUT /organizations/{id} - Update organization
+			orgID, err := strconv.ParseInt(pathSegments[1], 10, 64)
+			if err != nil {
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid organization ID", logger), nil
+			}
+			return handleUpdateOrganization(ctx, claims.UserID, orgID, request.Body), nil
+		} else {
+			return api.ErrorResponse(http.StatusBadRequest, "Organization ID required for update", logger), nil
+		}
+		
+	case http.MethodDelete:
+		if len(pathSegments) >= 2 && pathSegments[1] != "" {
+			// DELETE /organizations/{id} - Delete organization
+			orgID, err := strconv.ParseInt(pathSegments[1], 10, 64)
+			if err != nil {
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid organization ID", logger), nil
+			}
+			return handleDeleteOrganization(ctx, orgID, claims.UserID), nil
+		} else {
+			return api.ErrorResponse(http.StatusBadRequest, "Organization ID required for deletion", logger), nil
+		}
+		
+	default:
+		return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 	}
 
 	return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 }
 
-// handleUpdateOrganization handles the PUT request to update organization info
-func handleUpdateOrganization(ctx context.Context, userID int64, body string) events.APIGatewayProxyResponse {
-	// Parse request body
-	var updateReq models.UpdateOrganizationRequest
-	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
-		logger.WithError(err).Error("Failed to parse request body")
+// handleCreateOrganization handles POST /organizations
+func handleCreateOrganization(ctx context.Context, userID int64, body string) events.APIGatewayProxyResponse {
+	var createReq models.CreateOrganizationRequest
+	if err := json.Unmarshal([]byte(body), &createReq); err != nil {
+		logger.WithError(err).Error("Failed to parse create organization request")
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
-	// Validate request
-	if updateReq.OrgName == "" || len(updateReq.OrgName) < 3 || len(updateReq.OrgName) > 150 {
-		return api.ErrorResponse(http.StatusBadRequest, "Organization name must be between 3 and 150 characters", logger)
-	}
-
-	// Update organization
+	// Create organization object
 	org := &models.Organization{
-		OrgName: updateReq.OrgName,
+		Name:          createReq.Name,
+		OrgType:       createReq.OrgType,
+		LicenseNumber: createReq.LicenseNumber,
+		Address:       createReq.Address,
+		Phone:         createReq.Phone,
+		Email:         createReq.Email,
+		Website:       createReq.Website,
+		Status:        createReq.Status,
 	}
 
-	updatedOrg, err := orgRepository.UpdateOrganization(ctx, userID, org)
+	// Create organization
+	createdOrg, err := orgRepository.CreateOrganization(ctx, userID, org)
 	if err != nil {
-		logger.WithError(err).Error("Failed to update organization")
-		if err.Error() == "unauthorized: user is not a super admin" {
-			return api.ErrorResponse(http.StatusForbidden, err.Error(), logger)
+		logger.WithError(err).Error("Failed to create organization")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create organization", logger)
+	}
+
+	return api.SuccessResponse(http.StatusCreated, createdOrg, logger)
+}
+
+// handleUpdateOrganization handles PUT /organizations/{id}
+func handleUpdateOrganization(ctx context.Context, userID, orgID int64, body string) events.APIGatewayProxyResponse {
+	var updateReq models.UpdateOrganizationRequest
+	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
+		logger.WithError(err).Error("Failed to parse update organization request")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
+	}
+
+	updatedOrg, err := orgRepository.UpdateOrganization(ctx, userID, orgID, &updateReq)
+	if err != nil {
+		if err.Error() == "organization not found" {
+			return api.ErrorResponse(http.StatusNotFound, "Organization not found", logger)
 		}
+		logger.WithError(err).Error("Failed to update organization")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update organization", logger)
 	}
 
 	return api.SuccessResponse(http.StatusOK, updatedOrg, logger)
+}
+
+// handleGetOrganizationByID handles GET /organizations/{id}
+func handleGetOrganizationByID(ctx context.Context, orgID int64) events.APIGatewayProxyResponse {
+	org, err := orgRepository.GetOrganizationByID(ctx, orgID)
+	if err != nil {
+		if err.Error() == "organization not found" {
+			return api.ErrorResponse(http.StatusNotFound, "Organization not found", logger)
+		}
+		logger.WithError(err).Error("Failed to get organization")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get organization", logger)
+	}
+
+	return api.SuccessResponse(http.StatusOK, org, logger)
+}
+
+// handleDeleteOrganization handles DELETE /organizations/{id}
+func handleDeleteOrganization(ctx context.Context, orgID, userID int64) events.APIGatewayProxyResponse {
+	err := orgRepository.DeleteOrganization(ctx, orgID, userID)
+	if err != nil {
+		if err.Error() == "organization not found" {
+			return api.ErrorResponse(http.StatusNotFound, "Organization not found", logger)
+		}
+		logger.WithError(err).Error("Failed to delete organization")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to delete organization", logger)
+	}
+
+	return api.SuccessResponse(http.StatusNoContent, nil, logger)
 }
 
 // handleGetOrganization handles the GET request to retrieve organization info

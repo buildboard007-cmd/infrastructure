@@ -80,7 +80,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			if err != nil {
 					return api.ErrorResponse(http.StatusBadRequest, "Invalid location ID", logger), nil
 			}
-			return handleUpdateLocation(ctx, locationID, claims.OrgID, request.Body), nil
+			return handleUpdateLocation(ctx, locationID, claims.OrgID, claims.UserID, request.Body), nil
 		} else {
 			return api.ErrorResponse(http.StatusBadRequest, "Location ID required for update", logger), nil
 		}
@@ -92,7 +92,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			if err != nil {
 					return api.ErrorResponse(http.StatusBadRequest, "Invalid location ID", logger), nil
 			}
-			return handleDeleteLocation(ctx, locationID, claims.OrgID), nil
+			return handleDeleteLocation(ctx, locationID, claims.OrgID, claims.UserID), nil
 		} else {
 			return api.ErrorResponse(http.StatusBadRequest, "Location ID required for deletion", logger), nil
 		}
@@ -110,15 +110,16 @@ func handleCreateLocation(ctx context.Context, userID, orgID int64, body string)
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
-	// Validate required fields
-	if createReq.LocationName == "" || len(createReq.LocationName) < 2 || len(createReq.LocationName) > 100 {
-		return api.ErrorResponse(http.StatusBadRequest, "Location name must be between 2 and 100 characters", logger)
-	}
-
 	// Create location object
 	location := &models.Location{
-		LocationName: createReq.LocationName,
+		Name:         createReq.Name,
+		LocationType: createReq.LocationType,
 		Address:      createReq.Address,
+		City:         createReq.City,
+		State:        createReq.State,
+		ZipCode:      createReq.ZipCode,
+		Country:      createReq.Country,
+		Status:       createReq.Status,
 	}
 
 	// Create location (automatically assigns to creator with SuperAdmin role)
@@ -162,20 +163,14 @@ func handleGetLocation(ctx context.Context, locationID, orgID int64) events.APIG
 }
 
 // handleUpdateLocation handles PUT /locations/{id}
-func handleUpdateLocation(ctx context.Context, locationID, orgID int64, body string) events.APIGatewayProxyResponse {
+func handleUpdateLocation(ctx context.Context, locationID, orgID, userID int64, body string) events.APIGatewayProxyResponse {
 	var updateReq models.UpdateLocationRequest
 	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
 		logger.WithError(err).Error("Failed to parse update location request")
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
-	// Create location object with updates
-	location := &models.Location{
-		LocationName: updateReq.LocationName,
-		Address:      updateReq.Address,
-	}
-
-	updatedLocation, err := locationRepository.UpdateLocation(ctx, locationID, orgID, location)
+	updatedLocation, err := locationRepository.UpdateLocation(ctx, locationID, orgID, &updateReq, userID)
 	if err != nil {
 		if err.Error() == "location not found" {
 			return api.ErrorResponse(http.StatusNotFound, "Location not found", logger)
@@ -188,8 +183,8 @@ func handleUpdateLocation(ctx context.Context, locationID, orgID int64, body str
 }
 
 // handleDeleteLocation handles DELETE /locations/{id}
-func handleDeleteLocation(ctx context.Context, locationID, orgID int64) events.APIGatewayProxyResponse {
-	err := locationRepository.DeleteLocation(ctx, locationID, orgID)
+func handleDeleteLocation(ctx context.Context, locationID, orgID, userID int64) events.APIGatewayProxyResponse {
+	err := locationRepository.DeleteLocation(ctx, locationID, orgID, userID)
 	if err != nil {
 		if err.Error() == "location not found" {
 			return api.ErrorResponse(http.StatusNotFound, "Location not found", logger)
