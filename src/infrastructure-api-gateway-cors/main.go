@@ -37,11 +37,11 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	allowedOrigins := strings.Split(ssmParams[constants.ALLOWED_ORIGINS], ",")
 
 	for _, allowedOrigin := range allowedOrigins {
-		if allowedOrigin == requestOrigin {
+		if allowedOrigin == "*" || allowedOrigin == requestOrigin {
 			return events.APIGatewayProxyResponse{
 				StatusCode: 200,
 				Headers: map[string]string{
-					"Access-Control-Allow-Origin":      allowedOrigin,
+					"Access-Control-Allow-Origin":      requestOrigin,
 					"Access-Control-Allow-Headers":     "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,geolocation,x-retry",
 					"Access-Control-Allow-Methods":     "GET, PUT, DELETE, POST, OPTIONS, PATCH",
 					"Access-Control-Allow-Credentials": "true",
