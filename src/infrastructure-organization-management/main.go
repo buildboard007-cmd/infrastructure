@@ -72,51 +72,66 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 	// Route based on HTTP method and path
 	pathSegments := strings.Split(strings.Trim(request.Path, "/"), "/")
 	
-	// Handle different routes
-	switch request.HTTPMethod {
-	case http.MethodPost:
-		// POST /organizations - Create new organization
-		return handleCreateOrganization(ctx, claims.UserID, request.Body), nil
-		
-	case http.MethodGet:
-		if len(pathSegments) >= 2 && pathSegments[1] != "" {
-			// GET /organizations/{id} - Get specific organization
-			orgID, err := strconv.ParseInt(pathSegments[1], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid organization ID", logger), nil
-			}
-			return handleGetOrganizationByID(ctx, orgID), nil
-		} else {
-			// GET /organizations - Get organization by user
+	// Handle legacy /org route and new /organizations routes
+	if pathSegments[0] == "org" {
+		// Legacy /org routes (existing API Gateway setup)
+		switch request.HTTPMethod {
+		case http.MethodGet:
+			// GET /org - Get organization by user
 			return handleGetOrganization(ctx, claims.UserID), nil
+		case http.MethodPut:
+			// PUT /org - Update organization (use user's org_id from claims)
+			return handleUpdateOrganization(ctx, claims.UserID, claims.OrgID, request.Body), nil
+		default:
+			return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 		}
-		
-	case http.MethodPut:
-		if len(pathSegments) >= 2 && pathSegments[1] != "" {
-			// PUT /organizations/{id} - Update organization
-			orgID, err := strconv.ParseInt(pathSegments[1], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid organization ID", logger), nil
+	} else {
+		// New /organizations routes
+		switch request.HTTPMethod {
+		case http.MethodPost:
+			// POST /organizations - Create new organization
+			return handleCreateOrganization(ctx, claims.UserID, request.Body), nil
+			
+		case http.MethodGet:
+			if len(pathSegments) >= 2 && pathSegments[1] != "" {
+				// GET /organizations/{id} - Get specific organization
+				orgID, err := strconv.ParseInt(pathSegments[1], 10, 64)
+				if err != nil {
+					return api.ErrorResponse(http.StatusBadRequest, "Invalid organization ID", logger), nil
+				}
+				return handleGetOrganizationByID(ctx, orgID), nil
+			} else {
+				// GET /organizations - Get organization by user
+				return handleGetOrganization(ctx, claims.UserID), nil
 			}
-			return handleUpdateOrganization(ctx, claims.UserID, orgID, request.Body), nil
-		} else {
-			return api.ErrorResponse(http.StatusBadRequest, "Organization ID required for update", logger), nil
-		}
-		
-	case http.MethodDelete:
-		if len(pathSegments) >= 2 && pathSegments[1] != "" {
-			// DELETE /organizations/{id} - Delete organization
-			orgID, err := strconv.ParseInt(pathSegments[1], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid organization ID", logger), nil
+			
+		case http.MethodPut:
+			if len(pathSegments) >= 2 && pathSegments[1] != "" {
+				// PUT /organizations/{id} - Update organization
+				orgID, err := strconv.ParseInt(pathSegments[1], 10, 64)
+				if err != nil {
+					return api.ErrorResponse(http.StatusBadRequest, "Invalid organization ID", logger), nil
+				}
+				return handleUpdateOrganization(ctx, claims.UserID, orgID, request.Body), nil
+			} else {
+				return api.ErrorResponse(http.StatusBadRequest, "Organization ID required for update", logger), nil
 			}
-			return handleDeleteOrganization(ctx, orgID, claims.UserID), nil
-		} else {
-			return api.ErrorResponse(http.StatusBadRequest, "Organization ID required for deletion", logger), nil
+			
+		case http.MethodDelete:
+			if len(pathSegments) >= 2 && pathSegments[1] != "" {
+				// DELETE /organizations/{id} - Delete organization
+				orgID, err := strconv.ParseInt(pathSegments[1], 10, 64)
+				if err != nil {
+					return api.ErrorResponse(http.StatusBadRequest, "Invalid organization ID", logger), nil
+				}
+				return handleDeleteOrganization(ctx, orgID, claims.UserID), nil
+			} else {
+				return api.ErrorResponse(http.StatusBadRequest, "Organization ID required for deletion", logger), nil
+			}
+			
+		default:
+			return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 		}
-		
-	default:
-		return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
 	}
 
 	return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
