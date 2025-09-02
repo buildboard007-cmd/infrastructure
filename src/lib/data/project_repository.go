@@ -241,7 +241,7 @@ func (dao *ProjectDao) CreateProject(ctx context.Context, orgID int64, request *
 		"construction", // Default project_type
 		request.ProjectDetails.ProjectStage, request.ProjectDetails.WorkScope,
 		request.ProjectDetails.ProjectSector, request.ProjectDetails.DeliveryMethod,
-		"planning", // Default project_phase
+		"pre_construction", // Default project_phase
 		startDate, substantialCompletionDate, projectFinishDate,
 		warrantyStartDate, warrantyEndDate,
 		sql.NullFloat64{Float64: request.Financial.Budget, Valid: request.Financial.Budget > 0},
