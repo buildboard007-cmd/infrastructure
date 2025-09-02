@@ -290,6 +290,16 @@ func (dao *ProjectDao) CreateProject(ctx context.Context, orgID int64, request *
 			"name":   request.BasicInfo.Name,
 			"error":  err.Error(),
 		}).Error("Failed to create project")
+		
+		// Check for specific constraint violations
+		if strings.Contains(err.Error(), "fk_projects_location") {
+			return &models.CreateProjectResponse{
+				Success: false,
+				Message: "Validation failed",
+				Errors:  map[string][]string{"location_id": {"Invalid location ID - location does not exist or does not belong to your organization"}},
+			}, nil
+		}
+		
 		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
 
