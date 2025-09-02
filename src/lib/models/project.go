@@ -48,6 +48,7 @@ type Project struct {
 // CreateProjectRequest represents the request payload for creating a new project
 // Matches the API contract with nested structure
 type CreateProjectRequest struct {
+	LocationID      int64           `json:"location_id" binding:"required,min=1"`
 	BasicInfo       BasicInfo       `json:"basic_info"`
 	ProjectDetails  ProjectDetails  `json:"project_details"`
 	Location        LocationInfo    `json:"location"`
@@ -72,7 +73,7 @@ type ProjectDetails struct {
 	DeliveryMethod  string  `json:"delivery_method" binding:"required,oneof=design-build design-bid-build construction-manager-at-risk integrated-project-delivery construction-manager-as-agent public-private-partnership other"`
 	SquareFootage   int64   `json:"square_footage,omitempty" binding:"min=0"`
 	Language        string  `json:"language,omitempty" binding:"oneof=en es fr de it pt zh ja ko ar"`
-	Status          string  `json:"status,omitempty" binding:"oneof=active inactive on-hold completed cancelled"`
+	Status          string  `json:"status,omitempty" binding:"oneof=active inactive on_hold completed cancelled"`
 }
 
 // LocationInfo represents location details

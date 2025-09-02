@@ -232,13 +232,19 @@ func (dao *ProjectDao) CreateProject(ctx context.Context, orgID int64, request *
 		RETURNING id, created_at, updated_at
 	`
 
-	// Use user's current location as default
-	locationID := int64(1) // Default location - should be user's current location from claims
+	// Use location_id from request
+	locationID := request.LocationID
 	
+	// Use project_sector as project_type (they have the same valid values)
+	projectType := request.ProjectDetails.ProjectSector
+	if projectType == "" {
+		projectType = "commercial" // Default
+	}
+
 	err = tx.QueryRowContext(ctx, query,
 		orgID, locationID, projectNumber, request.BasicInfo.Name, 
 		sql.NullString{String: request.BasicInfo.Description, Valid: request.BasicInfo.Description != ""},
-		"construction", // Default project_type
+		projectType,
 		request.ProjectDetails.ProjectStage, request.ProjectDetails.WorkScope,
 		request.ProjectDetails.ProjectSector, request.ProjectDetails.DeliveryMethod,
 		"pre_construction", // Default project_phase
@@ -258,10 +264,7 @@ func (dao *ProjectDao) CreateProject(ctx context.Context, orgID int64, request *
 			"name":   request.BasicInfo.Name,
 			"error":  err.Error(),
 		}).Error("Failed to create project")
-		return &models.CreateProjectResponse{
-			Success: false,
-			Message: "Internal server error occurred",
-		}, nil
+		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
 
 	// Create project manager
@@ -287,18 +290,13 @@ func (dao *ProjectDao) CreateProject(ctx context.Context, orgID int64, request *
 			"manager_name": request.ProjectManager.Name,
 			"error": err.Error(),
 		}).Error("Failed to create project manager")
-		return &models.CreateProjectResponse{
-			Success: false,
-			Message: "Failed to create project manager",
-		}, nil
+		return nil, fmt.Errorf("failed to create project manager: %w", err)
 	}
 
 	// Commit transaction
 	if err = tx.Commit(); err != nil {
-		return &models.CreateProjectResponse{
-			Success: false,
-			Message: "Failed to commit project creation",
-		}, nil
+		dao.Logger.WithError(err).Error("Failed to commit project creation transaction")
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	dao.Logger.WithFields(logrus.Fields{

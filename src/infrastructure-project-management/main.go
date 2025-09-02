@@ -123,13 +123,22 @@ func handleCreateProject(ctx context.Context, request events.APIGatewayProxyRequ
 
 	orgID := claims.OrgID
 
-	project, err := projectRepository.CreateProject(ctx, orgID, &createRequest, userID)
+	response, err := projectRepository.CreateProject(ctx, orgID, &createRequest, userID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create project")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create project", logger), nil
 	}
 
-	return api.SuccessResponse(http.StatusCreated, project, logger), nil
+	// Check if project creation was successful
+	if !response.Success {
+		logger.WithField("message", response.Message).Error("Project creation failed")
+		if response.Errors != nil && len(response.Errors) > 0 {
+			return api.ValidationErrorResponse(response.Message, nil, logger), nil
+		}
+		return api.ErrorResponse(http.StatusInternalServerError, response.Message, logger), nil
+	}
+
+	return api.SuccessResponse(http.StatusCreated, response, logger), nil
 }
 
 // handleGetProjects handles GET /projects
