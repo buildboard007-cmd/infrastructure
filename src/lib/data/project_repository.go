@@ -199,10 +199,41 @@ func (dao *ProjectDao) CreateProject(ctx context.Context, orgID int64, request *
 		}
 	}
 
-	// Set defaults
-	language := request.ProjectDetails.Language
-	if language == "" {
-		language = "en"
+	if request.Timeline.ProjectFinishDate != "" {
+		if t, err := time.Parse("2006-01-02", request.Timeline.ProjectFinishDate); err == nil {
+			projectFinishDate = sql.NullTime{Time: t, Valid: true}
+		}
+	}
+
+	if request.Timeline.WarrantyStartDate != "" {
+		if t, err := time.Parse("2006-01-02", request.Timeline.WarrantyStartDate); err == nil {
+			warrantyStartDate = sql.NullTime{Time: t, Valid: true}
+		}
+	}
+
+	if request.Timeline.WarrantyEndDate != "" {
+		if t, err := time.Parse("2006-01-02", request.Timeline.WarrantyEndDate); err == nil {
+			warrantyEndDate = sql.NullTime{Time: t, Valid: true}
+		}
+	}
+
+	// Set defaults and map language
+	language := "en" // Default
+	if request.ProjectDetails.Language != "" {
+		// Map full language names to codes
+		switch strings.ToLower(request.ProjectDetails.Language) {
+		case "english":
+			language = "en"
+		case "spanish":
+			language = "es"
+		case "french":
+			language = "fr"
+		default:
+			// If it's already a code, use it
+			if len(request.ProjectDetails.Language) == 2 {
+				language = request.ProjectDetails.Language
+			}
+		}
 	}
 	
 	status := request.ProjectDetails.Status
@@ -252,7 +283,7 @@ func (dao *ProjectDao) CreateProject(ctx context.Context, orgID int64, request *
 		warrantyStartDate, warrantyEndDate,
 		sql.NullFloat64{Float64: request.Financial.Budget, Valid: request.Financial.Budget > 0},
 		sql.NullInt64{Int64: request.ProjectDetails.SquareFootage, Valid: request.ProjectDetails.SquareFootage > 0},
-		request.BasicInfo.Address, sql.NullString{String: request.Location.City, Valid: request.Location.City != ""},
+		request.Location.Address, sql.NullString{String: request.Location.City, Valid: request.Location.City != ""},
 		sql.NullString{String: request.Location.State, Valid: request.Location.State != ""},
 		sql.NullString{String: request.Location.ZipCode, Valid: request.Location.ZipCode != ""},
 		country, language, status, userID, userID,
@@ -267,31 +298,6 @@ func (dao *ProjectDao) CreateProject(ctx context.Context, orgID int64, request *
 		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
 
-	// Create project manager
-	managerQuery := `
-		INSERT INTO project.project_managers (
-			project_id, name, company, role, email, office_contact, mobile_contact, is_primary, created_by, updated_by
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	`
-	
-	_, err = tx.ExecContext(ctx, managerQuery,
-		projectID, request.ProjectManager.Name, request.ProjectManager.Company,
-		request.ProjectManager.Role, request.ProjectManager.Email,
-		sql.NullString{String: request.ProjectManager.OfficeContact, Valid: request.ProjectManager.OfficeContact != ""},
-		sql.NullString{String: request.ProjectManager.MobileContact, Valid: request.ProjectManager.MobileContact != ""},
-		true, // is_primary = true for the initial manager
-		userID, userID,
-	)
-
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"project_id": projectID,
-			"manager_name": request.ProjectManager.Name,
-			"error": err.Error(),
-		}).Error("Failed to create project manager")
-		return nil, fmt.Errorf("failed to create project manager: %w", err)
-	}
 
 	// Commit transaction
 	if err = tx.Commit(); err != nil {

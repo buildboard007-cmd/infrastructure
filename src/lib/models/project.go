@@ -54,7 +54,6 @@ type CreateProjectRequest struct {
 	Location        LocationInfo    `json:"location"`
 	Timeline        Timeline        `json:"timeline"`
 	Financial       Financial       `json:"financial"`
-	ProjectManager  ProjectManagerInfo  `json:"project_manager"`
 	Attachments     Attachments     `json:"attachments,omitempty"`
 }
 
@@ -62,7 +61,6 @@ type CreateProjectRequest struct {
 type BasicInfo struct {
 	Name        string `json:"name" binding:"required,max=255"`
 	Description string `json:"description,omitempty" binding:"max=1000"`
-	Address     string `json:"address" binding:"required,max=500"`
 }
 
 // ProjectDetails represents project-specific details
@@ -72,12 +70,13 @@ type ProjectDetails struct {
 	ProjectSector   string  `json:"project_sector" binding:"required,oneof=commercial residential industrial hospitality healthcare institutional mixed-use civil-infrastructure recreation aviation specialized"`
 	DeliveryMethod  string  `json:"delivery_method" binding:"required,oneof=design-build design-bid-build construction-manager-at-risk integrated-project-delivery construction-manager-as-agent public-private-partnership other"`
 	SquareFootage   int64   `json:"square_footage,omitempty" binding:"min=0"`
-	Language        string  `json:"language,omitempty" binding:"oneof=en es fr de it pt zh ja ko ar"`
+	Language        string  `json:"language,omitempty"`
 	Status          string  `json:"status,omitempty" binding:"oneof=active inactive on_hold completed cancelled"`
 }
 
 // LocationInfo represents location details
 type LocationInfo struct {
+	Address string `json:"address" binding:"required,max=500"`
 	City    string `json:"city,omitempty" binding:"max=100"`
 	State   string `json:"state,omitempty" binding:"max=50"`
 	ZipCode string `json:"zip_code,omitempty" binding:"max=20"`
@@ -98,15 +97,6 @@ type Financial struct {
 	Budget float64 `json:"budget,omitempty" binding:"min=0"`
 }
 
-// ProjectManagerInfo represents project manager details
-type ProjectManagerInfo struct {
-	Name          string `json:"name" binding:"required,max=255"`
-	Company       string `json:"company" binding:"required,max=255"`
-	Role          string `json:"role" binding:"required,oneof=general-contractor owners-representative program-manager consultant architect engineer inspector"`
-	Email         string `json:"email" binding:"required,email,max=255"`
-	OfficeContact string `json:"office_contact,omitempty" binding:"max=20"`
-	MobileContact string `json:"mobile_contact,omitempty" binding:"max=20"`
-}
 
 // Attachments represents file attachments
 type Attachments struct {
