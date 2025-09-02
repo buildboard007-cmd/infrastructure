@@ -122,7 +122,7 @@ func handleCreateLocation(ctx context.Context, userID, orgID int64, body string)
 		Status:       createReq.Status,
 	}
 
-	// Create location (automatically assigns to creator with SuperAdmin role)
+	// Create location
 	createdLocation, err := locationRepository.CreateLocation(ctx, userID, orgID, location)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create location")

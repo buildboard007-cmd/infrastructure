@@ -86,32 +86,6 @@ func (dao *LocationDao) CreateLocation(ctx context.Context, userID, orgID int64,
 		return nil, fmt.Errorf("failed to create location: %w", err)
 	}
 
-	// Get SuperAdmin role ID for the organization
-	var superAdminRoleID int64
-	err = tx.QueryRowContext(ctx, `
-		SELECT id FROM iam.roles WHERE name = 'SuperAdmin' AND org_id = $1
-	`, orgID).Scan(&superAdminRoleID)
-
-	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to get SuperAdmin role ID")
-		return nil, fmt.Errorf("failed to get SuperAdmin role: %w", err)
-	}
-
-	// Assign the location to the creator with SuperAdmin role
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO iam.location_user_roles (location_id, user_id, role_id, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5)
-	`, locationID, userID, superAdminRoleID, userID, userID)
-
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"user_id":     userID,
-			"location_id": locationID,
-			"role_id":     superAdminRoleID,
-			"error":       err.Error(),
-		}).Error("Failed to assign location to user")
-		return nil, fmt.Errorf("failed to assign location to user: %w", err)
-	}
 
 	// Commit transaction
 	if err = tx.Commit(); err != nil {
@@ -125,17 +99,6 @@ func (dao *LocationDao) CreateLocation(ctx context.Context, userID, orgID int64,
 	location.CreatedBy = userID
 	location.UpdatedBy = userID
 
-	// Check if user should be activated after creating first location
-	err = dao.checkAndUpdateUserStatusAfterLocation(ctx, userID, orgID)
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"user_id":     userID,
-			"org_id":      orgID,
-			"location_id": locationID,
-			"warning":     err.Error(),
-		}).Warn("Failed to check/update user status after location creation")
-		// Don't return error as location creation was successful
-	}
 
 	dao.Logger.WithFields(logrus.Fields{
 		"location_id": locationID,
