@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -43,6 +44,91 @@ type Project struct {
 	CreatedBy                  int64            `json:"created_by"`
 	UpdatedAt                  time.Time        `json:"updated_at"`
 	UpdatedBy                  int64            `json:"updated_by"`
+}
+
+// MarshalJSON implements json.Marshaler to properly handle SQL null types
+func (p Project) MarshalJSON() ([]byte, error) {
+	type Alias Project
+	return json.Marshal(&struct {
+		ProjectNumber              *string    `json:"project_number,omitempty"`
+		Description                *string    `json:"description,omitempty"`
+		ProjectStage               *string    `json:"project_stage,omitempty"`
+		WorkScope                  *string    `json:"work_scope,omitempty"`
+		ProjectSector              *string    `json:"project_sector,omitempty"`
+		DeliveryMethod             *string    `json:"delivery_method,omitempty"`
+		StartDate                  *time.Time `json:"start_date,omitempty"`
+		PlannedEndDate             *time.Time `json:"planned_end_date,omitempty"`
+		ActualStartDate            *time.Time `json:"actual_start_date,omitempty"`
+		ActualEndDate              *time.Time `json:"actual_end_date,omitempty"`
+		SubstantialCompletionDate  *time.Time `json:"substantial_completion_date,omitempty"`
+		ProjectFinishDate          *time.Time `json:"project_finish_date,omitempty"`
+		WarrantyStartDate          *time.Time `json:"warranty_start_date,omitempty"`
+		WarrantyEndDate            *time.Time `json:"warranty_end_date,omitempty"`
+		Budget                     *float64   `json:"budget,omitempty"`
+		ContractValue              *float64   `json:"contract_value,omitempty"`
+		SquareFootage              *int64     `json:"square_footage,omitempty"`
+		Address                    *string    `json:"address,omitempty"`
+		City                       *string    `json:"city,omitempty"`
+		State                      *string    `json:"state,omitempty"`
+		ZipCode                    *string    `json:"zip_code,omitempty"`
+		Latitude                   *float64   `json:"latitude,omitempty"`
+		Longitude                  *float64   `json:"longitude,omitempty"`
+		*Alias
+	}{
+		ProjectNumber:              nullStringToPtr(p.ProjectNumber),
+		Description:                nullStringToPtr(p.Description),
+		ProjectStage:               nullStringToPtr(p.ProjectStage),
+		WorkScope:                  nullStringToPtr(p.WorkScope),
+		ProjectSector:              nullStringToPtr(p.ProjectSector),
+		DeliveryMethod:             nullStringToPtr(p.DeliveryMethod),
+		StartDate:                  nullTimeToPtr(p.StartDate),
+		PlannedEndDate:             nullTimeToPtr(p.PlannedEndDate),
+		ActualStartDate:            nullTimeToPtr(p.ActualStartDate),
+		ActualEndDate:              nullTimeToPtr(p.ActualEndDate),
+		SubstantialCompletionDate:  nullTimeToPtr(p.SubstantialCompletionDate),
+		ProjectFinishDate:          nullTimeToPtr(p.ProjectFinishDate),
+		WarrantyStartDate:          nullTimeToPtr(p.WarrantyStartDate),
+		WarrantyEndDate:            nullTimeToPtr(p.WarrantyEndDate),
+		Budget:                     nullFloat64ToPtr(p.Budget),
+		ContractValue:              nullFloat64ToPtr(p.ContractValue),
+		SquareFootage:              nullInt64ToPtr(p.SquareFootage),
+		Address:                    nullStringToPtr(p.Address),
+		City:                       nullStringToPtr(p.City),
+		State:                      nullStringToPtr(p.State),
+		ZipCode:                    nullStringToPtr(p.ZipCode),
+		Latitude:                   nullFloat64ToPtr(p.Latitude),
+		Longitude:                  nullFloat64ToPtr(p.Longitude),
+		Alias:                      (*Alias)(&p),
+	})
+}
+
+// Helper functions to convert SQL null types to pointers
+func nullStringToPtr(ns sql.NullString) *string {
+	if ns.Valid {
+		return &ns.String
+	}
+	return nil
+}
+
+func nullTimeToPtr(nt sql.NullTime) *time.Time {
+	if nt.Valid {
+		return &nt.Time
+	}
+	return nil
+}
+
+func nullFloat64ToPtr(nf sql.NullFloat64) *float64 {
+	if nf.Valid {
+		return &nf.Float64
+	}
+	return nil
+}
+
+func nullInt64ToPtr(ni sql.NullInt64) *int64 {
+	if ni.Valid {
+		return &ni.Int64
+	}
+	return nil
 }
 
 // CreateProjectRequest represents the request payload for creating a new project
