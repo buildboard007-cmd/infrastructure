@@ -133,7 +133,14 @@ func handleCreateProject(ctx context.Context, request events.APIGatewayProxyRequ
 	if !response.Success {
 		logger.WithField("message", response.Message).Error("Project creation failed")
 		if response.Errors != nil && len(response.Errors) > 0 {
-			return api.ValidationErrorResponse(response.Message, nil, logger), nil
+			// Flatten the validation errors for the response
+			var validationErrors []string
+			for field, fieldErrors := range response.Errors {
+				for _, fieldError := range fieldErrors {
+					validationErrors = append(validationErrors, fmt.Sprintf("%s: %s", field, fieldError))
+				}
+			}
+			return api.ValidationErrorResponse(response.Message, validationErrors, logger), nil
 		}
 		return api.ErrorResponse(http.StatusInternalServerError, response.Message, logger), nil
 	}

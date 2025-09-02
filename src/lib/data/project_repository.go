@@ -168,14 +168,8 @@ func (dao *ProjectDao) CreateProject(ctx context.Context, orgID int64, request *
 		}, nil
 	}
 
-	// Validate start date is not in the past
-	if startDate.Before(time.Now().Truncate(24 * time.Hour)) {
-		return &models.CreateProjectResponse{
-			Success: false,
-			Message: "Validation failed",
-			Errors:  map[string][]string{"start_date": {"Start date cannot be in the past"}},
-		}, nil
-	}
+	// Allow past start dates for historical projects
+	// No validation needed for start date being in the past
 
 	// Handle optional dates
 	var substantialCompletionDate, projectFinishDate, warrantyStartDate, warrantyEndDate sql.NullTime
