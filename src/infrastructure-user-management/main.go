@@ -146,6 +146,7 @@ func handleUpdateUser(ctx context.Context, request events.APIGatewayProxyRequest
 
 	// Convert to User model for repository
 	user := &models.User{
+		Email:             updateRequest.Email,
 		FirstName:         updateRequest.FirstName,
 		LastName:          updateRequest.LastName,
 		Phone:             sql.NullString{String: updateRequest.Phone, Valid: updateRequest.Phone != ""},
@@ -157,7 +158,7 @@ func handleUpdateUser(ctx context.Context, request events.APIGatewayProxyRequest
 		Status:            updateRequest.Status,
 	}
 
-	updatedUser, err := userRepository.UpdateUser(ctx, userID, claims.OrgID, user)
+	updatedUser, err := userRepository.UpdateUser(ctx, userID, claims.OrgID, user, claims.UserID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to update user")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update user", logger)

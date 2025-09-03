@@ -60,12 +60,13 @@ import (
 // Global variables for Lambda cold start optimization
 // These are initialized once during Lambda cold start and reused across invocations
 var (
-	logger         *logrus.Logger      // Structured logger for debugging
-	isLocal        bool                // Development/local execution flag
-	ssmRepository  data.SSMRepository  // AWS SSM Parameter Store client interface
-	userRepository data.UserRepository // User data access layer interface
-	ssmParams      map[string]string   // Cached SSM parameters (database config)
-	sqlDB          *sql.DB             // PostgreSQL connection pool (reused across invocations)
+	logger         *logrus.Logger           // Structured logger for debugging
+	isLocal        bool                     // Development/local execution flag
+	ssmRepository  data.SSMRepository       // AWS SSM Parameter Store client interface
+	userRepository data.UserRepository      // User data access layer interface  
+	userMgmtRepo   *data.UserManagementDao  // User management repository for updates
+	ssmParams      map[string]string        // Cached SSM parameters (database config)
+	sqlDB          *sql.DB                  // PostgreSQL connection pool (reused across invocations)
 )
 
 // CustomClaims represents the structure of custom claims to add to JWT tokens.
@@ -151,6 +152,17 @@ func Handler(ctx context.Context, event events.CognitoEventUserPoolsPreTokenGenV
 		return event, nil // Return without modifications for invalid/legacy triggers
 	}
 
+	// Skip user profile fetching and token customization for NewPasswordChallenge
+	// During temporary password change, we don't need to customize tokens or activate users
+	if event.TriggerSource == "TokenGeneration_NewPasswordChallenge" {
+		logger.WithFields(logrus.Fields{
+			"trigger_source": event.TriggerSource,
+			"cognito_id":     event.UserName,
+			"operation":      "Handler",
+		}).Debug("Skipping token customization for NewPasswordChallenge")
+		return event, nil // Return unchanged event for password change flow
+	}
+
 	// Extract Cognito user UUID from event.UserName
 	// In Cognito Pre Token Generation triggers, event.UserName contains the user's
 	// Cognito 'sub' attribute (UUID), not their actual username or email
@@ -173,6 +185,54 @@ func Handler(ctx context.Context, event events.CognitoEventUserPoolsPreTokenGenV
 		}).Error("Failed to fetch user profile from database, proceeding without custom claims")
 		// Return unchanged event - user can still authenticate with basic Cognito claims
 		return event, nil
+	}
+
+	// Activate pending users on successful authentication
+	// When a user with "pending" status successfully authenticates (after changing temporary password),
+	// automatically update their status to "active" since they've completed the setup process
+	if userProfile.Status == "pending" && event.TriggerSource == "TokenGeneration_Authentication" {
+		userID, err := strconv.ParseInt(userProfile.UserID, 10, 64)
+		if err != nil {
+			logger.WithFields(logrus.Fields{
+				"cognito_id": cognitoID,
+				"user_id":    userProfile.UserID,
+				"operation":  "Handler",
+				"error":      err.Error(),
+			}).Error("Failed to parse user ID for activation")
+		} else {
+			orgID, err := strconv.ParseInt(userProfile.OrgID, 10, 64)
+			if err != nil {
+				logger.WithFields(logrus.Fields{
+					"cognito_id": cognitoID,
+					"user_id":    userProfile.UserID,
+					"org_id":     userProfile.OrgID,
+					"operation":  "Handler",
+					"error":      err.Error(),
+				}).Error("Failed to parse org ID for activation")
+			} else {
+				// Update user status to active using flexible UpdateUser function
+				userUpdate := &models.User{Status: "active"}
+				_, err = userMgmtRepo.UpdateUser(ctx, userID, orgID, userUpdate, userID)
+				if err != nil {
+					logger.WithFields(logrus.Fields{
+						"cognito_id": cognitoID,
+						"user_id":    userProfile.UserID,
+						"org_id":     userProfile.OrgID,
+						"operation":  "Handler",
+						"error":      err.Error(),
+					}).Error("Failed to activate user, proceeding with token generation")
+				} else {
+					logger.WithFields(logrus.Fields{
+						"cognito_id": cognitoID,
+						"user_id":    userProfile.UserID,
+						"org_id":     userProfile.OrgID,
+						"operation":  "Handler",
+					}).Info("Successfully activated pending user on first login")
+					// Update the profile status for token generation
+					userProfile.Status = "active"
+				}
+			}
+		}
 	}
 
 	// Build custom claims structure from user profile data
@@ -461,6 +521,17 @@ func setupPostgresSQLClient(ssmParams map[string]string) error {
 	userRepository = &data.UserDao{
 		DB:     sqlDB,  // Shared database connection pool
 		Logger: logger, // Structured logger for debugging
+	}
+
+	// Initialize user management repository for user updates
+	// This includes Cognito integration for comprehensive user management
+	cognitoClient := clients.NewCognitoIdentityProviderClient(isLocal)
+	userMgmtRepo = &data.UserManagementDao{
+		DB:            sqlDB,
+		Logger:        logger,
+		CognitoClient: cognitoClient,
+		UserPoolID:    ssmParams[constants.COGNITO_USER_POOL_ID],
+		ClientID:      ssmParams[constants.COGNITO_CLIENT_ID],
 	}
 
 	if logger.IsLevelEnabled(logrus.DebugLevel) {

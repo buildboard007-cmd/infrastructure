@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"infrastructure/lib/models"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -31,11 +32,9 @@ type UserManagementRepository interface {
 	// GetUserByCognitoID retrieves a user by Cognito ID
 	GetUserByCognitoID(ctx context.Context, cognitoID string, orgID int64) (*models.UserWithLocationsAndRoles, error)
 
-	// UpdateUser updates an existing user
-	UpdateUser(ctx context.Context, userID, orgID int64, user *models.User) (*models.User, error)
-
-	// UpdateUserStatus updates user status (activate, deactivate, suspend, etc.)
-	UpdateUserStatus(ctx context.Context, userID, orgID int64, status string) error
+	// UpdateUser updates an existing user with flexible partial updates
+	// Supports updating any combination of fields including status-only updates
+	UpdateUser(ctx context.Context, userID, orgID int64, user *models.User, updatedBy int64) (*models.User, error)
 
 	// DeleteUser deletes a user from the system
 	DeleteUser(ctx context.Context, userID, orgID int64) error
@@ -377,88 +376,144 @@ func (dao *UserManagementDao) GetUserByCognitoID(ctx context.Context, cognitoID 
 	}, nil
 }
 
-// UpdateUser updates an existing user
-func (dao *UserManagementDao) UpdateUser(ctx context.Context, userID, orgID int64, user *models.User) (*models.User, error) {
-	query := `
+// UpdateUser updates an existing user with flexible partial updates
+// Supports updating any combination of fields including status-only updates
+func (dao *UserManagementDao) UpdateUser(ctx context.Context, userID, orgID int64, user *models.User, updatedBy int64) (*models.User, error) {
+	// Get current user to check what fields are being updated
+	var currentUser models.User
+	err := dao.DB.QueryRowContext(ctx, `
+		SELECT id, cognito_id, email, first_name, last_name, phone, mobile, job_title, employee_id, 
+		       avatar_url, last_selected_location_id, status, is_super_admin, org_id, created_at, updated_at
+		FROM iam.users 
+		WHERE id = $1 AND org_id = $2 AND is_deleted = FALSE
+	`, userID, orgID).Scan(
+		&currentUser.UserID, &currentUser.CognitoID, &currentUser.Email, &currentUser.FirstName,
+		&currentUser.LastName, &currentUser.Phone, &currentUser.Mobile, &currentUser.JobTitle, 
+		&currentUser.EmployeeID, &currentUser.AvatarURL, &currentUser.LastSelectedLocationID,
+		&currentUser.Status, &currentUser.IsSuperAdmin, &currentUser.OrgID, &currentUser.CreatedAt, &currentUser.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current user: %w", err)
+	}
+
+	// Build update fields dynamically based on what's provided
+	updateFields := []string{}
+	updateValues := []interface{}{}
+	paramIndex := 1
+
+	// Only update email if provided and different
+	if user.Email != "" && currentUser.Email != user.Email {
+		// Update Cognito email first
+		_, err = dao.CognitoClient.AdminUpdateUserAttributes(ctx, &cognitoidentityprovider.AdminUpdateUserAttributesInput{
+			UserPoolId: aws.String(dao.UserPoolID),
+			Username:   aws.String(currentUser.CognitoID),
+			UserAttributes: []types.AttributeType{
+				{Name: aws.String("email"), Value: aws.String(user.Email)},
+				{Name: aws.String("email_verified"), Value: aws.String("true")},
+			},
+		})
+		if err != nil {
+			dao.Logger.WithFields(logrus.Fields{
+				"user_id": userID, "old_email": currentUser.Email, "new_email": user.Email, "error": err.Error(),
+			}).Error("Failed to update email in Cognito")
+			return nil, fmt.Errorf("failed to update email in Cognito: %w", err)
+		}
+		updateFields = append(updateFields, fmt.Sprintf("email = $%d", paramIndex))
+		updateValues = append(updateValues, user.Email)
+		paramIndex++
+	}
+
+	// Update other fields if provided
+	if user.FirstName != "" {
+		updateFields = append(updateFields, fmt.Sprintf("first_name = $%d", paramIndex))
+		updateValues = append(updateValues, user.FirstName)
+		paramIndex++
+	}
+	if user.LastName != "" {
+		updateFields = append(updateFields, fmt.Sprintf("last_name = $%d", paramIndex))
+		updateValues = append(updateValues, user.LastName)
+		paramIndex++
+	}
+	if user.Phone.Valid || user.Phone.String != "" {
+		updateFields = append(updateFields, fmt.Sprintf("phone = $%d", paramIndex))
+		updateValues = append(updateValues, user.Phone)
+		paramIndex++
+	}
+	if user.Mobile.Valid || user.Mobile.String != "" {
+		updateFields = append(updateFields, fmt.Sprintf("mobile = $%d", paramIndex))
+		updateValues = append(updateValues, user.Mobile)
+		paramIndex++
+	}
+	if user.JobTitle.Valid || user.JobTitle.String != "" {
+		updateFields = append(updateFields, fmt.Sprintf("job_title = $%d", paramIndex))
+		updateValues = append(updateValues, user.JobTitle)
+		paramIndex++
+	}
+	if user.EmployeeID.Valid || user.EmployeeID.String != "" {
+		updateFields = append(updateFields, fmt.Sprintf("employee_id = $%d", paramIndex))
+		updateValues = append(updateValues, user.EmployeeID)
+		paramIndex++
+	}
+	if user.AvatarURL.Valid || user.AvatarURL.String != "" {
+		updateFields = append(updateFields, fmt.Sprintf("avatar_url = $%d", paramIndex))
+		updateValues = append(updateValues, user.AvatarURL)
+		paramIndex++
+	}
+	if user.LastSelectedLocationID.Valid {
+		updateFields = append(updateFields, fmt.Sprintf("last_selected_location_id = $%d", paramIndex))
+		updateValues = append(updateValues, user.LastSelectedLocationID)
+		paramIndex++
+	}
+	if user.Status != "" {
+		updateFields = append(updateFields, fmt.Sprintf("status = $%d", paramIndex))
+		updateValues = append(updateValues, user.Status)
+		paramIndex++
+	}
+
+	// Always update updated_by and add WHERE clause parameters
+	updateFields = append(updateFields, fmt.Sprintf("updated_by = $%d", paramIndex))
+	updateValues = append(updateValues, updatedBy)
+	paramIndex++
+	
+	// Add WHERE clause parameters
+	updateValues = append(updateValues, userID, orgID)
+
+	// Build dynamic query
+	query := fmt.Sprintf(`
 		UPDATE iam.users 
-		SET first_name = $1, last_name = $2, phone = $3, mobile = $4, job_title = $5, employee_id = $6, avatar_url = $7, last_selected_location_id = $8, status = $9, updated_by = $10
-		WHERE id = $11 AND org_id = $12 AND is_deleted = FALSE
+		SET %s
+		WHERE id = $%d AND org_id = $%d AND is_deleted = FALSE
 		RETURNING id, cognito_id, email, first_name, last_name, phone, mobile, job_title, employee_id, 
 		          avatar_url, last_selected_location_id, is_super_admin, status, org_id, created_at, updated_at
-	`
+	`, strings.Join(updateFields, ", "), paramIndex, paramIndex+1)
 
 	var updatedUser models.User
-	err := dao.DB.QueryRowContext(ctx, query,
-		user.FirstName, user.LastName, user.Phone, user.Mobile, user.JobTitle, user.EmployeeID, user.AvatarURL, user.LastSelectedLocationID, user.Status, userID,
-		userID, orgID,
-	).Scan(
+	err = dao.DB.QueryRowContext(ctx, query, updateValues...).Scan(
 		&updatedUser.UserID, &updatedUser.CognitoID, &updatedUser.Email, &updatedUser.FirstName,
-		&updatedUser.LastName, &updatedUser.Phone, &updatedUser.Mobile, &updatedUser.JobTitle, &updatedUser.EmployeeID, &updatedUser.AvatarURL, &updatedUser.LastSelectedLocationID, &updatedUser.IsSuperAdmin,
-		&updatedUser.Status, &updatedUser.OrgID, &updatedUser.CreatedAt, &updatedUser.UpdatedAt,
+		&updatedUser.LastName, &updatedUser.Phone, &updatedUser.Mobile, &updatedUser.JobTitle, 
+		&updatedUser.EmployeeID, &updatedUser.AvatarURL, &updatedUser.LastSelectedLocationID, 
+		&updatedUser.IsSuperAdmin, &updatedUser.Status, &updatedUser.OrgID, &updatedUser.CreatedAt, &updatedUser.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
-		dao.Logger.WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Warn("User not found for update")
 		return nil, fmt.Errorf("user not found")
 	}
-
 	if err != nil {
 		dao.Logger.WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-			"error":   err.Error(),
+			"user_id": userID, "org_id": orgID, "error": err.Error(),
 		}).Error("Failed to update user")
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
 	dao.Logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-		"email":   updatedUser.Email,
+		"user_id": userID, "org_id": orgID, "email": updatedUser.Email,
 	}).Info("Successfully updated user")
 
 	return &updatedUser, nil
 }
 
 
-// UpdateUserStatus updates user status
-func (dao *UserManagementDao) UpdateUserStatus(ctx context.Context, userID, orgID int64, status string) error {
-	result, err := dao.DB.ExecContext(ctx, `
-		UPDATE iam.users 
-		SET status = $1, updated_by = $2
-		WHERE id = $3 AND org_id = $4 AND is_deleted = FALSE
-	`, status, userID, userID, orgID)
-
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-			"status":  status,
-			"error":   err.Error(),
-		}).Error("Failed to update user status")
-		return fmt.Errorf("failed to update user status: %w", err)
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		dao.Logger.WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Warn("User not found for status update")
-		return fmt.Errorf("user not found")
-	}
-
-	dao.Logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-		"status":  status,
-	}).Info("Successfully updated user status")
-
-	return nil
-}
 
 // DeleteUser deletes a user and all associated assignments
 func (dao *UserManagementDao) DeleteUser(ctx context.Context, userID, orgID int64) error {

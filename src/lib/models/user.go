@@ -64,6 +64,7 @@ type LocationRoleAssignmentRequest struct {
 
 // UpdateUserRequest represents the request payload for updating an existing user
 type UpdateUserRequest struct {
+	Email                  string `json:"email,omitempty" binding:"omitempty,email"`
 	FirstName              string `json:"first_name,omitempty" binding:"omitempty,min=2,max=50"`
 	LastName               string `json:"last_name,omitempty" binding:"omitempty,min=2,max=50"`
 	Phone                  string `json:"phone,omitempty"`
