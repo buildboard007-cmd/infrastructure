@@ -63,6 +63,7 @@ export class SubStack extends NestedStack {
         const rolesManagementIntegration = new LambdaIntegration(this.lambdaConstruct.rolesManagementLambda);
         const permissionsManagementIntegration = new LambdaIntegration(this.lambdaConstruct.permissionsManagementLambda);
         const projectManagementIntegration = new LambdaIntegration(this.lambdaConstruct.projectManagementLambda);
+        const userManagementIntegration = new LambdaIntegration(this.lambdaConstruct.userManagementLambda);
         const corsIntegration = new LambdaIntegration(this.lambdaConstruct.corsLambda);
 
         // Create /org resource with Cognito authorization
@@ -239,6 +240,36 @@ export class SubStack extends NestedStack {
             authorizer: cognitoAuthorizer
         });
         projectUserAssignmentIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /users resource with Cognito authorization
+        const usersResource = this.api.root.addResource('users');
+        usersResource.addMethod('GET', userManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        usersResource.addMethod('POST', userManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        usersResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /users/{userId} resource for specific user operations
+        const userIdResource = usersResource.addResource('{userId}');
+        userIdResource.addMethod('GET', userManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        userIdResource.addMethod('PUT', userManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        userIdResource.addMethod('DELETE', userManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        userIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /users/{userId}/reset-password resource for password reset
+        const userPasswordResetResource = userIdResource.addResource('reset-password');
+        userPasswordResetResource.addMethod('PATCH', userManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        userPasswordResetResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
         // Skip domain for LOCAL
         if (props.stageEnvironment != StageEnvironment.LOCAL) {

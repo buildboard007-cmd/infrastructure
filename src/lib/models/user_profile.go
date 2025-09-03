@@ -70,7 +70,7 @@ type UserProfile struct {
 	OrgName string `json:"org_name" db:"org_name"`       // Organization name for display
 	
 	// Location Context
-	CurrentLocationID sql.NullString   `json:"current_location_id" db:"current_location_id"` // User's primary/current location
+	LastSelectedLocationID sql.NullString   `json:"last_selected_location_id" db:"last_selected_location_id"` // User's last selected location for UI
 	Locations         []UserLocation `json:"locations" db:"locations"`                      // All locations and roles for this user
 }
 

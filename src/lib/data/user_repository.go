@@ -97,7 +97,7 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 			u.avatar_url,
 			u.org_id,
 			o.name,
-			u.current_location_id,
+			u.last_selected_location_id,
 			u.is_super_admin,
 			'[]'::text as locations
 		FROM iam.users u
@@ -135,7 +135,7 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 		&profile.AvatarURL,         // sql.NullString for optional field
 		&profile.OrgID,             // Organization identifier
 		&profile.OrgName,           // Organization display name
-		&profile.CurrentLocationID, // sql.NullString for optional primary location
+		&profile.LastSelectedLocationID, // sql.NullString for optional last selected location
 		&profile.IsSuperAdmin,      // SuperAdmin role flag
 		&locationsJSON,             // JSON string to be parsed into []Location
 	)

@@ -10,6 +10,7 @@ import {InfrastructureLocationManagement} from "../function_construct/infrastruc
 import {InfrastructureRolesManagementFunction} from "../function_construct/infrastructure-roles-management";
 import {InfrastructurePermissionsManagementFunction} from "../function_construct/infrastructure-permissions-management";
 import {InfrastructureProjectManagement} from "../function_construct/infrastructure-project-management";
+import {InfrastructureUserManagement} from "../function_construct/infrastructure-user-management";
 
 export class LambdaConstruct extends Construct {
 
@@ -21,6 +22,7 @@ export class LambdaConstruct extends Construct {
     private readonly infrastructureRolesManagement: InfrastructureRolesManagementFunction;
     private readonly infrastructurePermissionsManagement: InfrastructurePermissionsManagementFunction;
     private readonly infrastructureProjectManagement: InfrastructureProjectManagement;
+    private readonly infrastructureUserManagement: InfrastructureUserManagement;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -38,6 +40,7 @@ export class LambdaConstruct extends Construct {
         this.infrastructureRolesManagement = new InfrastructureRolesManagementFunction(this, 'InfrastructureRolesManagement', funcProps);
         this.infrastructurePermissionsManagement = new InfrastructurePermissionsManagementFunction(this, 'InfrastructurePermissionsManagement', funcProps);
         this.infrastructureProjectManagement = new InfrastructureProjectManagement(this, 'InfrastructureProjectManagement', funcProps);
+        this.infrastructureUserManagement = new InfrastructureUserManagement(this, 'InfrastructureUserManagement', funcProps);
     }
 
     get corsLambda(): GoFunction {
@@ -102,5 +105,13 @@ export class LambdaConstruct extends Construct {
 
     get projectManagementLambdaArn(): string {
         return this.infrastructureProjectManagement.functionArn;
+    }
+
+    get userManagementLambda(): GoFunction {
+        return this.infrastructureUserManagement.function;
+    }
+
+    get userManagementLambdaArn(): string {
+        return this.infrastructureUserManagement.functionArn;
     }
 }

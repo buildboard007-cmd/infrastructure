@@ -17,7 +17,7 @@ type User struct {
 	JobTitle          sql.NullString `json:"job_title,omitempty"`  // Optional professional title
 	EmployeeID        sql.NullString `json:"employee_id,omitempty"` // Optional employee ID
 	AvatarURL         sql.NullString `json:"avatar_url,omitempty"` // Optional profile photo URL
-	CurrentLocationID sql.NullInt64  `json:"current_location_id,omitempty"` // Current location assignment
+	LastSelectedLocationID sql.NullInt64  `json:"last_selected_location_id,omitempty"` // User's last selected location for UI
 	Status            string         `json:"status"`               // Account status: 'pending', 'active', 'inactive', 'suspended', 'pending_org_setup'
 	IsSuperAdmin      bool           `json:"is_super_admin"`       // SuperAdmin role flag
 	OrgID             int64          `json:"org_id"`               // Organization this user belongs to
@@ -49,7 +49,7 @@ type CreateUserRequest struct {
 	JobTitle         string `json:"job_title,omitempty"`
 	EmployeeID       string `json:"employee_id,omitempty"`
 	AvatarURL        string `json:"avatar_url,omitempty"`
-	CurrentLocationID int64 `json:"current_location_id,omitempty"`
+	LastSelectedLocationID int64 `json:"last_selected_location_id,omitempty"`
 	// Location and role assignments
 	LocationRoleAssignments []LocationRoleAssignmentRequest `json:"location_role_assignments" binding:"required,min=1"`
 }
@@ -69,7 +69,7 @@ type UpdateUserRequest struct {
 	JobTitle          string `json:"job_title,omitempty"`
 	EmployeeID        string `json:"employee_id,omitempty"`
 	AvatarURL         string `json:"avatar_url,omitempty"`
-	CurrentLocationID int64  `json:"current_location_id,omitempty"`
+	LastSelectedLocationID int64  `json:"last_selected_location_id,omitempty"`
 	Status            string `json:"status,omitempty" binding:"omitempty,oneof=pending active inactive suspended"`
 	// Location and role assignments (required - will replace ALL existing assignments)
 	LocationRoleAssignments []LocationRoleAssignmentRequest `json:"location_role_assignments" binding:"required"`

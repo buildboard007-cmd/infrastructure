@@ -10,5 +10,6 @@ const (
 	DATABASE_PASSWORD        = "/infrastructure/DATABASE_PASSWORD"
 	SSL_MODE                 = "/infrastructure/SSL_MODE"
 	COGNITO_USER_POOL_ID     = "/infrastructure/COGNITO_USER_POOL_ID"
+	COGNITO_CLIENT_ID        = "/infrastructure/COGNITO_CLIENT_ID"
 	DRIVER_NAME              = "postgres"
 )

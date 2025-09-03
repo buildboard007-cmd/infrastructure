@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "infrastructure-api-collection-001",
     "name": "Infrastructure",
-    "description": "Complete API collection for Infrastructure application including SuperAdmin signup, organization management, location management, roles & permissions management, user management, and project management.\n\n🔧 WORKFLOW FIXES APPLIED:\n- Fixed database permissions for app_user to access iam/project schemas\n- Fixed project_phase constraint violation (changed 'planning' to 'pre_construction')\n- Updated all date examples to use future dates\n- Added JWT token validation in Sign In tests\n- Verified complete signup workflow: SignUp → Confirm → SignIn → API Access\n\n✅ AUTHENTICATION FLOW:\n1. SuperAdmin Signup: Creates Cognito user with custom:isSuperAdmin=true\n2. Email Confirmation: Triggers PostConfirmation Lambda → Creates user in IAM database\n3. Sign In: Triggers PreTokenGeneration Lambda → Adds user_id, org_id to JWT\n4. API Access: All management APIs work with enriched JWT tokens",
+    "description": "Complete API collection for Infrastructure application including SuperAdmin signup, organization management, location management, roles & permissions management, user management, and project management.\n\n🔧 WORKFLOW FIXES APPLIED:\n- Fixed database permissions for app_user to access iam/project schemas\n- Fixed project_phase constraint violation (changed 'planning' to 'pre_construction')\n- Updated all date examples to use future dates\n- Added JWT token validation in Sign In tests\n- Verified complete signup workflow: SignUp → Confirm → SignIn → API Access\n\n✅ ENHANCED JWT TOKEN SYSTEM:\n1. SuperAdmin Signup: Creates Cognito user with custom:isSuperAdmin=true\n2. Normal User Creation: Super admins create users via POST /users with Cognito integration\n3. Email Confirmation: Triggers PostConfirmation Lambda → Creates user in IAM database\n4. Sign In: PreTokenGeneration Lambda → Adds enriched JWT with:\n   - User profile (user_id, org_id, email, names)\n   - Location access (last_selected_location_id)\n   - All locations & roles (base64 encoded for offline access)\n   - Organization details and admin flags\n5. Offline Authorization: Frontend can check permissions without API calls\n6. UI Integration: Location dropdown populated from JWT, no additional API needed\n\n🚀 CONSTRUCTION MANAGEMENT OPTIMIZED:\n- Mobile-first design for field workers\n- Offline-capable role-based authorization\n- Hierarchical access control (org → location → project)\n- Password reset workflow for normal users",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -1444,15 +1444,16 @@
                   "",
                   "pm.test('User created with required fields', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('user_id');",
-                  "    pm.expect(responseJson).to.have.property('email');",
-                  "    pm.expect(responseJson).to.have.property('cognito_id');",
+                  "    pm.expect(responseJson.data).to.have.property('user_id');",
+                  "    pm.expect(responseJson.data).to.have.property('email');",
+                  "    pm.expect(responseJson.data).to.have.property('cognito_id');",
                   "    pm.expect(responseJson).to.have.property('temporary_password');",
-                  "    pm.expect(responseJson).to.have.property('location_role_assignments');",
-                  "    pm.expect(responseJson.location_role_assignments).to.be.an('array');",
+                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    pm.expect(responseJson.data).to.have.property('location_role_assignments');",
+                  "    pm.expect(responseJson.data.location_role_assignments).to.be.an('array');",
                   "    ",
                   "    // Store user_id for other requests",
-                  "    pm.globals.set('user_id', responseJson.user_id);",
+                  "    pm.globals.set('user_id', responseJson.data.user_id);",
                   "    console.log('Created User:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
@@ -1476,7 +1477,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"phone\": \"+1234567890\",\n    \"job_title\": \"Software Engineer\",\n    \"photo_url\": \"https://example.com/photos/john.jpg\",\n    \"location_role_assignments\": [\n        {\n            \"location_id\": {{location_id}},\n            \"role_id\": {{role_id}}\n        }\n    ]\n}"
+              "raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"phone\": \"+1234567890\",\n    \"mobile\": \"+1987654321\",\n    \"job_title\": \"Software Engineer\",\n    \"employee_id\": \"EMP001\",\n    \"avatar_url\": \"https://example.com/photos/john.jpg\",\n    \"last_selected_location_id\": {{location_id}},\n    \"status\": \"active\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users",
@@ -1508,9 +1509,9 @@
                   "",
                   "pm.test('Response has users array', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('users');",
-                  "    pm.expect(responseJson).to.have.property('total');",
-                  "    pm.expect(responseJson.users).to.be.an('array');",
+                  "    pm.expect(responseJson.data).to.have.property('users');",
+                  "    pm.expect(responseJson.data).to.have.property('total');",
+                  "    pm.expect(responseJson.data.users).to.be.an('array');",
                   "    console.log('Users:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
@@ -1557,10 +1558,10 @@
                   "",
                   "pm.test('Response has user data with assignments', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('user_id');",
-                  "    pm.expect(responseJson).to.have.property('email');",
-                  "    pm.expect(responseJson).to.have.property('location_role_assignments');",
-                  "    pm.expect(responseJson.location_role_assignments).to.be.an('array');",
+                  "    pm.expect(responseJson.data).to.have.property('user_id');",
+                  "    pm.expect(responseJson.data).to.have.property('email');",
+                  "    pm.expect(responseJson.data).to.have.property('location_role_assignments');",
+                  "    pm.expect(responseJson.data.location_role_assignments).to.be.an('array');",
                   "    console.log('User Details:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
@@ -1608,9 +1609,8 @@
                   "",
                   "pm.test('User updated successfully', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('user_id');",
-                  "    pm.expect(responseJson).to.have.property('email');",
-                  "    pm.expect(responseJson).to.have.property('location_role_assignments');",
+                  "    pm.expect(responseJson.data).to.have.property('user_id');",
+                  "    pm.expect(responseJson.data).to.have.property('email');",
                   "    console.log('Updated User:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
@@ -1634,7 +1634,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Smith\",\n    \"phone\": \"+1234567890\",\n    \"job_title\": \"Senior Software Engineer\",\n    \"photo_url\": \"https://example.com/photos/john-updated.jpg\",\n    \"status\": \"active\",\n    \"location_role_assignments\": [\n        {\n            \"location_id\": {{location_id}},\n            \"role_id\": {{role_id}}\n        }\n    ]\n}"
+              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Smith\",\n    \"phone\": \"+1234567890\",\n    \"mobile\": \"+1987654321\",\n    \"job_title\": \"Senior Software Engineer\",\n    \"employee_id\": \"EMP001\",\n    \"avatar_url\": \"https://example.com/photos/john-updated.jpg\",\n    \"last_selected_location_id\": {{location_id}},\n    \"status\": \"active\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}",
@@ -1655,7 +1655,7 @@
           }
         },
         {
-          "name": "Update User Status - Activate",
+          "name": "Send Password Reset Email",
           "event": [
             {
               "listen": "test",
@@ -1665,11 +1665,10 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test('User status updated successfully', function () {",
+                  "pm.test('Password reset email sent', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('message');",
-                  "    pm.expect(responseJson).to.have.property('status');",
-                  "    console.log('Status Update Response:', JSON.stringify(responseJson, null, 2));",
+                  "    pm.expect(responseJson.data).to.have.property('message');",
+                  "    console.log('Password Reset Response:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -1677,25 +1676,16 @@
             }
           ],
           "request": {
-            "method": "PUT",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Authorization",
                 "value": "Bearer {{access_token}}",
                 "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"status\": \"active\"\n}"
-            },
             "url": {
-              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/status",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/reset-password",
               "protocol": "https",
               "host": [
                 "74zc1md7sc",
@@ -1708,125 +1698,7 @@
                 "main",
                 "users",
                 "{{user_id}}",
-                "status"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Update User Status - Suspend",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test('User status updated successfully', function () {",
-                  "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('message');",
-                  "    pm.expect(responseJson).to.have.property('status');",
-                  "    console.log('Status Update Response:', JSON.stringify(responseJson, null, 2));",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"status\": \"suspended\"\n}"
-            },
-            "url": {
-              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/status",
-              "protocol": "https",
-              "host": [
-                "74zc1md7sc",
-                "execute-api",
-                "us-east-2",
-                "amazonaws",
-                "com"
-              ],
-              "path": [
-                "main",
-                "users",
-                "{{user_id}}",
-                "status"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Update User Status - Deactivate",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test('User status updated successfully', function () {",
-                  "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('message');",
-                  "    pm.expect(responseJson).to.have.property('status');",
-                  "    console.log('Status Update Response:', JSON.stringify(responseJson, null, 2));",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"status\": \"inactive\"\n}"
-            },
-            "url": {
-              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/status",
-              "protocol": "https",
-              "host": [
-                "74zc1md7sc",
-                "execute-api",
-                "us-east-2",
-                "amazonaws",
-                "com"
-              ],
-              "path": [
-                "main",
-                "users",
-                "{{user_id}}",
-                "status"
+                "reset-password"
               ]
             }
           }
@@ -1844,7 +1716,7 @@
                   "",
                   "pm.test('User deleted successfully', function () {",
                   "    const responseJson = pm.response.json();",
-                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    pm.expect(responseJson.data).to.have.property('message');",
                   "    console.log('Delete Response:', JSON.stringify(responseJson, null, 2));",
                   "});"
                 ],

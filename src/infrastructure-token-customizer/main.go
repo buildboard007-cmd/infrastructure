@@ -103,7 +103,7 @@ type CustomClaims struct {
 	AvatarURL         string `json:"avatar_url,omitempty"`          // Optional profile photo URL
 	OrgID             string `json:"org_id"`                        // Organization identifier
 	OrgName           string `json:"org_name"`                      // Organization display name
-	CurrentLocationID string `json:"current_location_id,omitempty"` // User's primary location ID
+	LastSelectedLocationID string `json:"last_selected_location_id,omitempty"` // User's last selected location for UI
 	IsSuperAdmin      bool   `json:"isSuperAdmin"`                  // SuperAdmin role flag
 	Locations         string `json:"locations"`                     // Base64 encoded JSON of []Location with roles
 }
@@ -204,7 +204,7 @@ func Handler(ctx context.Context, event events.CognitoEventUserPoolsPreTokenGenV
 		"avatar_url":          customClaims.AvatarURL,         // Optional profile photo
 		"org_id":              customClaims.OrgID,             // Organization identifier
 		"org_name":            customClaims.OrgName,           // Organization display name
-		"current_location_id": customClaims.CurrentLocationID, // Primary location
+		"last_selected_location_id": customClaims.LastSelectedLocationID, // User's last selected location
 		"isSuperAdmin":        customClaims.IsSuperAdmin,      // SuperAdmin role flag
 		"locations":           customClaims.Locations,         // Base64 encoded JSON of locations with roles
 	}
@@ -388,9 +388,9 @@ func buildCustomClaims(profile *models.UserProfile) (*CustomClaims, error) {
 		avatarURL = profile.AvatarURL.String
 	}
 
-	currentLocationID := ""
-	if profile.CurrentLocationID.Valid {
-		currentLocationID = profile.CurrentLocationID.String
+	lastSelectedLocationID := ""
+	if profile.LastSelectedLocationID.Valid {
+		lastSelectedLocationID = profile.LastSelectedLocationID.String
 	}
 
 	// Build and return the complete custom claims structure
@@ -407,7 +407,7 @@ func buildCustomClaims(profile *models.UserProfile) (*CustomClaims, error) {
 		AvatarURL:         avatarURL,            // Optional profile photo
 		OrgID:             profile.OrgID,        // Organization identifier
 		OrgName:           profile.OrgName,      // Organization display name
-		CurrentLocationID: currentLocationID,    // Primary location ID
+		LastSelectedLocationID: lastSelectedLocationID, // User's last selected location ID
 		IsSuperAdmin:      profile.IsSuperAdmin, // SuperAdmin role flag from database
 		Locations:         locationsEncoded,     // Base64 encoded JSON of all locations with roles
 	}, nil
