@@ -121,7 +121,7 @@ func (dao *UserManagementDao) CreateNormalUser(ctx context.Context, orgID int64,
 	// Generate temporary password
 	tempPassword := generateTemporaryPassword()
 
-	// Create user in Cognito first
+	// Create user in Cognito first - default behavior sends welcome email
 	cognitoInput := &cognitoidentityprovider.AdminCreateUserInput{
 		UserPoolId: aws.String(dao.UserPoolID),
 		Username:   aws.String(request.Email),
@@ -140,7 +140,7 @@ func (dao *UserManagementDao) CreateNormalUser(ctx context.Context, orgID int64,
 			},
 		},
 		TemporaryPassword: aws.String(tempPassword),
-		MessageAction:     types.MessageActionTypeSuppress, // Don't send welcome email, we'll handle password reset
+		// No MessageAction specified - uses default behavior to send invite email
 	}
 
 	cognitoResult, err := dao.CognitoClient.AdminCreateUser(ctx, cognitoInput)
@@ -149,24 +149,10 @@ func (dao *UserManagementDao) CreateNormalUser(ctx context.Context, orgID int64,
 			"email": request.Email,
 			"error": err.Error(),
 		}).Error("Failed to create user in Cognito")
-		return &models.CreateUserResponse{
-			Message: "Failed to create user account",
-		}, nil
+		return nil, fmt.Errorf("failed to create user in Cognito: %w", err)
 	}
 
 	cognitoUserID := *cognitoResult.User.Username
-
-	// Force password reset on first login
-	_, err = dao.CognitoClient.AdminSetUserPassword(ctx, &cognitoidentityprovider.AdminSetUserPasswordInput{
-		UserPoolId: aws.String(dao.UserPoolID),
-		Username:   aws.String(cognitoUserID),
-		Password:   aws.String(tempPassword),
-		Permanent:  false, // Force password change on first login
-	})
-	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to set temporary password")
-		// Continue with user creation, but log the error
-	}
 
 	// Create user record in database
 	var userID int64
@@ -203,29 +189,10 @@ func (dao *UserManagementDao) CreateNormalUser(ctx context.Context, orgID int64,
 			dao.Logger.WithError(deleteErr).Error("Failed to cleanup Cognito user after database error")
 		}
 
-		return &models.CreateUserResponse{
-			Message: "Failed to create user account",
-		}, nil
+		return nil, fmt.Errorf("failed to create user in database: %w", err)
 	}
 
-	// Send password reset email
-	_, err = dao.CognitoClient.AdminInitiateAuth(ctx, &cognitoidentityprovider.AdminInitiateAuthInput{
-		UserPoolId: aws.String(dao.UserPoolID),
-		ClientId:   aws.String(dao.ClientID),
-		AuthFlow:   types.AuthFlowTypeAdminNoSrpAuth,
-		AuthParameters: map[string]string{
-			"USERNAME": cognitoUserID,
-			"PASSWORD": tempPassword,
-		},
-	})
-
-	// Expected to fail with NEW_PASSWORD_REQUIRED, which triggers the password reset flow
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"cognito_id": cognitoUserID,
-			"error":      err.Error(),
-		}).Debug("Expected password reset challenge triggered")
-	}
+	// Email with temporary password is automatically sent via MessageAction: RESEND
 
 	dao.Logger.WithFields(logrus.Fields{
 		"user_id":    userID,
@@ -238,15 +205,12 @@ func (dao *UserManagementDao) CreateNormalUser(ctx context.Context, orgID int64,
 	userWithAssignments, err := dao.GetUserByID(ctx, userID, orgID)
 	if err != nil {
 		dao.Logger.WithError(err).Error("Failed to get created user")
-		return &models.CreateUserResponse{
-			Message:           "User created but failed to retrieve details",
-			TemporaryPassword: tempPassword,
-		}, nil
+		return nil, fmt.Errorf("user created but failed to retrieve details: %w", err)
 	}
 
 	return &models.CreateUserResponse{
 		UserWithLocationsAndRoles: *userWithAssignments,
-		Message:                   "User created successfully. Password reset email will be sent.",
+		Message:                   "User created successfully. Welcome email with temporary password sent.",
 		TemporaryPassword:         tempPassword,
 	}, nil
 }
@@ -458,6 +422,7 @@ func (dao *UserManagementDao) UpdateUser(ctx context.Context, userID, orgID int6
 
 	return &updatedUser, nil
 }
+
 
 // UpdateUserStatus updates user status
 func (dao *UserManagementDao) UpdateUserStatus(ctx context.Context, userID, orgID int64, status string) error {

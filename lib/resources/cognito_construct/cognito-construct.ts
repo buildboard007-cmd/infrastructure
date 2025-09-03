@@ -87,6 +87,12 @@ export class CognitoConstruct extends Construct {
                 emailStyle: VerificationEmailStyle.CODE,
             },
 
+            // Admin invite message template for user creation
+            userInvitation: {
+                emailSubject: "Welcome to BuildBoard - Set Up Your Account",
+                emailBody: "Welcome to BuildBoard! Your account has been created. Please use the credentials below to log in and set up your password: Email: {username} Temporary Password: {####} You'll be prompted to create a new password on your first login. Best regards, The BuildBoard Team",
+            },
+
             // Lambda triggers will be configured manually for V2.0 support
 
             // Deletion protection based on environment
