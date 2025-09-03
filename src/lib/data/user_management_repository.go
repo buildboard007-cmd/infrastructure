@@ -177,12 +177,13 @@ func (dao *UserManagementDao) CreateNormalUser(ctx context.Context, orgID int64,
 	jobTitle := sql.NullString{String: request.JobTitle, Valid: request.JobTitle != ""}
 	employeeID := sql.NullString{String: request.EmployeeID, Valid: request.EmployeeID != ""}
 	avatarURL := sql.NullString{String: request.AvatarURL, Valid: request.AvatarURL != ""}
+	lastSelectedLocationID := sql.NullInt64{Int64: request.LastSelectedLocationID, Valid: request.LastSelectedLocationID != 0}
 
 	err = dao.DB.QueryRowContext(ctx, `
 		INSERT INTO iam.users (cognito_id, email, first_name, last_name, phone, mobile, job_title, employee_id, avatar_url, last_selected_location_id, is_super_admin, status, org_id, created_by, updated_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id, created_at, updated_at
-	`, cognitoUserID, request.Email, request.FirstName, request.LastName, phone, mobile, jobTitle, employeeID, avatarURL, request.LastSelectedLocationID, false, "pending_password_setup", orgID, createdBy, createdBy).Scan(
+	`, cognitoUserID, request.Email, request.FirstName, request.LastName, phone, mobile, jobTitle, employeeID, avatarURL, lastSelectedLocationID, false, "pending", orgID, createdBy, createdBy).Scan(
 		&userID, &createdAt, &updatedAt)
 
 	if err != nil {

@@ -1432,7 +1432,7 @@
       "name": "User Management",
       "item": [
         {
-          "name": "Create User",
+          "name": "Create User (No Location Required)",
           "event": [
             {
               "listen": "test",
@@ -1477,7 +1477,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"phone\": \"+1234567890\",\n    \"mobile\": \"+1987654321\",\n    \"job_title\": \"Software Engineer\",\n    \"employee_id\": \"EMP001\",\n    \"avatar_url\": \"https://example.com/photos/john.jpg\",\n    \"last_selected_location_id\": {{location_id}},\n    \"status\": \"active\"\n}"
+              "raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"phone\": \"+1234567890\",\n    \"mobile\": \"+1987654321\",\n    \"job_title\": \"Software Engineer\",\n    \"employee_id\": \"EMP001\",\n    \"avatar_url\": \"https://example.com/photos/john.jpg\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users",
@@ -1634,7 +1634,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Smith\",\n    \"phone\": \"+1234567890\",\n    \"mobile\": \"+1987654321\",\n    \"job_title\": \"Senior Software Engineer\",\n    \"employee_id\": \"EMP001\",\n    \"avatar_url\": \"https://example.com/photos/john-updated.jpg\",\n    \"last_selected_location_id\": {{location_id}},\n    \"status\": \"active\"\n}"
+              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Smith\",\n    \"phone\": \"+1234567890\",\n    \"mobile\": \"+1987654321\",\n    \"job_title\": \"Senior Software Engineer\",\n    \"employee_id\": \"EMP001\",\n    \"avatar_url\": \"https://example.com/photos/john-updated.jpg\",\n    \"status\": \"active\"\n}"
             },
             "url": {
               "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}",

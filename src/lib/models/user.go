@@ -50,8 +50,9 @@ type CreateUserRequest struct {
 	EmployeeID       string `json:"employee_id,omitempty"`
 	AvatarURL        string `json:"avatar_url,omitempty"`
 	LastSelectedLocationID int64 `json:"last_selected_location_id,omitempty"`
-	// Location and role assignments
-	LocationRoleAssignments []LocationRoleAssignmentRequest `json:"location_role_assignments" binding:"required,min=1"`
+	// Location and role assignments (optional for initial user creation)
+	LocationRoleAssignments []LocationRoleAssignmentRequest `json:"location_role_assignments,omitempty"`
+	// Note: Status is automatically set to "pending" by backend
 }
 
 // LocationRoleAssignmentRequest represents a location-role assignment in the create user request
