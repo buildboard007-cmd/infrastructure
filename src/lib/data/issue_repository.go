@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"infrastructure/lib/models"
-	"strconv"
 	"strings"
 	"time"
 
@@ -74,13 +73,8 @@ func (dao *IssueDao) generateIssueNumber(ctx context.Context, projectID int64, c
 
 // CreateIssue creates a new issue in the project
 func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, req *models.CreateIssueRequest) (*models.IssueResponse, error) {
-	// Convert string IDs to int64 for database operations
+	// Handle template ID (not in current request structure)
 	var templateID sql.NullInt64
-	if req.TemplateID != "" && req.TemplateID != "string" {
-		if tid, err := strconv.ParseInt(req.TemplateID, 10, 64); err == nil {
-			templateID = sql.NullInt64{Int64: tid, Valid: true}
-		}
-	}
 	// Start transaction
 	tx, err := dao.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -100,9 +94,8 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 	if req.Priority == "" {
 		req.Priority = models.IssuePriorityMedium
 	}
-	if req.Severity == "" {
-		req.Severity = models.IssueSeverityMinor
-	}
+	// Set default severity (not in current request structure)
+	severity := models.IssueSeverityMinor
 	
 	// Parse due date if provided
 	var dueDate *time.Time
@@ -114,36 +107,22 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 		dueDate = &parsedDate
 	}
 	
-	// Parse assigned to (can be user ID or email)
+	// Handle assigned to (now it's a user ID)
 	var assignedToID sql.NullInt64
-	if req.AssignedTo != "" {
-		// Try to parse as int64 first
-		var userID int64
-		_, err := fmt.Sscanf(req.AssignedTo, "%d", &userID)
-		if err == nil {
-			assignedToID = sql.NullInt64{Int64: userID, Valid: true}
-		} else {
-			// Try to find user by email
-			err = tx.QueryRowContext(ctx, `
-				SELECT id FROM iam.users 
-				WHERE email = $1 AND is_deleted = FALSE
-			`, req.AssignedTo).Scan(&userID)
-			if err == nil {
-				assignedToID = sql.NullInt64{Int64: userID, Valid: true}
-			}
-		}
+	if req.AssignedTo != 0 {
+		assignedToID = sql.NullInt64{Int64: req.AssignedTo, Valid: true}
 	}
 	
 	// Create the issue
 	var issueID int64
 	var createdAt, updatedAt time.Time
 	
-	// Map issue type from category
+	// Map issue type from issue_category
 	issueType := "general"
-	if req.Category != "" {
-		switch req.Category {
+	if req.IssueCategory != "" {
+		switch req.IssueCategory {
 		case "quality", "safety", "deficiency", "punch_item", "code_violation":
-			issueType = req.Category
+			issueType = req.IssueCategory
 		}
 	}
 	
@@ -153,9 +132,8 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 	if req.Location.Coordinates != nil {
 		locationX = sql.NullFloat64{Float64: req.Location.Coordinates.X, Valid: true}
 		locationY = sql.NullFloat64{Float64: req.Location.Coordinates.Y, Valid: true}
-		// Also store as lat/long for backwards compatibility
-		latitude = sql.NullFloat64{Float64: req.Location.Coordinates.X, Valid: true}
-		longitude = sql.NullFloat64{Float64: req.Location.Coordinates.Y, Valid: true}
+		// Don't store drawing coordinates as lat/long - they are different scales
+		// latitude/longitude fields should remain null for drawing coordinates
 	}
 	
 	err = tx.QueryRowContext(ctx, `
@@ -196,8 +174,8 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 	`,
 		projectID, issueNumber, templateID,
 		req.Title, req.Description,
-		issueType, sql.NullString{String: req.Category, Valid: req.Category != ""}, sql.NullString{String: req.DetailCategory, Valid: req.DetailCategory != ""},
-		req.Priority, req.Severity,
+		issueType, sql.NullString{String: req.IssueCategory, Valid: req.IssueCategory != ""}, sql.NullString{String: req.DetailCategory, Valid: req.DetailCategory != ""},
+		req.Priority, severity,
 		sql.NullString{String: req.RootCause, Valid: req.RootCause != ""},
 		sql.NullString{String: req.Location.Description, Valid: req.Location.Description != ""},
 		sql.NullString{String: req.Location.Building, Valid: req.Location.Building != ""},
@@ -206,8 +184,8 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 		locationX, locationY,
 		sql.NullString{String: req.Location.Room, Valid: req.Location.Room != ""}, // room_area = room for now
 		sql.NullString{String: req.Location.Level, Valid: req.Location.Level != ""}, // floor_level = level for now
-		sql.NullString{String: req.Discipline, Valid: req.Discipline != ""},
-		sql.NullString{String: req.Trade, Valid: req.Trade != ""},
+		sql.NullString{}, // discipline not in current request
+		sql.NullString{}, // trade not in current request
 		userID, assignedToID, sql.NullInt64{}, // assigned_company_id not in request for now
 		sql.NullString{}, sql.NullString{}, // drawing_reference, specification_reference not in request
 		dueDate, pq.Array(req.DistributionList),
@@ -244,8 +222,20 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 
 // GetIssueByID retrieves a specific issue by ID
 func (dao *IssueDao) GetIssueByID(ctx context.Context, issueID int64) (*models.IssueResponse, error) {
-	var issue models.IssueResponse
+	var response models.IssueResponse
 	var distributionList pq.StringArray
+	
+	// Database scan variables (using sql.Null* types for nullable columns)
+	var templateID sql.NullInt64
+	var category, detailCategory, rootCause sql.NullString
+	var locationDescription, locationBuilding, locationLevel, locationRoom sql.NullString
+	var locationX, locationY sql.NullFloat64
+	var roomArea, floorLevel, discipline, tradeType sql.NullString
+	var assignedTo, assignedCompanyID sql.NullInt64
+	var drawingRef, specRef sql.NullString
+	var dueDate, closedDate *time.Time
+	var costToFix, latitude, longitude sql.NullFloat64
+	var projectName, reportedByName, assignedToName, assignedCompanyName sql.NullString
 	
 	query := `
 		SELECT 
@@ -281,29 +271,29 @@ func (dao *IssueDao) GetIssueByID(ctx context.Context, issueID int64) (*models.I
 	`
 	
 	err := dao.DB.QueryRowContext(ctx, query, issueID).Scan(
-		&issue.ID, &issue.ProjectID, &issue.IssueNumber, &issue.TemplateID,
-		&issue.Title, &issue.Description,
-		&issue.Category, &issue.DetailCategory, &issue.IssueType,
-		&issue.Priority, &issue.Severity,
-		&issue.RootCause,
-		&issue.LocationDescription, &issue.LocationBuilding, &issue.LocationLevel, &issue.LocationRoom,
-		&issue.LocationX, &issue.LocationY,
-		&issue.RoomArea, &issue.FloorLevel,
-		&issue.Discipline, &issue.TradeType,
-		&issue.ReportedBy, &issue.AssignedTo, &issue.AssignedCompanyID,
-		&issue.DrawingReference, &issue.SpecificationRef,
-		&issue.DueDate, &issue.ClosedDate,
+		&response.ID, &response.ProjectID, &response.IssueNumber, &templateID,
+		&response.Title, &response.Description,
+		&category, &detailCategory, &response.IssueType,
+		&response.Priority, &response.Severity,
+		&rootCause,
+		&locationDescription, &locationBuilding, &locationLevel, &locationRoom,
+		&locationX, &locationY,
+		&roomArea, &floorLevel,
+		&discipline, &tradeType,
+		&response.ReportedBy, &assignedTo, &assignedCompanyID,
+		&drawingRef, &specRef,
+		&dueDate, &closedDate,
 		&distributionList,
-		&issue.Status,
-		&issue.CostToFix,
-		&issue.Latitude, &issue.Longitude,
-		&issue.CreatedAt, &issue.CreatedBy, &issue.UpdatedAt, &issue.UpdatedBy,
-		&issue.ProjectName,
-		&issue.ReportedByName,
-		&issue.AssignedToName,
-		&issue.AssignedCompanyName,
-		&issue.DaysOpen,
-		&issue.IsOverdue,
+		&response.Status,
+		&costToFix,
+		&latitude, &longitude,
+		&response.CreatedAt, &response.CreatedBy, &response.UpdatedAt, &response.UpdatedBy,
+		&projectName,
+		&reportedByName,
+		&assignedToName,
+		&assignedCompanyName,
+		&response.DaysOpen,
+		&response.IsOverdue,
 	)
 	
 	if err == sql.ErrNoRows {
@@ -319,9 +309,94 @@ func (dao *IssueDao) GetIssueByID(ctx context.Context, issueID int64) (*models.I
 		return nil, fmt.Errorf("failed to get issue: %w", err)
 	}
 	
-	issue.DistributionList = []string(distributionList)
+	response.DistributionList = []string(distributionList)
 	
-	return &issue, nil
+	// Convert nullable database types to clean response types
+	if projectName.Valid {
+		response.ProjectName = projectName.String
+	}
+	if reportedByName.Valid {
+		response.ReportedByName = reportedByName.String
+	}
+	if assignedToName.Valid {
+		response.AssignedToName = assignedToName.String
+	}
+	if assignedCompanyName.Valid {
+		response.AssignedCompanyName = assignedCompanyName.String
+	}
+	
+	// Handle nullable fields - only set if valid
+	if templateID.Valid {
+		response.TemplateID = &templateID.Int64
+	}
+	if category.Valid && category.String != "" {
+		response.Category = category.String
+	}
+	if detailCategory.Valid && detailCategory.String != "" {
+		response.DetailCategory = detailCategory.String
+	}
+	if rootCause.Valid && rootCause.String != "" {
+		response.RootCause = rootCause.String
+	}
+	if locationDescription.Valid && locationDescription.String != "" {
+		response.LocationDescription = locationDescription.String
+	}
+	if locationBuilding.Valid && locationBuilding.String != "" {
+		response.LocationBuilding = locationBuilding.String
+	}
+	if locationLevel.Valid && locationLevel.String != "" {
+		response.LocationLevel = locationLevel.String
+	}
+	if locationRoom.Valid && locationRoom.String != "" {
+		response.LocationRoom = locationRoom.String
+	}
+	if locationX.Valid {
+		response.LocationX = &locationX.Float64
+	}
+	if locationY.Valid {
+		response.LocationY = &locationY.Float64
+	}
+	if roomArea.Valid && roomArea.String != "" {
+		response.RoomArea = roomArea.String
+	}
+	if floorLevel.Valid && floorLevel.String != "" {
+		response.FloorLevel = floorLevel.String
+	}
+	if discipline.Valid && discipline.String != "" {
+		response.Discipline = discipline.String
+	}
+	if tradeType.Valid && tradeType.String != "" {
+		response.TradeType = tradeType.String
+	}
+	if assignedTo.Valid {
+		response.AssignedTo = &assignedTo.Int64
+	}
+	if assignedCompanyID.Valid {
+		response.AssignedCompanyID = &assignedCompanyID.Int64
+	}
+	if drawingRef.Valid && drawingRef.String != "" {
+		response.DrawingReference = drawingRef.String
+	}
+	if specRef.Valid && specRef.String != "" {
+		response.SpecificationRef = specRef.String
+	}
+	if dueDate != nil {
+		response.DueDate = dueDate
+	}
+	if closedDate != nil {
+		response.ClosedDate = closedDate
+	}
+	if costToFix.Valid {
+		response.CostToFix = &costToFix.Float64
+	}
+	if latitude.Valid {
+		response.Latitude = &latitude.Float64
+	}
+	if longitude.Valid {
+		response.Longitude = &longitude.Float64
+	}
+	
+	return &response, nil
 }
 
 // GetIssuesByProject retrieves all issues for a specific project with optional filters
@@ -406,28 +481,40 @@ func (dao *IssueDao) GetIssuesByProject(ctx context.Context, projectID int64, fi
 		var issue models.IssueResponse
 		var distributionList pq.StringArray
 		
+		// Database scan variables (using sql.Null* types for nullable columns)
+		var templateID sql.NullInt64
+		var category, detailCategory, rootCause sql.NullString
+		var locationDescription, locationBuilding, locationLevel, locationRoom sql.NullString
+		var locationX, locationY sql.NullFloat64
+		var roomArea, floorLevel, discipline, tradeType sql.NullString
+		var assignedTo, assignedCompanyID sql.NullInt64
+		var drawingRef, specRef sql.NullString
+		var dueDate, closedDate *time.Time
+		var costToFix, latitude, longitude sql.NullFloat64
+		var projectName, reportedByName, assignedToName, assignedCompanyName sql.NullString
+		
 		err := rows.Scan(
-			&issue.ID, &issue.ProjectID, &issue.IssueNumber, &issue.TemplateID,
+			&issue.ID, &issue.ProjectID, &issue.IssueNumber, &templateID,
 			&issue.Title, &issue.Description,
-			&issue.Category, &issue.DetailCategory, &issue.IssueType,
+			&category, &detailCategory, &issue.IssueType,
 			&issue.Priority, &issue.Severity,
-			&issue.RootCause,
-			&issue.LocationDescription, &issue.LocationBuilding, &issue.LocationLevel, &issue.LocationRoom,
-			&issue.LocationX, &issue.LocationY,
-			&issue.RoomArea, &issue.FloorLevel,
-			&issue.Discipline, &issue.TradeType,
-			&issue.ReportedBy, &issue.AssignedTo, &issue.AssignedCompanyID,
-			&issue.DrawingReference, &issue.SpecificationRef,
-			&issue.DueDate, &issue.ClosedDate,
+			&rootCause,
+			&locationDescription, &locationBuilding, &locationLevel, &locationRoom,
+			&locationX, &locationY,
+			&roomArea, &floorLevel,
+			&discipline, &tradeType,
+			&issue.ReportedBy, &assignedTo, &assignedCompanyID,
+			&drawingRef, &specRef,
+			&dueDate, &closedDate,
 			&distributionList,
 			&issue.Status,
-			&issue.CostToFix,
-			&issue.Latitude, &issue.Longitude,
+			&costToFix,
+			&latitude, &longitude,
 			&issue.CreatedAt, &issue.CreatedBy, &issue.UpdatedAt, &issue.UpdatedBy,
-			&issue.ProjectName,
-			&issue.ReportedByName,
-			&issue.AssignedToName,
-			&issue.AssignedCompanyName,
+			&projectName,
+			&reportedByName,
+			&assignedToName,
+			&assignedCompanyName,
 			&issue.DaysOpen,
 			&issue.IsOverdue,
 		)
@@ -438,6 +525,92 @@ func (dao *IssueDao) GetIssuesByProject(ctx context.Context, projectID int64, fi
 		}
 		
 		issue.DistributionList = []string(distributionList)
+		
+		// Convert nullable database types to clean response types
+		if projectName.Valid {
+			issue.ProjectName = projectName.String
+		}
+		if reportedByName.Valid {
+			issue.ReportedByName = reportedByName.String
+		}
+		if assignedToName.Valid {
+			issue.AssignedToName = assignedToName.String
+		}
+		if assignedCompanyName.Valid {
+			issue.AssignedCompanyName = assignedCompanyName.String
+		}
+		
+		// Handle nullable fields - only set if valid
+		if templateID.Valid {
+			issue.TemplateID = &templateID.Int64
+		}
+		if category.Valid && category.String != "" {
+			issue.Category = category.String
+		}
+		if detailCategory.Valid && detailCategory.String != "" {
+			issue.DetailCategory = detailCategory.String
+		}
+		if rootCause.Valid && rootCause.String != "" {
+			issue.RootCause = rootCause.String
+		}
+		if locationDescription.Valid && locationDescription.String != "" {
+			issue.LocationDescription = locationDescription.String
+		}
+		if locationBuilding.Valid && locationBuilding.String != "" {
+			issue.LocationBuilding = locationBuilding.String
+		}
+		if locationLevel.Valid && locationLevel.String != "" {
+			issue.LocationLevel = locationLevel.String
+		}
+		if locationRoom.Valid && locationRoom.String != "" {
+			issue.LocationRoom = locationRoom.String
+		}
+		if locationX.Valid {
+			issue.LocationX = &locationX.Float64
+		}
+		if locationY.Valid {
+			issue.LocationY = &locationY.Float64
+		}
+		if roomArea.Valid && roomArea.String != "" {
+			issue.RoomArea = roomArea.String
+		}
+		if floorLevel.Valid && floorLevel.String != "" {
+			issue.FloorLevel = floorLevel.String
+		}
+		if discipline.Valid && discipline.String != "" {
+			issue.Discipline = discipline.String
+		}
+		if tradeType.Valid && tradeType.String != "" {
+			issue.TradeType = tradeType.String
+		}
+		if assignedTo.Valid {
+			issue.AssignedTo = &assignedTo.Int64
+		}
+		if assignedCompanyID.Valid {
+			issue.AssignedCompanyID = &assignedCompanyID.Int64
+		}
+		if drawingRef.Valid && drawingRef.String != "" {
+			issue.DrawingReference = drawingRef.String
+		}
+		if specRef.Valid && specRef.String != "" {
+			issue.SpecificationRef = specRef.String
+		}
+		if dueDate != nil {
+			issue.DueDate = dueDate
+		}
+		if closedDate != nil {
+			issue.ClosedDate = closedDate
+		}
+		if costToFix.Valid {
+			issue.CostToFix = &costToFix.Float64
+		}
+		if latitude.Valid {
+			issue.Latitude = &latitude.Float64
+		}
+		if longitude.Valid {
+			issue.Longitude = &longitude.Float64
+		}
+		
 		issues = append(issues, issue)
 	}
 	
