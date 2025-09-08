@@ -12,6 +12,7 @@ import {InfrastructurePermissionsManagementFunction} from "../function_construct
 import {InfrastructureProjectManagement} from "../function_construct/infrastructure-project-management";
 import {InfrastructureUserManagement} from "../function_construct/infrastructure-user-management";
 import {InfrastructureIssueManagement} from "../function_construct/infrastructure-issue-management";
+import {InfrastructureRFIManagement} from "../function_construct/infrastructure-rfi-management";
 
 export class LambdaConstruct extends Construct {
 
@@ -25,6 +26,7 @@ export class LambdaConstruct extends Construct {
     private readonly infrastructureProjectManagement: InfrastructureProjectManagement;
     private readonly infrastructureUserManagement: InfrastructureUserManagement;
     private readonly infrastructureIssueManagement: InfrastructureIssueManagement;
+    private readonly infrastructureRFIManagement: InfrastructureRFIManagement;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -44,6 +46,7 @@ export class LambdaConstruct extends Construct {
         this.infrastructureProjectManagement = new InfrastructureProjectManagement(this, 'InfrastructureProjectManagement', funcProps);
         this.infrastructureUserManagement = new InfrastructureUserManagement(this, 'InfrastructureUserManagement', funcProps);
         this.infrastructureIssueManagement = new InfrastructureIssueManagement(this, 'InfrastructureIssueManagement', funcProps);
+        this.infrastructureRFIManagement = new InfrastructureRFIManagement(this, 'InfrastructureRFIManagement', funcProps);
     }
 
     get corsLambda(): GoFunction {
@@ -124,5 +127,13 @@ export class LambdaConstruct extends Construct {
 
     get issueManagementLambdaArn(): string {
         return this.infrastructureIssueManagement.functionArn;
+    }
+
+    get rfiManagementLambda(): GoFunction {
+        return this.infrastructureRFIManagement.function;
+    }
+
+    get rfiManagementLambdaArn(): string {
+        return this.infrastructureRFIManagement.functionArn;
     }
 }

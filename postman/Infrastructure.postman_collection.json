@@ -3165,6 +3165,798 @@
           }
         }
       ]
+    },
+    {
+      "name": "RFI Management",
+      "item": [
+        {
+          "name": "Create RFI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has RFI details', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('id');",
+                  "    pm.expect(jsonData.data).to.have.property('rfi_number');",
+                  "    pm.expect(jsonData.data).to.have.property('status', 'draft');",
+                  "    ",
+                  "    // Store RFI ID for other requests",
+                  "    pm.globals.set('rfi_id', jsonData.data.id);",
+                  "    console.log('Created RFI with ID:', jsonData.data.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"org_id\": {{org_id}},\n  \"project_id\": {{project_id}},\n  \"location_id\": {{location_id}},\n  \"subject\": \"Structural Detail Clarification - Foundation Connection\",\n  \"question\": \"Please provide clarification on the connection detail between the foundation wall and the first floor slab at Grid Line A.\",\n  \"description\": \"The current drawings show a connection detail that appears to conflict with the structural specifications. We need clarification before proceeding with the pour.\",\n  \"category\": \"structural\",\n  \"discipline\": \"structural\",\n  \"trade_type\": \"concrete\",\n  \"project_phase\": \"pre_construction\",\n  \"priority\": \"high\",\n  \"reviewer\": \"structural.engineer@consultant.com\",\n  \"approver\": \"project.manager@owner.com\",\n  \"ccList\": [\n    \"site.super@contractor.com\",\n    \"qa.manager@contractor.com\"\n  ],\n  \"distributionList\": [\n    \"project.team@owner.com\",\n    \"field.crew@contractor.com\"\n  ],\n  \"dueDate\": \"2025-09-15\",\n  \"costImpact\": \"yes\",\n  \"scheduleImpact\": \"yes\",\n  \"costImpactAmount\": 15000,\n  \"scheduleImpactDays\": 3,\n  \"costImpactDetails\": \"Additional reinforcement and form work modifications\",\n  \"scheduleImpactDetails\": \"Delay in foundation completion affecting slab pour schedule\",\n  \"location\": \"Foundation at Grid Line A, Level B1\",\n  \"drawingReferences\": \"S-101, S-102, Foundation Plan\",\n  \"specificationReferences\": \"Section 03300 - Cast-in-Place Concrete\",\n  \"relatedSubmittals\": \"Concrete Mix Design Submittal #45\",\n  \"workflowType\": \"STANDARD\",\n  \"requiresApproval\": true,\n  \"urgencyJustification\": \"Critical path activity affecting project schedule\",\n  \"businessJustification\": \"Required to maintain safety standards and structural integrity\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get RFIs by Project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has RFIs list', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('rfis');",
+                  "    pm.expect(jsonData.data).to.have.property('total_count');",
+                  "    console.log('Found', jsonData.data.total_count, 'RFIs');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/rfis?status=submitted&priority=high",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "projects",
+                "{{project_id}}",
+                "rfis"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "submitted",
+                  "description": "Filter by status"
+                },
+                {
+                  "key": "priority",
+                  "value": "high",
+                  "description": "Filter by priority"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get RFI by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has RFI details', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('id');",
+                  "    pm.expect(jsonData.data).to.have.property('subject');",
+                  "    pm.expect(jsonData.data).to.have.property('rfi_number');",
+                  "    console.log('RFI details:', jsonData.data.rfi_number, jsonData.data.subject);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update RFI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('RFI updated successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('id');",
+                  "    console.log('Updated RFI:', jsonData.data.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"Updated: Structural Detail Clarification - Foundation Connection Detail\",\n  \"question\": \"Please provide updated clarification on the connection detail between the foundation wall and the first floor slab at Grid Line A, including reinforcement specifications.\",\n  \"description\": \"The current drawings show a connection detail that appears to conflict with the structural specifications. We need clarification before proceeding with the pour. Additional concern raised about reinforcement overlap requirements.\",\n  \"priority\": \"critical\",\n  \"category\": \"structural\",\n  \"discipline\": \"structural\",\n  \"trade_type\": \"concrete\",\n  \"project_phase\": \"construction\",\n  \"reviewer\": \"senior.structural@consultant.com\",\n  \"approver\": \"project.director@owner.com\",\n  \"dueDate\": \"2025-09-12\",\n  \"costImpactAmount\": 25000,\n  \"scheduleImpactDays\": 5,\n  \"costImpactDetails\": \"Additional reinforcement, form work modifications, and potential design changes\",\n  \"scheduleImpactDetails\": \"Extended delay in foundation completion affecting multiple downstream activities\",\n  \"drawingReferences\": \"S-101, S-102, S-103, Foundation Plan Rev. 2\",\n  \"urgencyJustification\": \"Critical path activity with cascading schedule impacts\",\n  \"businessJustification\": \"Essential for maintaining structural integrity and meeting code requirements\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update RFI Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('RFI status updated successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('status');",
+                  "    console.log('RFI status updated to:', jsonData.data.status);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_review\",\n  \"comment\": \"RFI moved to review status for structural engineering team evaluation\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/status",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Submit RFI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('RFI submitted successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('status', 'submitted');",
+                  "    console.log('RFI submitted for review');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigned_to\": 8,\n  \"comment\": \"RFI submitted for structural engineering review - urgent priority due to schedule impact\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/submit",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "submit"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Respond to RFI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('RFI response submitted successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('status', 'responded');",
+                  "    console.log('RFI response submitted');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"response\": \"The connection detail shown in drawing S-101 is correct. Use #5 rebar at 12\\\" o.c. both ways with 40 bar diameter lap splice. See revised detail S-101A attached. The reinforcement should extend minimum 18\\\" into the slab. Follow ACI 318 requirements for development length.\",\n  \"response_status\": \"clarification_provided\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/respond",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "respond"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve RFI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('RFI approved successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('approval_status', 'approved');",
+                  "    console.log('RFI approved');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approval_comments\": \"RFI response reviewed and approved. Proceed with construction as detailed in the response. Ensure QA inspection of reinforcement placement before concrete pour.\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/approve",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "approve"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reject RFI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('RFI rejected successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('approval_status', 'rejected');",
+                  "    console.log('RFI rejected');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejection_reason\": \"RFI lacks sufficient detail. Please provide specific grid references, elevation details, and reference to applicable building codes. Resubmit with complete technical specifications.\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/reject",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "reject"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get RFI Attachments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has attachments', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('attachments');",
+                  "    console.log('Found', jsonData.data.attachments.length, 'attachments');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/attachments",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "attachments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add RFI Attachment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Attachment added successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('attachment_id');",
+                  "    console.log('Added attachment with ID:', jsonData.data.attachment_id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"foundation_detail_photo.jpg\",\n  \"file_type\": \"image/jpeg\",\n  \"file_size\": 2450000,\n  \"description\": \"Current foundation connection detail showing conflict with specifications\",\n  \"attachment_type\": \"photo\",\n  \"s3_bucket\": \"project-attachments-bucket\",\n  \"s3_key\": \"rfis/2024/foundation_detail_photo.jpg\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/attachments",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "attachments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get RFI Comments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has comments', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('comments');",
+                  "    console.log('Found', jsonData.data.comments.length, 'comments');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/comments",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "comments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add RFI Comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Comment added successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('comment_id');",
+                  "    console.log('Added comment with ID:', jsonData.data.comment_id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Field crew has identified additional concerns regarding the reinforcement lap splice requirements. Please review ACI 318 Section 25.5.2 for minimum lap splice length requirements.\",\n  \"comment_type\": \"comment\"\n}"
+            },
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/comments",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "comments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete RFI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('RFI deleted successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('message');",
+                  "    console.log('Delete result:', jsonData.data.message);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}"
+              ]
+            }
+          }
+        }
+      ]
     }
   ]
 }

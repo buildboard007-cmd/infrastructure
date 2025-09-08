@@ -65,6 +65,7 @@ export class SubStack extends NestedStack {
         const projectManagementIntegration = new LambdaIntegration(this.lambdaConstruct.projectManagementLambda);
         const userManagementIntegration = new LambdaIntegration(this.lambdaConstruct.userManagementLambda);
         const issueManagementIntegration = new LambdaIntegration(this.lambdaConstruct.issueManagementLambda);
+        const rfiManagementIntegration = new LambdaIntegration(this.lambdaConstruct.rfiManagementLambda);
         const corsIntegration = new LambdaIntegration(this.lambdaConstruct.corsLambda);
 
         // Create /org resource with Cognito authorization
@@ -309,6 +310,102 @@ export class SubStack extends NestedStack {
             authorizer: cognitoAuthorizer
         });
         issueStatusResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Add RFI management routes
+        // Create /projects/{projectId}/rfis resource for RFI management
+        const projectRFIsResource = projectIdResource.addResource('rfis');
+        projectRFIsResource.addMethod('GET', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectRFIsResource.addMethod('POST', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectRFIsResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis resource for direct RFI operations
+        const rfisResource = this.api.root.addResource('rfis');
+        rfisResource.addMethod('POST', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfisResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis/{rfiId} resource for specific RFI operations
+        const rfiIdResource = rfisResource.addResource('{rfiId}');
+        rfiIdResource.addMethod('GET', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiIdResource.addMethod('PUT', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiIdResource.addMethod('DELETE', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis/{rfiId}/status resource for status-only updates
+        const rfiStatusResource = rfiIdResource.addResource('status');
+        rfiStatusResource.addMethod('PATCH', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiStatusResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis/{rfiId}/submit resource for submitting RFI
+        const rfiSubmitResource = rfiIdResource.addResource('submit');
+        rfiSubmitResource.addMethod('PATCH', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiSubmitResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis/{rfiId}/respond resource for responding to RFI
+        const rfiRespondResource = rfiIdResource.addResource('respond');
+        rfiRespondResource.addMethod('PATCH', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiRespondResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis/{rfiId}/approve resource for approving RFI
+        const rfiApproveResource = rfiIdResource.addResource('approve');
+        rfiApproveResource.addMethod('PATCH', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiApproveResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis/{rfiId}/reject resource for rejecting RFI
+        const rfiRejectResource = rfiIdResource.addResource('reject');
+        rfiRejectResource.addMethod('PATCH', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiRejectResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis/{rfiId}/attachments resource for RFI attachment management
+        const rfiAttachmentsResource = rfiIdResource.addResource('attachments');
+        rfiAttachmentsResource.addMethod('GET', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiAttachmentsResource.addMethod('POST', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiAttachmentsResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis/{rfiId}/attachments/{attachmentId} resource for specific attachment operations
+        const rfiAttachmentIdResource = rfiAttachmentsResource.addResource('{attachmentId}');
+        rfiAttachmentIdResource.addMethod('GET', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiAttachmentIdResource.addMethod('DELETE', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiAttachmentIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /rfis/{rfiId}/comments resource for RFI comment management
+        const rfiCommentsResource = rfiIdResource.addResource('comments');
+        rfiCommentsResource.addMethod('GET', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiCommentsResource.addMethod('POST', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        rfiCommentsResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
         // Skip domain for LOCAL
         if (props.stageEnvironment != StageEnvironment.LOCAL) {
