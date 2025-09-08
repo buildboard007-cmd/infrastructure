@@ -116,7 +116,7 @@ type CreateRFIRequest struct {
 	ApproverEmail           string         `json:"approver,omitempty"`
 	CCList                  []string       `json:"ccList,omitempty"`
 	DistributionList        []string       `json:"distributionList,omitempty"`
-	DueDate                 *time.Time     `json:"dueDate,omitempty"`
+	DueDate                 string         `json:"dueDate,omitempty"`
 	CostImpact              string         `json:"costImpact,omitempty"`
 	ScheduleImpact          string         `json:"scheduleImpact,omitempty"`
 	CostImpactAmount        *float64       `json:"costImpactAmount,omitempty"`
@@ -151,7 +151,7 @@ type UpdateRFIRequest struct {
 	ApproverEmail           string         `json:"approver,omitempty"`
 	CCList                  []string       `json:"ccList,omitempty"`
 	DistributionList        []string       `json:"distributionList,omitempty"`
-	DueDate                 *time.Time     `json:"dueDate,omitempty"`
+	DueDate                 string         `json:"dueDate,omitempty"`
 	CostImpact              string         `json:"costImpact,omitempty"`
 	ScheduleImpact          string         `json:"scheduleImpact,omitempty"`
 	CostImpactAmount        *float64       `json:"costImpactAmount,omitempty"`

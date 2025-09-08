@@ -38,7 +38,7 @@
             }
           ],
           "request": {
-            "method": "POST",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
@@ -3903,6 +3903,109 @@
                 "rfis",
                 "{{rfi_id}}",
                 "comments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get RFI Attachment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has attachment data', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('attachment_id');",
+                  "    pm.expect(jsonData.data).to.have.property('filename');",
+                  "    console.log('Retrieved attachment:', jsonData.data.filename);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/attachments/{{attachment_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "attachments",
+                "{{attachment_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete RFI Attachment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Attachment deleted successfully', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.have.property('message');",
+                  "    console.log('Delete result:', jsonData.data.message);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/attachments/{{attachment_id}}",
+              "protocol": "https",
+              "host": [
+                "74zc1md7sc",
+                "execute-api",
+                "us-east-2",
+                "amazonaws",
+                "com"
+              ],
+              "path": [
+                "main",
+                "rfis",
+                "{{rfi_id}}",
+                "attachments",
+                "{{attachment_id}}"
               ]
             }
           }

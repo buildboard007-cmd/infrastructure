@@ -8,6 +8,7 @@ import (
 	"infrastructure/lib/api"
 	"infrastructure/lib/auth"
 	"infrastructure/lib/clients"
+	"infrastructure/lib/constants"
 	"infrastructure/lib/data"
 	"infrastructure/lib/models"
 	"infrastructure/lib/util"
@@ -204,6 +205,14 @@ func handleCreateRFI(ctx context.Context, userID, orgID int64, body string) even
 		req.RFINumber = rfiNumber
 	}
 
+	// Parse due date
+	var dueDate *time.Time
+	if req.DueDate != "" {
+		if parsedDate, err := time.Parse("2006-01-02", req.DueDate); err == nil {
+			dueDate = &parsedDate
+		}
+	}
+
 	// Convert request to RFI model
 	rfi := &models.RFI{
 		ProjectID:               req.ProjectID,
@@ -224,7 +233,7 @@ func handleCreateRFI(ctx context.Context, userID, orgID int64, body string) even
 		ApproverEmail:           req.ApproverEmail,
 		CCList:                  req.CCList,
 		DistributionList:        req.DistributionList,
-		DueDate:                 req.DueDate,
+		DueDate:                 dueDate,
 		CostImpact:              req.CostImpact == "Yes",
 		ScheduleImpact:          req.ScheduleImpact == "Yes",
 		CostImpactAmount:        req.CostImpactAmount,
@@ -686,15 +695,12 @@ func handleGetRFIAttachments(ctx context.Context, rfiID int64) events.APIGateway
 }
 
 func init() {
-	logger = logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
-	logger.SetLevel(logrus.InfoLevel)
+	var err error
 
-	// Check if running locally
-	if os.Getenv("AWS_EXECUTION_ENV") == "" {
-		isLocal = true
-		logger.Info("Running in local mode")
-	}
+	isLocal = parseIsLocal()
+
+	// Logger Setup
+	logger = setupLogger(isLocal)
 
 	// Initialize AWS SSM Parameter Store client
 	ssmClient := clients.NewSSMClient(isLocal)
@@ -704,46 +710,72 @@ func init() {
 	}
 
 	// Retrieve all required configuration parameters from SSM
-	var err error
 	ssmParams, err = ssmRepository.GetParameters()
 	if err != nil {
-		logger.WithError(err).Fatal("Failed to fetch SSM parameters")
+		logger.WithFields(logrus.Fields{
+			"operation": "init",
+			"error":     err.Error(),
+		}).Fatal("Error while getting SSM params from parameter store")
 	}
 
-	// Create database connection string
-	dbHost := ssmParams["db_host"]
-	dbUsername := ssmParams["db_username"] 
-	dbPassword := ssmParams["db_password"]
-	dbName := ssmParams["db_name"]
+	logger.WithFields(logrus.Fields{
+		"operation":    "init",
+		"params_count": len(ssmParams),
+	}).Debug("Retrieved SSM parameters")
 
-	connectionString := fmt.Sprintf(
-		"host=%s port=5432 user=%s password=%s dbname=%s sslmode=require",
-		dbHost, dbUsername, dbPassword, dbName,
-	)
-	logger.Info("connection string: ", connectionString)
-
-	// Initialize database connection
-	sqlDB, err = sql.Open("postgres", connectionString)
+	// Initialize PostgreSQL database connection
+	err = setupPostgresSQLClient(ssmParams)
 	if err != nil {
-		logger.WithError(err).Fatal("Failed to open database connection")
+		logger.WithFields(logrus.Fields{
+			"operation": "init",
+			"error":     err.Error(),
+		}).Fatal("Error setting up PostgreSQL client")
 	}
-
-	// Configure connection pool
-	sqlDB.SetMaxOpenConns(25)
-	sqlDB.SetMaxIdleConns(5)
-	sqlDB.SetConnMaxLifetime(5 * time.Minute)
-
-	// Test database connection
-	if err = sqlDB.Ping(); err != nil {
-		logger.WithError(err).Fatal("Failed to ping database")
-	}
-
-	// Initialize RFI repository
-	rfiRepository = data.NewRFIDao(sqlDB, logger)
 
 	logger.Info("RFI management service initialized successfully")
 }
 
 func main() {
 	lambda.Start(Handler)
+}
+
+func parseIsLocal() bool {
+	isLocal, _ := strconv.ParseBool(os.Getenv("IS_LOCAL"))
+	return isLocal
+}
+
+func setupLogger(isLocal bool) *logrus.Logger {
+	logger := logrus.New()
+	util.SetLogLevel(logger, os.Getenv("LOG_LEVEL"))
+	logger.SetFormatter(&logrus.JSONFormatter{PrettyPrint: isLocal})
+	return logger
+}
+
+func setupPostgresSQLClient(ssmParams map[string]string) error {
+	var err error
+
+	// Create PostgreSQL client using RDS connection parameters from SSM
+	sqlDB, err = clients.NewPostgresSQLClient(
+		ssmParams[constants.DATABASE_RDS_ENDPOINT],
+		ssmParams[constants.DATABASE_PORT],
+		ssmParams[constants.DATABASE_NAME],
+		ssmParams[constants.DATABASE_USERNAME],
+		ssmParams[constants.DATABASE_PASSWORD],
+		ssmParams[constants.SSL_MODE],
+	)
+	if err != nil {
+		return fmt.Errorf("error creating PostgreSQL client: %w", err)
+	}
+
+	// Initialize RFI repository
+	rfiRepository = &data.RFIDao{
+		DB:     sqlDB,
+		Logger: logger,
+	}
+
+	if logger.IsLevelEnabled(logrus.DebugLevel) {
+		logger.WithField("operation", "setupPostgresSQLClient").Debug("PostgreSQL client initialized successfully")
+	}
+
+	return nil
 }

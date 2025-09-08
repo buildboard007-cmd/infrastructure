@@ -567,10 +567,13 @@ func (dao *RFIDao) UpdateRFI(ctx context.Context, rfiID int64, updates *models.U
 		argIndex++
 	}
 	
-	if updates.DueDate != nil {
-		setClauses = append(setClauses, fmt.Sprintf("due_date = $%d", argIndex))
-		args = append(args, *updates.DueDate)
-		argIndex++
+	if updates.DueDate != "" {
+		// Parse the date string and convert to time.Time
+		if parsedDate, err := time.Parse("2006-01-02", updates.DueDate); err == nil {
+			setClauses = append(setClauses, fmt.Sprintf("due_date = $%d", argIndex))
+			args = append(args, parsedDate)
+			argIndex++
+		}
 	}
 	
 	// Always update updated_by and updated_at
