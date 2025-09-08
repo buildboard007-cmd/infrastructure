@@ -138,19 +138,42 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 	var issueID int64
 	var createdAt, updatedAt time.Time
 	
+	// Map issue type from category
+	issueType := "general"
+	if req.Category != "" {
+		switch req.Category {
+		case "quality", "safety", "deficiency", "punch_item", "code_violation":
+			issueType = req.Category
+		}
+	}
+	
+	// Handle coordinates
+	var locationX, locationY sql.NullFloat64
+	var latitude, longitude sql.NullFloat64
+	if req.Location.Coordinates != nil {
+		locationX = sql.NullFloat64{Float64: req.Location.Coordinates.X, Valid: true}
+		locationY = sql.NullFloat64{Float64: req.Location.Coordinates.Y, Valid: true}
+		// Also store as lat/long for backwards compatibility
+		latitude = sql.NullFloat64{Float64: req.Location.Coordinates.X, Valid: true}
+		longitude = sql.NullFloat64{Float64: req.Location.Coordinates.Y, Valid: true}
+	}
+	
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO project.issues (
 			project_id, issue_number, template_id,
 			title, description, 
-			category, detail_category, issue_type,
+			issue_type, category, detail_category,
 			priority, severity,
 			root_cause,
 			location_description, location_building, location_level, location_room,
 			location_x, location_y,
+			room_area, floor_level,
 			discipline, trade_type,
-			reported_by, assigned_to,
+			reported_by, assigned_to, assigned_company_id,
+			drawing_reference, specification_reference,
 			due_date, distribution_list,
 			status,
+			latitude, longitude,
 			created_by, updated_by
 		) VALUES (
 			$1, $2, $3,
@@ -162,28 +185,34 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 			$16, $17,
 			$18, $19,
 			$20, $21,
-			$22, $23,
-			$24,
-			$25, $26
+			$22, $23, $24,
+			$25, $26,
+			$27, $28,
+			$29,
+			$30, $31,
+			$32, $33
 		)
 		RETURNING id, created_at, updated_at
 	`,
 		projectID, issueNumber, templateID,
 		req.Title, req.Description,
-		req.Category, sql.NullString{String: req.DetailCategory, Valid: req.DetailCategory != ""}, req.Category, // issue_type = category for now
+		issueType, sql.NullString{String: req.Category, Valid: req.Category != ""}, sql.NullString{String: req.DetailCategory, Valid: req.DetailCategory != ""},
 		req.Priority, req.Severity,
 		sql.NullString{String: req.RootCause, Valid: req.RootCause != ""},
-		sql.NullString{String: req.Location.Description, Valid: true},
+		sql.NullString{String: req.Location.Description, Valid: req.Location.Description != ""},
 		sql.NullString{String: req.Location.Building, Valid: req.Location.Building != ""},
 		sql.NullString{String: req.Location.Level, Valid: req.Location.Level != ""},
 		sql.NullString{String: req.Location.Room, Valid: req.Location.Room != ""},
-		func() sql.NullFloat64 { if req.Location.Coordinates != nil { return sql.NullFloat64{Float64: req.Location.Coordinates.X, Valid: true} }; return sql.NullFloat64{Valid: false} }(),
-		func() sql.NullFloat64 { if req.Location.Coordinates != nil { return sql.NullFloat64{Float64: req.Location.Coordinates.Y, Valid: true} }; return sql.NullFloat64{Valid: false} }(),
+		locationX, locationY,
+		sql.NullString{String: req.Location.Room, Valid: req.Location.Room != ""}, // room_area = room for now
+		sql.NullString{String: req.Location.Level, Valid: req.Location.Level != ""}, // floor_level = level for now
 		sql.NullString{String: req.Discipline, Valid: req.Discipline != ""},
 		sql.NullString{String: req.Trade, Valid: req.Trade != ""},
-		userID, assignedToID,
+		userID, assignedToID, sql.NullInt64{}, // assigned_company_id not in request for now
+		sql.NullString{}, sql.NullString{}, // drawing_reference, specification_reference not in request
 		dueDate, pq.Array(req.DistributionList),
 		models.IssueStatusOpen,
+		latitude, longitude,
 		userID, userID,
 	).Scan(&issueID, &createdAt, &updatedAt)
 	
