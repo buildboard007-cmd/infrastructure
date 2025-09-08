@@ -64,6 +64,7 @@ export class SubStack extends NestedStack {
         const permissionsManagementIntegration = new LambdaIntegration(this.lambdaConstruct.permissionsManagementLambda);
         const projectManagementIntegration = new LambdaIntegration(this.lambdaConstruct.projectManagementLambda);
         const userManagementIntegration = new LambdaIntegration(this.lambdaConstruct.userManagementLambda);
+        const issueManagementIntegration = new LambdaIntegration(this.lambdaConstruct.issueManagementLambda);
         const corsIntegration = new LambdaIntegration(this.lambdaConstruct.corsLambda);
 
         // Create /org resource with Cognito authorization
@@ -270,6 +271,41 @@ export class SubStack extends NestedStack {
             authorizer: cognitoAuthorizer
         });
         userPasswordResetResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Add issue management routes
+        // Create /projects/{projectId}/issues resource for issue management
+        const projectIssuesResource = projectIdResource.addResource('issues');
+        projectIssuesResource.addMethod('GET', issueManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectIssuesResource.addMethod('POST', issueManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        projectIssuesResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /issues resource for direct issue operations
+        const issuesResource = this.api.root.addResource('issues');
+        issuesResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /issues/{issueId} resource for specific issue operations
+        const issueIdResource = issuesResource.addResource('{issueId}');
+        issueIdResource.addMethod('GET', issueManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        issueIdResource.addMethod('PUT', issueManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        issueIdResource.addMethod('DELETE', issueManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        issueIdResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
+
+        // Create /issues/{issueId}/status resource for status-only updates
+        const issueStatusResource = issueIdResource.addResource('status');
+        issueStatusResource.addMethod('PATCH', issueManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        issueStatusResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
         // Skip domain for LOCAL
         if (props.stageEnvironment != StageEnvironment.LOCAL) {
