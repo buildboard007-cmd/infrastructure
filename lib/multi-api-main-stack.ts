@@ -6,17 +6,16 @@ import {MultiApiSubStack} from "./resources/sub_stack/multi-api-sub-stack";
 import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "js-yaml";
-import {GetAccountId} from "./utils/account-utils";
 import {OpenApiBuilder, OpenAPIObject} from "openapi3-ts";
 import {removeDiscriminators} from "./utils/api-utils";
 
-interface LambdaStackProps extends cdk.StackProps {
+interface MultiApiMainStackProps extends cdk.StackProps {
     options: StackOptions;
     stageEnvironment: StageEnvironment;
 }
 
-export class MainStack extends cdk.Stack {
-    constructor(scope: Construct, id: string, props: LambdaStackProps) {
+export class MultiApiMainStack extends cdk.Stack {
+    constructor(scope: Construct, id: string, props: MultiApiMainStackProps) {
         super(scope, id, {
             ...props,
         });
@@ -24,12 +23,11 @@ export class MainStack extends cdk.Stack {
         cdk.Tags.of(this).add("billingTag", props.options.serviceName);
         cdk.Tags.of(this).add("serviceName", props.options.serviceName);
 
-        // const account = GetAccountId(props.stageEnvironment);
+        // Load OpenAPI spec for documentation
         const spec = yaml.load(
             fs.readFileSync(path.join(__dirname, "/resources/specs/source_spec.yaml"), "utf8")
         ) as OpenAPIObject;
         const builder = new OpenApiBuilder(spec);
-        // Security scheme will be added in sub-stack after Cognito is created
         removeDiscriminators(builder);
 
         const multiApiSubStack = new MultiApiSubStack(this, `SubStack`, {
@@ -37,13 +35,13 @@ export class MainStack extends cdk.Stack {
             stageEnvironment: props.stageEnvironment,
         });
 
+        // Output all API Gateway IDs and URLs for reference
         new cdk.CfnOutput(this, 'CorsLambdaArn', {
             value: multiApiSubStack.corsLambdaArn,
             exportName: `api-gateway-cors-lambda-arn`,
             description: 'ARN of the CORS Lambda function for API Gateway'
         });
 
-        // Output all API Gateway IDs and URLs for reference
         new cdk.CfnOutput(this, 'IamApiId', {
             value: multiApiSubStack.iamApiId,
             exportName: `iam-api-id`,
@@ -96,5 +94,4 @@ export class MainStack extends cdk.Stack {
             description: 'Base URL for RFIs Management API'
         });
     }
-
 }
