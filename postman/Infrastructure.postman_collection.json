@@ -2839,10 +2839,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"location_id\": \"{{location_id}}\",\n  \"organization_id\": \"{{org_id}}\",\n  \"template_id\": \"string\",\n  \"category\": \"string\",\n  \"detail_category\": \"string\",\n  \"title\": \"Concrete crack in slab at Grid B-4\",\n  \"description\": \"Hairline crack observed in concrete slab extending approximately 3 feet. Crack width is less than 0.1 inches. Located near column intersection at Grid B-4.\",\n  \"priority\": \"high\",\n  \"severity\": \"major\",\n  \"root_cause\": \"Improper curing process during concrete placement\",\n  \"location\": {\n    \"description\": \"Level 3 slab near column intersection\",\n    \"coordinates\": {\n      \"x\": 450.5,\n      \"y\": 320.2\n    },\n    \"building\": \"Tower A\",\n    \"level\": \"Level 3\",\n    \"room\": \"Open Area\"\n  },\n  \"discipline\": \"structural\",\n  \"trade\": \"concrete\",\n  \"assigned_to\": \"contractor@example.com\",\n  \"due_date\": \"2024-02-15\",\n  \"distribution_list\": [\n    \"email1@example.com\",\n    \"email2@example.com\"\n  ]\n}"
+              "raw": "{\n  \"project_id\": {{project_id}},\n  \"location_id\": {{location_id}},\n  \"org_id\": {{org_id}},\n  \"issue_category\": \"quality\",\n  \"category\": \"division-01\",\n  \"detail_category\": \"Non-conformance report unresolved\",\n  \"title\": \"test\",\n  \"description\": \"testdgdfgdfgd\",\n  \"priority\": \"critical\",\n  \"root_cause\": \"constructability\",\n  \"location\": {\n    \"description\": \"test\",\n    \"coordinates\": {\n      \"x\": 0,\n      \"y\": 0\n    },\n    \"building\": \"3\",\n    \"level\": \"3\",\n    \"room\": \"3\"\n  },\n  \"assigned_to\": 4,\n  \"due_date\": \"2025-09-08\",\n  \"distribution_list\": []\n}"
             },
             "url": {
-              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/issues",
+              "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues",
               "protocol": "https",
               "host": [
                 "74zc1md7sc",
@@ -2853,8 +2853,6 @@
               ],
               "path": [
                 "main",
-                "projects",
-                "{{project_id}}",
                 "issues"
               ]
             }

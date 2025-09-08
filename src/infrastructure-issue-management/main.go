@@ -50,13 +50,9 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Handle different routes
 	switch request.HTTPMethod {
 	case http.MethodPost:
-		// POST /projects/{projectId}/issues - Create new issue
-		if strings.Contains(request.Resource, "/projects/{projectId}/issues") {
-			projectID, err := strconv.ParseInt(request.PathParameters["projectId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
-			}
-			return handleCreateIssue(ctx, projectID, claims.UserID, claims.OrgID, request.Body), nil
+		// POST /issues - Create new issue (project info in request body)
+		if request.Resource == "/issues" {
+			return handleCreateIssue(ctx, claims.UserID, claims.OrgID, request.Body), nil
 		}
 		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
 		
@@ -119,24 +115,25 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 }
 
-// handleCreateIssue handles POST /projects/{projectId}/issues
-func handleCreateIssue(ctx context.Context, projectID, userID, orgID int64, body string) events.APIGatewayProxyResponse {
+// handleCreateIssue handles POST /issues
+func handleCreateIssue(ctx context.Context, userID, orgID int64, body string) events.APIGatewayProxyResponse {
 	var createReq models.CreateIssueRequest
 	if err := json.Unmarshal([]byte(body), &createReq); err != nil {
 		logger.WithError(err).Error("Failed to parse create issue request")
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
-	// Set context fields from path/auth (converting to strings for consistency)
-	createReq.ProjectID = fmt.Sprintf("%d", projectID)
-	createReq.OrganizationID = fmt.Sprintf("%d", orgID)
+	// Validate organization ID matches auth
+	if createReq.OrganizationID != orgID {
+		return api.ErrorResponse(http.StatusForbidden, "Organization ID does not match your organization", logger)
+	}
 	
 	// Validate project belongs to org
 	var projectOrgID int64
 	err := sqlDB.QueryRowContext(ctx, `
 		SELECT org_id FROM project.projects 
 		WHERE id = $1 AND is_deleted = FALSE
-	`, projectID).Scan(&projectOrgID)
+	`, createReq.ProjectID).Scan(&projectOrgID)
 	
 	if err == sql.ErrNoRows {
 		return api.ErrorResponse(http.StatusNotFound, "Project not found", logger)
@@ -150,21 +147,21 @@ func handleCreateIssue(ctx context.Context, projectID, userID, orgID int64, body
 	}
 	
 	// Get location ID from project if not provided
-	if createReq.LocationID == "" || createReq.LocationID == "0" {
+	if createReq.LocationID == 0 {
 		var locationID int64
 		err = sqlDB.QueryRowContext(ctx, `
 			SELECT location_id FROM project.projects 
 			WHERE id = $1
-		`, projectID).Scan(&locationID)
+		`, createReq.ProjectID).Scan(&locationID)
 		if err != nil {
 			logger.WithError(err).Warn("Failed to get location ID from project")
 		} else {
-			createReq.LocationID = fmt.Sprintf("%d", locationID)
+			createReq.LocationID = locationID
 		}
 	}
 
 	// Create issue
-	issue, err := issueRepository.CreateIssue(ctx, projectID, userID, &createReq)
+	issue, err := issueRepository.CreateIssue(ctx, createReq.ProjectID, userID, &createReq)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create issue")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create issue", logger)

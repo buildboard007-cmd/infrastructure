@@ -285,6 +285,9 @@ export class SubStack extends NestedStack {
 
         // Create /issues resource for direct issue operations
         const issuesResource = this.api.root.addResource('issues');
+        issuesResource.addMethod('POST', issueManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
         issuesResource.addMethod('OPTIONS', corsIntegration); // OPTIONS doesn't need auth for CORS
 
         // Create /issues/{issueId} resource for specific issue operations

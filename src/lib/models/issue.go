@@ -17,6 +17,7 @@ type Issue struct {
 	Description          string         `json:"description"`
 	
 	// Categorization
+	IssueCategory        string         `json:"issue_category"`
 	Category             string         `json:"category"`
 	DetailCategory       sql.NullString `json:"detail_category,omitempty"`
 	IssueType            string         `json:"issue_type"` // Existing field
@@ -77,13 +78,13 @@ type Issue struct {
 
 // CreateIssueRequest represents the request payload for creating a new issue
 type CreateIssueRequest struct {
-	// Context (auto-populated)
-	ProjectID            string         `json:"project_id,omitempty"`
-	LocationID           string         `json:"location_id,omitempty"`
-	OrganizationID       string         `json:"organization_id,omitempty"`
+	// Context (required)
+	ProjectID            int64          `json:"project_id" binding:"required"`
+	LocationID           int64          `json:"location_id" binding:"required"`
+	OrganizationID       int64          `json:"org_id" binding:"required"`
 	
 	// Categorization (required)
-	TemplateID           string         `json:"template_id,omitempty"`
+	IssueCategory        string         `json:"issue_category" binding:"required"`
 	Category             string         `json:"category" binding:"required"`
 	DetailCategory       string         `json:"detail_category,omitempty"`
 	
@@ -92,19 +93,14 @@ type CreateIssueRequest struct {
 	Description          string         `json:"description" binding:"required"`
 	Priority             string         `json:"priority" binding:"required,oneof=critical high medium low planned"`
 	
-	// Classification (optional - severity not in UI)
-	Severity             string         `json:"severity,omitempty" binding:"omitempty,oneof=blocking major minor cosmetic"`
+	// Classification (optional)
 	RootCause            string         `json:"root_cause,omitempty"`
 	
-	// Location (required + optional fields)
+	// Location (required)
 	Location             IssueLocationInfo   `json:"location" binding:"required"`
 	
-	// Trade (not in UI currently)
-	Discipline           string         `json:"discipline,omitempty"`
-	Trade                string         `json:"trade,omitempty"`
-	
 	// Assignment (required)
-	AssignedTo           string         `json:"assigned_to" binding:"required"`
+	AssignedTo           int64          `json:"assigned_to" binding:"required"`
 	
 	// Timeline (optional)
 	DueDate              string         `json:"due_date,omitempty"` // Format: YYYY-MM-DD
@@ -163,9 +159,77 @@ type UpdateIssueRequest struct {
 	DistributionList     []string              `json:"distribution_list,omitempty"`
 }
 
-// IssueResponse represents the response for an issue
+// IssueResponse represents the clean response for an issue (without sql.Null* types)
 type IssueResponse struct {
-	Issue
+	// Core fields
+	ID                   int64          `json:"id"`
+	ProjectID            int64          `json:"project_id"`
+	IssueNumber          string         `json:"issue_number"`
+	TemplateID           *int64         `json:"template_id,omitempty"`
+	
+	// Basic Information
+	Title                string         `json:"title"`
+	Description          string         `json:"description"`
+	
+	// Categorization
+	IssueCategory        string         `json:"issue_category,omitempty"`
+	Category             string         `json:"category,omitempty"`
+	DetailCategory       string         `json:"detail_category,omitempty"`
+	IssueType            string         `json:"issue_type"`
+	
+	// Priority & Severity
+	Priority             string         `json:"priority"`
+	Severity             string         `json:"severity"`
+	
+	// Root Cause
+	RootCause            string         `json:"root_cause,omitempty"`
+	
+	// Location Information
+	LocationDescription  string         `json:"location_description,omitempty"`
+	LocationBuilding     string         `json:"location_building,omitempty"`
+	LocationLevel        string         `json:"location_level,omitempty"`
+	LocationRoom         string         `json:"location_room,omitempty"`
+	LocationX            *float64       `json:"location_x,omitempty"`
+	LocationY            *float64       `json:"location_y,omitempty"`
+	
+	// Legacy location fields
+	RoomArea             string         `json:"room_area,omitempty"`
+	FloorLevel           string         `json:"floor_level,omitempty"`
+	
+	// Trade & Assignment
+	Discipline           string         `json:"discipline,omitempty"`
+	TradeType            string         `json:"trade_type,omitempty"`
+	ReportedBy           int64          `json:"reported_by"`
+	AssignedTo           *int64         `json:"assigned_to,omitempty"`
+	AssignedCompanyID    *int64         `json:"assigned_company_id,omitempty"`
+	
+	// References
+	DrawingReference     string         `json:"drawing_reference,omitempty"`
+	SpecificationRef     string         `json:"specification_reference,omitempty"`
+	
+	// Timeline
+	DueDate              *time.Time     `json:"due_date,omitempty"`
+	ClosedDate           *time.Time     `json:"closed_date,omitempty"`
+	
+	// Distribution
+	DistributionList     []string       `json:"distribution_list,omitempty"`
+	
+	// Status
+	Status               string         `json:"status"`
+	
+	// Cost Impact
+	CostToFix            *float64       `json:"cost_to_fix,omitempty"`
+	
+	// GPS Coordinates
+	Latitude             *float64       `json:"latitude,omitempty"`
+	Longitude            *float64       `json:"longitude,omitempty"`
+	
+	// Audit fields
+	CreatedAt            time.Time      `json:"created_at"`
+	CreatedBy            int64          `json:"created_by"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+	UpdatedBy            int64          `json:"updated_by"`
+	
 	// Additional computed fields
 	ProjectName          string         `json:"project_name,omitempty"`
 	ReportedByName       string         `json:"reported_by_name,omitempty"`
