@@ -32,7 +32,7 @@ export class MainStack extends cdk.Stack {
         // Security scheme will be added in sub-stack after Cognito is created
         removeDiscriminators(builder);
 
-        const multiApiSubStack = new MultiApiSubStack(this, `SubStack`, {
+        const multiApiSubStack = new MultiApiSubStack(this, `MultiApiSubStack`, {
             options: props.options,
             stageEnvironment: props.stageEnvironment,
         });
