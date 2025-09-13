@@ -336,9 +336,17 @@ func (dao *OrgDao) checkAndUpdateUserStatus(ctx context.Context, userID, orgID i
 		return fmt.Errorf("failed to check user status and location count: %w", err)
 	}
 	
-	// If user is pending_org_setup and has at least one location, activate them
+	// If user is pending_org_setup and has at least one location, activate both user and organization
 	if userStatus == "pending_org_setup" && locationCount > 0 {
-		_, err = dao.DB.ExecContext(ctx, `
+		// Start transaction to update both user and organization atomically
+		tx, err := dao.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("failed to start transaction for activation: %w", err)
+		}
+		defer tx.Rollback()
+		
+		// Update user status to active
+		_, err = tx.ExecContext(ctx, `
 			UPDATE iam.users
 			SET status = 'active', updated_by = $1, updated_at = CURRENT_TIMESTAMP
 			WHERE id = $2 AND status = 'pending_org_setup'
@@ -348,11 +356,27 @@ func (dao *OrgDao) checkAndUpdateUserStatus(ctx context.Context, userID, orgID i
 			return fmt.Errorf("failed to update user status to active: %w", err)
 		}
 		
+		// Update organization status to active
+		_, err = tx.ExecContext(ctx, `
+			UPDATE iam.organizations
+			SET status = 'active', updated_by = $1, updated_at = CURRENT_TIMESTAMP
+			WHERE id = $2 AND status = 'pending'
+		`, userID, orgID)
+		
+		if err != nil {
+			return fmt.Errorf("failed to update organization status to active: %w", err)
+		}
+		
+		// Commit transaction
+		if err = tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit activation transaction: %w", err)
+		}
+		
 		dao.Logger.WithFields(logrus.Fields{
 			"user_id":        userID,
 			"org_id":         orgID,
 			"location_count": locationCount,
-		}).Info("User status updated to active after org update and location creation")
+		}).Info("User and organization status updated to active after org update and location creation")
 	}
 	
 	return nil
