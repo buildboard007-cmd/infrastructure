@@ -317,67 +317,65 @@ func (dao *OrgDao) DeleteOrganization(ctx context.Context, orgID int64, userID i
 	return nil
 }
 
-// checkAndUpdateUserStatus checks if user has both updated org and created at least one location
-// If both conditions are met, updates user status from pending_org_setup to active
+// checkAndUpdateUserStatus checks if user should be activated after organization setup
+// Activates both user and organization immediately upon organization setup completion
 func (dao *OrgDao) checkAndUpdateUserStatus(ctx context.Context, userID, orgID int64) error {
-	// Check if user is still in pending_org_setup status and has at least one location
+	// Check if user is still in pending_org_setup status
 	var userStatus string
-	var locationCount int64
-	
+
 	query := `
-		SELECT u.status, 
-		       (SELECT COUNT(*) FROM iam.locations WHERE org_id = u.org_id AND is_deleted = FALSE) as location_count
+		SELECT u.status
 		FROM iam.users u
 		WHERE u.id = $1 AND u.org_id = $2
 	`
-	
-	err := dao.DB.QueryRowContext(ctx, query, userID, orgID).Scan(&userStatus, &locationCount)
+
+	err := dao.DB.QueryRowContext(ctx, query, userID, orgID).Scan(&userStatus)
 	if err != nil {
-		return fmt.Errorf("failed to check user status and location count: %w", err)
+		return fmt.Errorf("failed to check user status: %w", err)
 	}
-	
-	// If user is pending_org_setup and has at least one location, activate both user and organization
-	if userStatus == "pending_org_setup" && locationCount > 0 {
+
+	// If user is pending_org_setup, activate both user and organization immediately
+	// This happens as soon as organization setup is completed
+	if userStatus == "pending_org_setup" {
 		// Start transaction to update both user and organization atomically
 		tx, err := dao.DB.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("failed to start transaction for activation: %w", err)
 		}
 		defer tx.Rollback()
-		
+
 		// Update user status to active
 		_, err = tx.ExecContext(ctx, `
 			UPDATE iam.users
 			SET status = 'active', updated_by = $1, updated_at = CURRENT_TIMESTAMP
 			WHERE id = $2 AND status = 'pending_org_setup'
 		`, userID, userID)
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to update user status to active: %w", err)
 		}
-		
+
 		// Update organization status to active
 		_, err = tx.ExecContext(ctx, `
 			UPDATE iam.organizations
 			SET status = 'active', updated_by = $1, updated_at = CURRENT_TIMESTAMP
 			WHERE id = $2 AND status = 'pending'
 		`, userID, orgID)
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to update organization status to active: %w", err)
 		}
-		
+
 		// Commit transaction
 		if err = tx.Commit(); err != nil {
 			return fmt.Errorf("failed to commit activation transaction: %w", err)
 		}
-		
+
 		dao.Logger.WithFields(logrus.Fields{
-			"user_id":        userID,
-			"org_id":         orgID,
-			"location_count": locationCount,
-		}).Info("User and organization status updated to active after org update and location creation")
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Info("User and organization status updated to active immediately after organization setup completion")
 	}
-	
+
 	return nil
 }

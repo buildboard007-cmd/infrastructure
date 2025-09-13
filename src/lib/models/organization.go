@@ -1,24 +1,25 @@
 package models
 
 import (
+	"database/sql"
 	"time"
 )
 
 // Organization represents an organization in the system based on iam.organizations table
 type Organization struct {
-	ID            int64     `json:"id"`               // Unique organization identifier
-	Name          string    `json:"name"`             // Organization name (matches schema: name)
-	OrgType       string    `json:"org_type"`         // 'general_contractor', 'subcontractor', 'architect', 'owner', 'consultant'
-	LicenseNumber string    `json:"license_number,omitempty"`
-	Address       string    `json:"address,omitempty"`
-	Phone         string    `json:"phone,omitempty"`
-	Email         string    `json:"email,omitempty"`
-	Website       string    `json:"website,omitempty"`
-	Status        string    `json:"status"`           // 'active', 'inactive', 'pending_setup', 'suspended'
-	CreatedAt     time.Time `json:"created_at"`
-	CreatedBy     int64     `json:"created_by"`       // User who created this organization
-	UpdatedAt     time.Time `json:"updated_at"`
-	UpdatedBy     int64     `json:"updated_by"`       // User who last updated this organization
+	ID            int64          `json:"id"`       // Unique organization identifier
+	Name          string         `json:"name"`     // Organization name (matches schema: name)
+	OrgType       string         `json:"org_type"` // 'general_contractor', 'subcontractor', 'architect', 'owner', 'consultant'
+	LicenseNumber sql.NullString `json:"license_number,omitempty"`
+	Address       sql.NullString `json:"address,omitempty"`
+	Phone         sql.NullString `json:"phone,omitempty"`
+	Email         sql.NullString `json:"email,omitempty"`
+	Website       sql.NullString `json:"website,omitempty"`
+	Status        string         `json:"status"` // 'active', 'inactive', 'pending_setup', 'suspended'
+	CreatedAt     time.Time      `json:"created_at"`
+	CreatedBy     int64          `json:"created_by"` // User who created this organization
+	UpdatedAt     time.Time      `json:"updated_at"`
+	UpdatedBy     int64          `json:"updated_by"` // User who last updated this organization
 }
 
 // CreateOrganizationRequest represents the request payload for creating a new organization
