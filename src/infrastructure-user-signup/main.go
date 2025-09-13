@@ -169,6 +169,7 @@ func extractSignupData(event events.CognitoEventUserPoolsPostConfirmation, corre
 
 	// Extract additional user data from ClientMetadata (passed during signup)
 	// ClientMetadata is used to pass additional data that we don't want to store in Cognito
+	// For super admin signup, we don't require any additional data - nulls are acceptable
 	firstName := ""
 	lastName := ""
 	phone := ""
@@ -177,15 +178,6 @@ func extractSignupData(event events.CognitoEventUserPoolsPostConfirmation, corre
 		firstName = event.Request.ClientMetadata["firstName"]
 		lastName = event.Request.ClientMetadata["lastName"]
 		phone = event.Request.ClientMetadata["phone"]
-	}
-	
-	// If ClientMetadata is not available, these fields will remain empty
-	// The database allows NULL for phone, and we'll use empty strings for names
-	if firstName == "" {
-		firstName = "FirstName" // Default placeholder
-	}
-	if lastName == "" {
-		lastName = "LastName" // Default placeholder
 	}
 
 	// Determine signup type based on trigger source and user attributes
@@ -255,14 +247,13 @@ func processSignup(request *SignupRequest) error {
 // processSuperAdminSignup handles the SuperAdmin signup flow
 func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 	// Create a new organization for this SuperAdmin
-	// Each SuperAdmin gets their own organization
+	// Each SuperAdmin gets their own organization with NULL name initially
 	var orgID int64
 	
-	// Create a unique organization for this super admin
-	// Initial name will be "New Organization" and they can update it later
+	// Create organization with NULL name - will be set during org setup
 	err := tx.QueryRow(`
 		INSERT INTO iam.organizations (name, org_type, status, created_by, updated_by)
-		VALUES ('New Organization', 'general_contractor', 'pending_setup', 1, 1)
+		VALUES (NULL, NULL, 'pending', 1, 1)
 		RETURNING id
 	`).Scan(&orgID)
 
@@ -271,8 +262,15 @@ func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 	}
 
 	// Create SuperAdmin user record with pending_org_setup status
-	// Handle phone as nullable field
-	var phone sql.NullString
+	// Handle all optional fields as nullable
+	var firstName, lastName, phone sql.NullString
+	
+	if request.FirstName != "" {
+		firstName = sql.NullString{String: request.FirstName, Valid: true}
+	}
+	if request.LastName != "" {
+		lastName = sql.NullString{String: request.LastName, Valid: true}
+	}
 	if request.Phone != "" {
 		phone = sql.NullString{String: request.Phone, Valid: true}
 	}
@@ -291,7 +289,7 @@ func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 			updated_by
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	`, request.CognitoID, orgID, request.Email, request.FirstName, request.LastName, phone, StatusPendingOrgSetup, true, 1, 1)
+	`, request.CognitoID, orgID, request.Email, firstName, lastName, phone, StatusPendingOrgSetup, true, 1, 1)
 
 	if err != nil {
 		return fmt.Errorf("failed to create SuperAdmin user record: %w", err)

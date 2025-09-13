@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"infrastructure/lib/models"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -66,60 +67,63 @@ func NewUserRepository(db *sql.DB) UserRepository {
 
 // GetUserProfile fetches complete user profile data from PostgreSQL database using Cognito ID.
 //
-// This method uses the optimized iam.user_summary view which pre-aggregates all user data
-// including organizations, locations, and roles in a single query. This approach provides:
-// 1. Better performance (single query vs multiple JOINs)
-// 2. Consistent data (atomic read of related data)
-// 3. Simplified error handling
+// This method uses the new RBAC system with user_assignments table to determine user access.
+// It provides optimized access context aggregation for JWT token generation:
+// 1. Single query with RBAC context aggregation
+// 2. Direct location access based on user assignments
+// 3. Support for organization/location/project level permissions
 //
 // Query Details:
-//   - Uses iam.user_summary view (see IAM_SCHEMA_DOCUMENTATION.md)
-//   - Filters by cognito_id (AWS Cognito 'sub' claim)
-//   - Only returns 'active' users (excludes 'inactive', 'suspended')
-//   - Converts locations JSON to string for parsing
+//   - Uses new iam.user_assignments table for RBAC
+//   - Aggregates access contexts into array for JWT
+//   - Fetches accessible locations based on user assignments
+//   - Supports hierarchical permissions (org -> location -> project)
 //
 // Error Handling:
 //   - sql.ErrNoRows: User not found or inactive
 //   - JSON parsing errors: Malformed locations data
 //   - Database errors: Connection, timeout, constraint violations
 func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error) {
-	// Optimized query using pre-built view with all user relationships
-	query := `
-		SELECT 
-			u.id,
-			u.cognito_id,
-			u.email,
-			u.first_name,
-			u.last_name,
-			u.phone,
-			u.job_title,
-			u.status,
-			u.avatar_url,
-			u.org_id,
-			o.name,
-			u.last_selected_location_id,
-			u.is_super_admin,
-			'[]'::text as locations
+	// Step 1: Get user basic info and access contexts for JWT
+	userQuery := `
+		SELECT
+			u.id, u.cognito_id, u.email, u.first_name, u.last_name,
+			u.phone, u.job_title, u.status, u.avatar_url, u.org_id, 
+			o.name as org_name, u.last_selected_location_id, u.is_super_admin,
+			COALESCE(
+				array_agg(DISTINCT
+					CASE ua.context_type
+						WHEN 'organization' THEN 'ORG:' || ua.context_id
+						WHEN 'location' THEN 'LOC:' || ua.context_id
+						WHEN 'project' THEN 'PROJ:' || ua.context_id
+					END
+				) FILTER (WHERE ua.context_id IS NOT NULL),
+				ARRAY[]::text[]
+			) as access_contexts
 		FROM iam.users u
 		JOIN iam.organizations o ON u.org_id = o.id
+		LEFT JOIN iam.user_assignments ua ON u.id = ua.user_id AND ua.is_deleted = false
 		WHERE u.cognito_id = $1 
 		  AND u.is_deleted = FALSE
 		  AND (
 			  u.status = 'active'
 			  OR (u.status = 'pending_org_setup' AND u.is_super_admin = true)
-		  );
+		  )
+		GROUP BY u.id, u.cognito_id, u.email, u.first_name, u.last_name, 
+				 u.phone, u.job_title, u.status, u.avatar_url, u.org_id, 
+				 o.name, u.last_selected_location_id, u.is_super_admin;
 `
 
 	dao.Logger.WithFields(logrus.Fields{
 		"cognito_id": cognitoID,
 		"operation":  "GetUserProfile",
-	}).Debug("Fetching user profile from iam.user_summary view")
+	}).Debug("Fetching user profile with new RBAC system")
 
-	row := dao.DB.QueryRow(query, cognitoID)
+	row := dao.DB.QueryRow(userQuery, cognitoID)
 
-	// Initialize profile struct and temporary variable for JSON parsing
+	// Initialize profile struct and variables for RBAC access
 	var profile models.UserProfile
-	var locationsJSON string
+	var accessContexts StringSlice
 
 	// Scan database row into struct fields
 	// Order must match the SELECT statement exactly
@@ -129,15 +133,15 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 		&profile.Email,     // User's email address
 		&profile.FirstName, // Personal information
 		&profile.LastName,
-		&profile.Phone,             // sql.NullString for optional field
-		&profile.JobTitle,          // sql.NullString for optional field
-		&profile.Status,            // Account status (active/inactive/suspended)
-		&profile.AvatarURL,         // sql.NullString for optional field
-		&profile.OrgID,             // Organization identifier
-		&profile.OrgName,           // Organization display name
+		&profile.Phone,                  // sql.NullString for optional field
+		&profile.JobTitle,               // sql.NullString for optional field
+		&profile.Status,                 // Account status (active/inactive/suspended)
+		&profile.AvatarURL,              // sql.NullString for optional field
+		&profile.OrgID,                  // Organization identifier
+		&profile.OrgName,                // Organization display name
 		&profile.LastSelectedLocationID, // sql.NullString for optional last selected location
-		&profile.IsSuperAdmin,      // SuperAdmin role flag
-		&locationsJSON,             // JSON string to be parsed into []Location
+		&profile.IsSuperAdmin,           // SuperAdmin role flag
+		&accessContexts,                 // Access contexts array for RBAC
 	)
 
 	// Handle database errors with proper classification
@@ -160,41 +164,126 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 		return nil, fmt.Errorf("error fetching user profile: %w", err)
 	}
 
-	// Parse locations JSON into structured data
-	// Locations contain nested roles data for each location the user has access to
-	if locationsJSON != "" && locationsJSON != "null" {
-		if err := json.Unmarshal([]byte(locationsJSON), &profile.Locations); err != nil {
-			// JSON parsing error - log but don't fail the entire request
-			// This allows users to login even if locations data is corrupted
+	// Step 2: Fetch accessible locations based on RBAC contexts
+	if len(accessContexts) > 0 {
+		// Build location query based on access contexts
+		locationQuery := `
+			SELECT DISTINCT 
+				l.id, l.name, l.location_type,
+				COUNT(DISTINCT p.id) as project_count
+			FROM iam.locations l
+			LEFT JOIN project.projects p ON l.id = p.location_id AND p.is_deleted = false
+			WHERE (
+		`
+		
+		var queryConditions []string
+		var queryArgs []interface{}
+		argIndex := 1
+		
+		// Parse access contexts and build query conditions
+		hasOrg := false
+		var projectIds []int64
+		var locationIds []int64
+		
+		for _, context := range accessContexts {
+			parts := strings.Split(context, ":")
+			if len(parts) == 2 {
+				contextType := parts[0]
+				contextId := parts[1]
+				
+				switch contextType {
+				case "ORG":
+					hasOrg = true
+					queryConditions = append(queryConditions, fmt.Sprintf("l.org_id = $%d", argIndex))
+					queryArgs = append(queryArgs, contextId)
+					argIndex++
+				case "LOC":
+					locationIds = append(locationIds, parseInt64(contextId))
+				case "PROJ":
+					projectIds = append(projectIds, parseInt64(contextId))
+				}
+			}
+		}
+		
+		// Add location IDs condition
+		if len(locationIds) > 0 {
+			queryConditions = append(queryConditions, fmt.Sprintf("l.id = ANY($%d::bigint[])", argIndex))
+			queryArgs = append(queryArgs, locationIds)
+			argIndex++
+		}
+		
+		// Add project-based location access
+		if len(projectIds) > 0 {
+			queryConditions = append(queryConditions, fmt.Sprintf("p.id = ANY($%d::bigint[])", argIndex))
+			queryArgs = append(queryArgs, projectIds)
+			argIndex++
+		}
+		
+		if len(queryConditions) > 0 {
+			locationQuery += strings.Join(queryConditions, " OR ")
+		} else {
+			locationQuery += "1=0" // No access
+		}
+		
+		locationQuery += `
+			) AND l.is_deleted = false
+			GROUP BY l.id, l.name, l.location_type
+			ORDER BY l.name;
+		`
+		
+		// Execute location query
+		rows, err := dao.DB.Query(locationQuery, queryArgs...)
+		if err != nil {
 			dao.Logger.WithFields(logrus.Fields{
-				"cognito_id":     cognitoID,
-				"operation":      "GetUserProfile",
-				"locations_json": locationsJSON,
-				"error":          err.Error(),
-			}).Warn("Error parsing locations JSON, using empty locations array")
+				"cognito_id": cognitoID,
+				"error":      err.Error(),
+			}).Error("Error fetching user locations")
 			profile.Locations = []models.UserLocation{}
+		} else {
+			defer rows.Close()
+			
+			var locations []models.UserLocation
+			for rows.Next() {
+				var loc models.UserLocation
+				var projectCount int
+				if err := rows.Scan(&loc.ID, &loc.Name, &loc.LocationType, &projectCount); err != nil {
+					dao.Logger.WithFields(logrus.Fields{
+						"cognito_id": cognitoID,
+						"error":      err.Error(),
+					}).Warn("Error scanning location row")
+					continue
+				}
+				locations = append(locations, loc)
+			}
+			profile.Locations = locations
 		}
 	} else {
-		// No locations data or null - initialize empty array
+		// No access contexts - empty locations
 		profile.Locations = []models.UserLocation{}
 	}
 
 	// Log successful profile fetch
-	if dao.Logger.IsLevelEnabled(logrus.DebugLevel) {
-		dao.Logger.WithFields(logrus.Fields{
-			"user_id":         profile.UserID,
-			"cognito_id":      profile.CognitoID,
-			"email":           profile.Email,
-			"org_id":          profile.OrgID,
-			"org_name":        profile.OrgName,
-			"status":          profile.Status,
-			"isSuperAdmin":    profile.IsSuperAdmin,
-			"locations_count": len(profile.Locations),
-			"operation":       "GetUserProfile",
-		}).Debug("Successfully fetched user profile")
-	}
+	dao.Logger.WithFields(logrus.Fields{
+		"user_id":         profile.UserID,
+		"cognito_id":      profile.CognitoID,
+		"email":           profile.Email,
+		"org_id":          profile.OrgID,
+		"org_name":        profile.OrgName,
+		"status":          profile.Status,
+		"isSuperAdmin":    profile.IsSuperAdmin,
+		"locations_count": len(profile.Locations),
+		"operation":       "GetUserProfile",
+	}).Debug("Successfully fetched user profile")
 
 	return &profile, nil
+}
+
+// parseInt64 safely converts string to int64, returns 0 on error
+func parseInt64(s string) int64 {
+	if val, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return val
+	}
+	return 0
 }
 
 // StringSlice is a custom type for handling PostgreSQL array values.

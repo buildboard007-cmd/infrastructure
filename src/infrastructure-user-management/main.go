@@ -50,7 +50,8 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 		return api.ErrorResponse(http.StatusUnauthorized, "Authentication failed", logger), nil
 	}
 
-	if !claims.IsSuperAdmin {
+	// Check authorization based on the endpoint being accessed
+	if request.Resource != "/users/{userId}/location" && !claims.IsSuperAdmin {
 		logger.WithField("user_id", claims.UserID).Warn("User is not a super admin")
 		return api.ErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage users", logger), nil
 	}
@@ -72,6 +73,10 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 		// Handle password reset requests via PATCH /users/{userId}/reset-password
 		if request.PathParameters["userId"] != "" && request.Resource == "/users/{userId}/reset-password" {
 			return handlePasswordReset(ctx, request, claims), nil
+		}
+		// Handle location update requests via PATCH /users/{userId}/location
+		if request.PathParameters["userId"] != "" && request.Resource == "/users/{userId}/location" {
+			return handleLocationUpdate(ctx, request, claims), nil
 		}
 		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
 	default:
@@ -207,6 +212,61 @@ func handlePasswordReset(ctx context.Context, request events.APIGatewayProxyRequ
 	}
 
 	return api.SuccessResponse(http.StatusOK, map[string]string{"message": "Password reset email sent successfully"}, logger)
+}
+
+// handleLocationUpdate handles PATCH /users/{userId}/location
+func handleLocationUpdate(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) events.APIGatewayProxyResponse {
+	userID, err := strconv.ParseInt(request.PathParameters["userId"], 10, 64)
+	if err != nil {
+		logger.WithError(err).Error("Invalid user ID")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid user ID", logger)
+	}
+
+	var locationRequest struct {
+		LocationID int64 `json:"location_id" binding:"required"`
+	}
+
+	if err := json.Unmarshal([]byte(request.Body), &locationRequest); err != nil {
+		logger.WithError(err).Error("Invalid request body for location update")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
+	}
+
+	// For location updates, users can update their own location or super admins can update any user's location
+	if !claims.IsSuperAdmin && claims.UserID != userID {
+		logger.WithField("user_id", claims.UserID).Warn("User attempting to update another user's location")
+		return api.ErrorResponse(http.StatusForbidden, "Forbidden: You can only update your own location", logger)
+	}
+
+	// Verify the user exists and belongs to the same organization
+	existingUser, err := userRepository.GetUserByID(ctx, userID, claims.OrgID)
+	if err != nil {
+		logger.WithError(err).Error("Failed to get user for location update")
+		return api.ErrorResponse(http.StatusNotFound, "User not found", logger)
+	}
+
+	// Create partial user update with only location change
+	userUpdate := &models.User{
+		LastSelectedLocationID: sql.NullInt64{Int64: locationRequest.LocationID, Valid: true},
+	}
+
+	// Update user with location change
+	updatedUser, err := userRepository.UpdateUser(ctx, userID, claims.OrgID, userUpdate, claims.UserID)
+	if err != nil {
+		logger.WithError(err).Error("Failed to update user location")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update location", logger)
+	}
+
+	logger.WithFields(logrus.Fields{
+		"user_id":     userID,
+		"location_id": locationRequest.LocationID,
+		"updated_by":  claims.UserID,
+	}).Info("User location updated successfully")
+
+	return api.SuccessResponse(http.StatusOK, map[string]interface{}{
+		"message":     "Location updated successfully",
+		"user_id":     updatedUser.ID,
+		"location_id": updatedUser.LastSelectedLocationID.Int64,
+	}, logger)
 }
 
 func main() {

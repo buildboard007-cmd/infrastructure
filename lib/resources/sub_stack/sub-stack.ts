@@ -286,6 +286,13 @@ export class SubStack extends NestedStack {
         });
         // CORS handled at API Gateway level
 
+        // Create /users/{userId}/location resource for location selection updates
+        const userLocationResource = userIdResource.addResource('location');
+        userLocationResource.addMethod('PATCH', userManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
         // Add issue management routes
         // Create /projects/{projectId}/issues resource for issue management
         const projectIssuesResource = projectIdResource.addResource('issues');
@@ -364,14 +371,14 @@ export class SubStack extends NestedStack {
 
         // Create /rfis/{rfiId}/submit resource for submitting RFI
         const rfiSubmitResource = rfiIdResource.addResource('submit');
-        rfiSubmitResource.addMethod('PATCH', rfiManagementIntegration, {
+        rfiSubmitResource.addMethod('POST', rfiManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
         // CORS handled at API Gateway level
 
         // Create /rfis/{rfiId}/respond resource for responding to RFI
         const rfiRespondResource = rfiIdResource.addResource('respond');
-        rfiRespondResource.addMethod('PATCH', rfiManagementIntegration, {
+        rfiRespondResource.addMethod('POST', rfiManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
         // CORS handled at API Gateway level

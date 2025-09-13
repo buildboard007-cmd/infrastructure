@@ -1,0 +1,37 @@
+{
+  "name": "mcp-postgres-construction-server",
+  "version": "1.0.0",
+  "description": "MCP Server for AWS PostgreSQL Construction Management Database",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "postgresql",
+    "construction",
+    "database",
+    "aws"
+  ],
+  "author": "BuildBoard Construction Management",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.4.0",
+    "pg": "^8.11.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.10.9",
+    "@types/prettier": "^2.7.3",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

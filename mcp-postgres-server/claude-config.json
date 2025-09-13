@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "postgres-construction": {
+      "command": "node",
+      "args": ["/Users/mayur/git_personal/infrastructure/mcp-postgres-server/dist/index.js"],
+      "env": {
+        "DATABASE_HOST": "appdb.cdwmaay8wkw4.us-east-2.rds.amazonaws.com",
+        "DATABASE_PORT": "5432",
+        "DATABASE_NAME": "appdb",
+        "DATABASE_USER": "appdb_admin",
+        "DATABASE_PASSWORD": "India2025!!",
+        "DATABASE_SSL": "true"
+      }
+    }
+  }
+}
