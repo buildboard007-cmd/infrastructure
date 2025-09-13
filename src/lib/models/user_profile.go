@@ -26,8 +26,9 @@ type LocationRole struct {
 //
 // Database mapping: iam.location table + associated roles via iam.user_location_role
 type UserLocation struct {
-	LocationID   int64  `json:"location_id"`               // Primary key from iam.location.location_id
-	LocationName string `json:"location_name"`             // Human-readable location name
+	ID           int64  `json:"id"`                        // Primary key from iam.location.id
+	Name         string `json:"name"`                      // Human-readable location name
+	LocationType string `json:"location_type"`             // Location type (office, warehouse, job_site, yard)
 	Address      string `json:"address,omitempty"`         // Optional physical address
 	Roles        []LocationRole `json:"roles"`                     // All roles this user has at this location
 }
@@ -48,26 +49,26 @@ type UserLocation struct {
 // Database mapping: iam.user_summary view (aggregates users, organization, locations, roles)
 type UserProfile struct {
 	// Core Identity
-	UserID    string `json:"user_id" db:"user_id"`         // Internal user ID (auto-incrementing)
-	CognitoID string `json:"cognito_id" db:"cognito_id"`   // AWS Cognito sub UUID (unique identifier)
-	Email     string `json:"email" db:"email"`             // User's email (must match Cognito email)
-	
+	UserID    sql.NullString `json:"user_id" db:"user_id"`         // Internal user ID (auto-incrementing)
+	CognitoID sql.NullString `json:"cognito_id" db:"cognito_id"`   // AWS Cognito sub UUID (unique identifier)
+	Email     sql.NullString `json:"email" db:"email"`             // User's email (must match Cognito email)
+
 	// Personal Information
-	FirstName string         `json:"first_name" db:"first_name"`   // User's first name
-	LastName  string         `json:"last_name" db:"last_name"`     // User's last name
+	FirstName sql.NullString `json:"first_name" db:"first_name"`   // User's first name
+	LastName  sql.NullString `json:"last_name" db:"last_name"`     // User's last name
 	Phone     sql.NullString `json:"phone" db:"phone"`             // Optional contact phone number
 	JobTitle  sql.NullString `json:"job_title" db:"job_title"`     // Optional professional title
 	AvatarURL sql.NullString `json:"avatar_url" db:"avatar_url"`   // Optional profile photo URL
-	
+
 	// Account Status
-	Status string `json:"status" db:"status"`             // Account status: 'active', 'inactive', 'suspended'
+	Status sql.NullString `json:"status" db:"status"`             // Account status: 'active', 'inactive', 'suspended'
 	
 	// Role Information
 	IsSuperAdmin bool `json:"is_super_admin" db:"is_super_admin"` // SuperAdmin role flag
 	
 	// Organizational Context
-	OrgID   string `json:"org_id" db:"org_id"`           // Organization ID this user belongs to
-	OrgName string `json:"org_name" db:"org_name"`       // Organization name for display
+	OrgID   sql.NullString `json:"org_id" db:"org_id"`           // Organization ID this user belongs to
+	OrgName sql.NullString `json:"org_name" db:"org_name"`       // Organization name for display
 	
 	// Location Context
 	LastSelectedLocationID sql.NullString   `json:"last_selected_location_id" db:"last_selected_location_id"` // User's last selected location for UI
@@ -76,7 +77,22 @@ type UserProfile struct {
 
 // GetFullName returns the user's full name as "FirstName LastName"
 func (u *UserProfile) GetFullName() string {
-	return u.FirstName + " " + u.LastName
+	firstName := ""
+	if u.FirstName.Valid {
+		firstName = u.FirstName.String
+	}
+	lastName := ""
+	if u.LastName.Valid {
+		lastName = u.LastName.String
+	}
+	if firstName != "" && lastName != "" {
+		return firstName + " " + lastName
+	} else if firstName != "" {
+		return firstName
+	} else if lastName != "" {
+		return lastName
+	}
+	return ""
 }
 
 // GetAllRoles returns all unique role names across all locations for this user
@@ -110,7 +126,7 @@ func (u *UserProfile) HasRole(roleName string) bool {
 // HasRoleAtLocation checks if the user has a specific role at a specific location
 func (u *UserProfile) HasRoleAtLocation(roleName string, locationID int64) bool {
 	for _, location := range u.Locations {
-		if location.LocationID == locationID {
+		if location.ID == locationID {
 			for _, role := range location.Roles {
 				if role.RoleName == roleName {
 					return true

@@ -190,22 +190,38 @@ func Handler(ctx context.Context, event events.CognitoEventUserPoolsPreTokenGenV
 	// Activate pending users on successful authentication
 	// When a user with "pending" status successfully authenticates (after changing temporary password),
 	// automatically update their status to "active" since they've completed the setup process
-	if userProfile.Status == "pending" && event.TriggerSource == "TokenGeneration_Authentication" {
-		userID, err := strconv.ParseInt(userProfile.UserID, 10, 64)
+	currentStatus := ""
+	if userProfile.Status.Valid {
+		currentStatus = userProfile.Status.String
+	}
+	if currentStatus == "pending" && event.TriggerSource == "TokenGeneration_Authentication" {
+		// Handle nullable UserID field
+		userIDStr := ""
+		if userProfile.UserID.Valid {
+			userIDStr = userProfile.UserID.String
+		}
+
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
 			logger.WithFields(logrus.Fields{
 				"cognito_id": cognitoID,
-				"user_id":    userProfile.UserID,
+				"user_id":    userIDStr,
 				"operation":  "Handler",
 				"error":      err.Error(),
 			}).Error("Failed to parse user ID for activation")
 		} else {
-			orgID, err := strconv.ParseInt(userProfile.OrgID, 10, 64)
+			// Handle nullable OrgID field
+			orgIDStr := ""
+			if userProfile.OrgID.Valid {
+				orgIDStr = userProfile.OrgID.String
+			}
+
+			orgID, err := strconv.ParseInt(orgIDStr, 10, 64)
 			if err != nil {
 				logger.WithFields(logrus.Fields{
 					"cognito_id": cognitoID,
-					"user_id":    userProfile.UserID,
-					"org_id":     userProfile.OrgID,
+					"user_id":    userIDStr,
+					"org_id":     orgIDStr,
 					"operation":  "Handler",
 					"error":      err.Error(),
 				}).Error("Failed to parse org ID for activation")
@@ -216,20 +232,20 @@ func Handler(ctx context.Context, event events.CognitoEventUserPoolsPreTokenGenV
 				if err != nil {
 					logger.WithFields(logrus.Fields{
 						"cognito_id": cognitoID,
-						"user_id":    userProfile.UserID,
-						"org_id":     userProfile.OrgID,
+						"user_id":    userIDStr,
+						"org_id":     orgIDStr,
 						"operation":  "Handler",
 						"error":      err.Error(),
 					}).Error("Failed to activate user, proceeding with token generation")
 				} else {
 					logger.WithFields(logrus.Fields{
 						"cognito_id": cognitoID,
-						"user_id":    userProfile.UserID,
-						"org_id":     userProfile.OrgID,
+						"user_id":    userIDStr,
+						"org_id":     orgIDStr,
 						"operation":  "Handler",
 					}).Info("Successfully activated pending user on first login")
 					// Update the profile status for token generation
-					userProfile.Status = "active"
+					userProfile.Status = sql.NullString{String: "active", Valid: true}
 				}
 			}
 		}
@@ -428,8 +444,18 @@ func buildCustomClaims(profile *models.UserProfile) (*CustomClaims, error) {
 	}
 	locationsEncoded := base64.StdEncoding.EncodeToString(locationsJSON)
 
+	// Handle nullable first/last names
+	firstName := ""
+	if profile.FirstName.Valid {
+		firstName = profile.FirstName.String
+	}
+	lastName := ""
+	if profile.LastName.Valid {
+		lastName = profile.LastName.String
+	}
+
 	// Compute full name by combining first and last name with proper spacing
-	fullName := strings.TrimSpace(profile.FirstName + " " + profile.LastName)
+	fullName := strings.TrimSpace(firstName + " " + lastName)
 
 	// Handle nullable database fields by converting sql.NullString to regular strings
 	// JWT claims must be strings, not complex types
@@ -453,20 +479,56 @@ func buildCustomClaims(profile *models.UserProfile) (*CustomClaims, error) {
 		lastSelectedLocationID = profile.LastSelectedLocationID.String
 	}
 
+	// Handle nullable UserID field
+	userID := ""
+	if profile.UserID.Valid {
+		userID = profile.UserID.String
+	}
+
+	// Handle nullable OrgID field
+	orgID := ""
+	if profile.OrgID.Valid {
+		orgID = profile.OrgID.String
+	}
+
+	// Handle nullable OrgName field
+	orgName := ""
+	if profile.OrgName.Valid {
+		orgName = profile.OrgName.String
+	}
+
+	// Handle nullable CognitoID field
+	cognitoID := ""
+	if profile.CognitoID.Valid {
+		cognitoID = profile.CognitoID.String
+	}
+
+	// Handle nullable Email field
+	email := ""
+	if profile.Email.Valid {
+		email = profile.Email.String
+	}
+
+	// Handle nullable Status field
+	status := ""
+	if profile.Status.Valid {
+		status = profile.Status.String
+	}
+
 	// Build and return the complete custom claims structure
 	return &CustomClaims{
-		UserID:            profile.UserID,    // Internal database identifier
-		CognitoID:         profile.CognitoID, // AWS Cognito UUID
-		Email:             profile.Email,     // User's email address
-		FirstName:         profile.FirstName, // Personal information
-		LastName:          profile.LastName,
+		UserID:            userID,       // Internal database identifier
+		CognitoID:         cognitoID,    // AWS Cognito UUID
+		Email:             email,        // User's email address
+		FirstName:         firstName, // Personal information
+		LastName:          lastName,
 		FullName:          fullName,             // Computed convenience field
 		Phone:             phone,                // Optional contact information
 		JobTitle:          jobTitle,             // Optional professional title
-		Status:            profile.Status,       // Account status (active/inactive/suspended)
+		Status:            status,               // Account status (active/inactive/suspended)
 		AvatarURL:         avatarURL,            // Optional profile photo
-		OrgID:             profile.OrgID,        // Organization identifier
-		OrgName:           profile.OrgName,      // Organization display name
+		OrgID:             orgID,                // Organization identifier
+		OrgName:           orgName,              // Organization display name
 		LastSelectedLocationID: lastSelectedLocationID, // User's last selected location ID
 		IsSuperAdmin:      profile.IsSuperAdmin, // SuperAdmin role flag from database
 		Locations:         locationsEncoded,     // Base64 encoded JSON of all locations with roles

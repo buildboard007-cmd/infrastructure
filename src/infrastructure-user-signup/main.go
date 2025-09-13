@@ -253,7 +253,7 @@ func processSuperAdminSignup(tx *sql.Tx, request *SignupRequest) error {
 	// Create organization with NULL name - will be set during org setup
 	err := tx.QueryRow(`
 		INSERT INTO iam.organizations (name, org_type, status, created_by, updated_by)
-		VALUES (NULL, NULL, 'pending', 1, 1)
+		VALUES (NULL, NULL, 'pending_setup', 1, 1)
 		RETURNING id
 	`).Scan(&orgID)
 

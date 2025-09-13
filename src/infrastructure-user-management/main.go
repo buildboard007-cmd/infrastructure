@@ -238,7 +238,7 @@ func handleLocationUpdate(ctx context.Context, request events.APIGatewayProxyReq
 	}
 
 	// Verify the user exists and belongs to the same organization
-	existingUser, err := userRepository.GetUserByID(ctx, userID, claims.OrgID)
+	_, err = userRepository.GetUserByID(ctx, userID, claims.OrgID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get user for location update")
 		return api.ErrorResponse(http.StatusNotFound, "User not found", logger)
@@ -264,7 +264,7 @@ func handleLocationUpdate(ctx context.Context, request events.APIGatewayProxyReq
 
 	return api.SuccessResponse(http.StatusOK, map[string]interface{}{
 		"message":     "Location updated successfully",
-		"user_id":     updatedUser.ID,
+		"user_id":     updatedUser.UserID,
 		"location_id": updatedUser.LastSelectedLocationID.Int64,
 	}, logger)
 }

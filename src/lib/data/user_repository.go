@@ -14,7 +14,6 @@ package data
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"infrastructure/lib/models"
 	"strconv"
@@ -181,7 +180,6 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 		argIndex := 1
 		
 		// Parse access contexts and build query conditions
-		hasOrg := false
 		var projectIds []int64
 		var locationIds []int64
 		
@@ -193,7 +191,6 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 				
 				switch contextType {
 				case "ORG":
-					hasOrg = true
 					queryConditions = append(queryConditions, fmt.Sprintf("l.org_id = $%d", argIndex))
 					queryArgs = append(queryArgs, contextId)
 					argIndex++
