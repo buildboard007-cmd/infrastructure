@@ -152,8 +152,8 @@ func handleUpdateUser(ctx context.Context, request events.APIGatewayProxyRequest
 	// Convert to User model for repository
 	user := &models.User{
 		Email:             updateRequest.Email,
-		FirstName:         updateRequest.FirstName,
-		LastName:          updateRequest.LastName,
+		FirstName:         sql.NullString{String: updateRequest.FirstName, Valid: updateRequest.FirstName != ""},
+		LastName:          sql.NullString{String: updateRequest.LastName, Valid: updateRequest.LastName != ""},
 		Phone:             sql.NullString{String: updateRequest.Phone, Valid: updateRequest.Phone != ""},
 		Mobile:            sql.NullString{String: updateRequest.Mobile, Valid: updateRequest.Mobile != ""},
 		JobTitle:          sql.NullString{String: updateRequest.JobTitle, Valid: updateRequest.JobTitle != ""},

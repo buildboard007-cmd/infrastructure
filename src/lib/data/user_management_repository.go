@@ -425,14 +425,14 @@ func (dao *UserManagementDao) UpdateUser(ctx context.Context, userID, orgID int6
 	}
 
 	// Update other fields if provided
-	if user.FirstName != "" {
+	if user.FirstName.Valid && user.FirstName.String != "" {
 		updateFields = append(updateFields, fmt.Sprintf("first_name = $%d", paramIndex))
-		updateValues = append(updateValues, user.FirstName)
+		updateValues = append(updateValues, user.FirstName.String)
 		paramIndex++
 	}
-	if user.LastName != "" {
+	if user.LastName.Valid && user.LastName.String != "" {
 		updateFields = append(updateFields, fmt.Sprintf("last_name = $%d", paramIndex))
-		updateValues = append(updateValues, user.LastName)
+		updateValues = append(updateValues, user.LastName.String)
 		paramIndex++
 	}
 	if user.Phone.Valid || user.Phone.String != "" {

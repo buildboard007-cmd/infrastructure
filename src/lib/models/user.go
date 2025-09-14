@@ -11,8 +11,8 @@ type User struct {
 	UserID                 int64          `json:"user_id"`                             // Primary key from iam.users.id
 	CognitoID              string         `json:"cognito_id"`                          // AWS Cognito sub UUID
 	Email                  string         `json:"email"`                               // User's email (must match Cognito email)
-	FirstName              string         `json:"first_name"`                          // User's first name
-	LastName               string         `json:"last_name"`                           // User's last name
+	FirstName              sql.NullString `json:"first_name"`                          // User's first name
+	LastName               sql.NullString `json:"last_name"`                           // User's last name
 	Phone                  sql.NullString `json:"phone,omitempty"`                     // Optional contact phone number
 	Mobile                 sql.NullString `json:"mobile,omitempty"`                    // Optional mobile phone number
 	JobTitle               sql.NullString `json:"job_title,omitempty"`                 // Optional professional title
@@ -106,7 +106,18 @@ const (
 
 // GetFullName returns the user's full name
 func (u *User) GetFullName() string {
-	return u.FirstName + " " + u.LastName
+	firstName := ""
+	if u.FirstName.Valid {
+		firstName = u.FirstName.String
+	}
+	lastName := ""
+	if u.LastName.Valid {
+		lastName = u.LastName.String
+	}
+	if firstName == "" && lastName == "" {
+		return ""
+	}
+	return firstName + " " + lastName
 }
 
 // IsActive returns true if user status is active
@@ -144,13 +155,20 @@ func (u *User) MarshalJSON() ([]byte, error) {
 		UserID:       u.UserID,
 		CognitoID:    u.CognitoID,
 		Email:        u.Email,
-		FirstName:    u.FirstName,
-		LastName:     u.LastName,
+		FirstName:    "",
+		LastName:     "",
 		Status:       u.Status,
 		IsSuperAdmin: u.IsSuperAdmin,
 		OrgID:        u.OrgID,
 		CreatedAt:    u.CreatedAt,
 		UpdatedAt:    u.UpdatedAt,
+	}
+
+	if u.FirstName.Valid {
+		userJSON.FirstName = u.FirstName.String
+	}
+	if u.LastName.Valid {
+		userJSON.LastName = u.LastName.String
 	}
 
 	if u.Phone.Valid {

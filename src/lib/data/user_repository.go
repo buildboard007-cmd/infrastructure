@@ -106,6 +106,7 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 		  AND u.is_deleted = FALSE
 		  AND (
 			  u.status = 'active'
+			  OR u.status = 'pending'
 			  OR (u.status = 'pending_org_setup' AND u.is_super_admin = true)
 		  )
 		GROUP BY u.id, u.cognito_id, u.email, u.first_name, u.last_name, 
