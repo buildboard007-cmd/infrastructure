@@ -109,9 +109,9 @@ export class SubStack extends NestedStack {
         locationIdResource.addMethod('PUT', locationManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        locationIdResource.addMethod('DELETE', locationManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // locationIdResource.addMethod('DELETE', locationManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /roles resource with Cognito authorization
@@ -132,9 +132,9 @@ export class SubStack extends NestedStack {
         roleIdResource.addMethod('PUT', rolesManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        roleIdResource.addMethod('DELETE', rolesManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // roleIdResource.addMethod('DELETE', rolesManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /roles/{id}/permissions resource for role-permission management
@@ -142,9 +142,9 @@ export class SubStack extends NestedStack {
         rolePermissionsResource.addMethod('POST', rolesManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        rolePermissionsResource.addMethod('DELETE', rolesManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // rolePermissionsResource.addMethod('DELETE', rolesManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /permissions resource with Cognito authorization
@@ -165,9 +165,9 @@ export class SubStack extends NestedStack {
         permissionIdResource.addMethod('PUT', permissionsManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        permissionIdResource.addMethod('DELETE', permissionsManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // permissionIdResource.addMethod('DELETE', permissionsManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /projects resource with Cognito authorization
@@ -188,33 +188,11 @@ export class SubStack extends NestedStack {
         projectIdResource.addMethod('PUT', projectManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        projectIdResource.addMethod('DELETE', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // projectIdResource.addMethod('DELETE', projectManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
-        // Create /projects/{projectId}/managers resource for project manager management
-        const projectManagersResource = projectIdResource.addResource('managers');
-        projectManagersResource.addMethod('GET', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        projectManagersResource.addMethod('POST', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // CORS handled at API Gateway level
-
-        // Create /projects/{projectId}/managers/{managerId} resource for specific manager operations
-        const projectManagerIdResource = projectManagersResource.addResource('{managerId}');
-        projectManagerIdResource.addMethod('GET', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        projectManagerIdResource.addMethod('PUT', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        projectManagerIdResource.addMethod('DELETE', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // CORS handled at API Gateway level
 
         // Create /projects/{projectId}/attachments resource for project attachment management
         const projectAttachmentsResource = projectIdResource.addResource('attachments');
@@ -231,9 +209,9 @@ export class SubStack extends NestedStack {
         projectAttachmentIdResource.addMethod('GET', projectManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        projectAttachmentIdResource.addMethod('DELETE', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // projectAttachmentIdResource.addMethod('DELETE', projectManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /projects/{projectId}/users resource for project user role management
@@ -251,9 +229,9 @@ export class SubStack extends NestedStack {
         projectUserAssignmentIdResource.addMethod('PUT', projectManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        projectUserAssignmentIdResource.addMethod('DELETE', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // projectUserAssignmentIdResource.addMethod('DELETE', projectManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /users resource with Cognito authorization
@@ -274,9 +252,9 @@ export class SubStack extends NestedStack {
         userIdResource.addMethod('PUT', userManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        userIdResource.addMethod('DELETE', userManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // userIdResource.addMethod('DELETE', userManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /users/{userId}/reset-password resource for password reset
@@ -289,6 +267,14 @@ export class SubStack extends NestedStack {
         // Create /users/{userId}/location resource for location selection updates
         const userLocationResource = userIdResource.addResource('location');
         userLocationResource.addMethod('PATCH', userManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
+        // Create /users/{userId}/selected-location/{locationId} resource for setting user's selected location preference
+        const userSelectedLocationResource = userIdResource.addResource('selected-location');
+        const userSelectedLocationIdResource = userSelectedLocationResource.addResource('{locationId}');
+        userSelectedLocationIdResource.addMethod('PUT', userManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
         // CORS handled at API Gateway level
@@ -319,9 +305,9 @@ export class SubStack extends NestedStack {
         issueIdResource.addMethod('PUT', issueManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        issueIdResource.addMethod('DELETE', issueManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // issueIdResource.addMethod('DELETE', issueManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /issues/{issueId}/status resource for status-only updates
@@ -357,9 +343,9 @@ export class SubStack extends NestedStack {
         rfiIdResource.addMethod('PUT', rfiManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        rfiIdResource.addMethod('DELETE', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // rfiIdResource.addMethod('DELETE', rfiManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /rfis/{rfiId}/status resource for status-only updates
@@ -412,9 +398,9 @@ export class SubStack extends NestedStack {
         rfiAttachmentIdResource.addMethod('GET', rfiManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        rfiAttachmentIdResource.addMethod('DELETE', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // rfiAttachmentIdResource.addMethod('DELETE', rfiManagementIntegration, {
+        //     authorizer: cognitoAuthorizer
+        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
         // Create /rfis/{rfiId}/comments resource for RFI comment management

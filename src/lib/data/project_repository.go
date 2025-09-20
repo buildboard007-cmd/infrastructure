@@ -20,14 +20,8 @@ type ProjectRepository interface {
 	GetProjectsByLocationID(ctx context.Context, locationID, orgID int64) ([]models.Project, error)
 	GetProjectByID(ctx context.Context, projectID, orgID int64) (*models.Project, error)
 	UpdateProject(ctx context.Context, projectID, orgID int64, project *models.UpdateProjectRequest, userID int64) (*models.Project, error)
-	DeleteProject(ctx context.Context, projectID, orgID int64, userID int64) error
 	
 	// Project Manager operations
-	CreateProjectManager(ctx context.Context, projectID int64, manager *models.CreateProjectManagerRequest, userID int64) (*models.ProjectManager, error)
-	GetProjectManagersByProject(ctx context.Context, projectID int64) ([]models.ProjectManager, error)
-	GetProjectManagerByID(ctx context.Context, managerID, projectID int64) (*models.ProjectManager, error)
-	UpdateProjectManager(ctx context.Context, managerID, projectID int64, manager *models.UpdateProjectManagerRequest, userID int64) (*models.ProjectManager, error)
-	DeleteProjectManager(ctx context.Context, managerID, projectID int64, userID int64) error
 	
 	// Project Attachment operations
 	CreateProjectAttachment(ctx context.Context, projectID int64, attachment *models.CreateProjectAttachmentRequest, userID int64) (*models.ProjectAttachment, error)
@@ -518,50 +512,175 @@ func (dao *ProjectDao) GetProjectByID(ctx context.Context, projectID, orgID int6
 	return &project, nil
 }
 
-// UpdateProject updates an existing project
+// UpdateProject updates an existing project using same structure as CreateProjectRequest
 func (dao *ProjectDao) UpdateProject(ctx context.Context, projectID, orgID int64, request *models.UpdateProjectRequest, userID int64) (*models.Project, error) {
 	// Build dynamic update query based on provided fields
 	setParts := []string{}
 	args := []interface{}{}
 	argIndex := 1
 
+	// Handle LocationID
 	if request.LocationID != 0 {
 		setParts = append(setParts, fmt.Sprintf("location_id = $%d", argIndex))
 		args = append(args, request.LocationID)
 		argIndex++
 	}
-	
-	if request.ProjectNumber != "" {
-		setParts = append(setParts, fmt.Sprintf("project_number = $%d", argIndex))
-		args = append(args, request.ProjectNumber)
-		argIndex++
-	}
-	
-	if request.Name != "" {
+
+	// Handle BasicInfo fields
+	if request.BasicInfo.Name != "" {
 		setParts = append(setParts, fmt.Sprintf("name = $%d", argIndex))
-		args = append(args, request.Name)
-		argIndex++
-	}
-	
-	if request.Description != "" {
-		setParts = append(setParts, fmt.Sprintf("description = $%d", argIndex))
-		args = append(args, request.Description)
-		argIndex++
-	}
-	
-	if request.ProjectType != "" {
-		setParts = append(setParts, fmt.Sprintf("project_type = $%d", argIndex))
-		args = append(args, request.ProjectType)
-		argIndex++
-	}
-	
-	if request.Status != "" {
-		setParts = append(setParts, fmt.Sprintf("status = $%d", argIndex))
-		args = append(args, request.Status)
+		args = append(args, request.BasicInfo.Name)
 		argIndex++
 	}
 
-	// Always update updated_by and updated_at
+	if request.BasicInfo.Description != "" {
+		setParts = append(setParts, fmt.Sprintf("description = $%d", argIndex))
+		args = append(args, sql.NullString{String: request.BasicInfo.Description, Valid: true})
+		argIndex++
+	}
+
+	// Handle ProjectDetails fields
+	if request.ProjectDetails.ProjectStage != "" {
+		setParts = append(setParts, fmt.Sprintf("project_stage = $%d", argIndex))
+		args = append(args, sql.NullString{String: request.ProjectDetails.ProjectStage, Valid: true})
+		argIndex++
+	}
+
+	if request.ProjectDetails.WorkScope != "" {
+		setParts = append(setParts, fmt.Sprintf("work_scope = $%d", argIndex))
+		args = append(args, sql.NullString{String: request.ProjectDetails.WorkScope, Valid: true})
+		argIndex++
+	}
+
+	if request.ProjectDetails.ProjectSector != "" {
+		setParts = append(setParts, fmt.Sprintf("project_sector = $%d", argIndex))
+		args = append(args, sql.NullString{String: request.ProjectDetails.ProjectSector, Valid: true})
+		argIndex++
+
+		// Also update project_type to match project_sector for consistency
+		setParts = append(setParts, fmt.Sprintf("project_type = $%d", argIndex))
+		args = append(args, request.ProjectDetails.ProjectSector)
+		argIndex++
+	}
+
+	if request.ProjectDetails.DeliveryMethod != "" {
+		setParts = append(setParts, fmt.Sprintf("delivery_method = $%d", argIndex))
+		args = append(args, sql.NullString{String: request.ProjectDetails.DeliveryMethod, Valid: true})
+		argIndex++
+	}
+
+	if request.ProjectDetails.SquareFootage != 0 {
+		setParts = append(setParts, fmt.Sprintf("square_footage = $%d", argIndex))
+		args = append(args, sql.NullInt64{Int64: request.ProjectDetails.SquareFootage, Valid: request.ProjectDetails.SquareFootage > 0})
+		argIndex++
+	}
+
+	if request.ProjectDetails.Language != "" {
+		// Map language similar to create
+		language := "en" // Default
+		switch strings.ToLower(request.ProjectDetails.Language) {
+		case "english":
+			language = "en"
+		case "spanish":
+			language = "es"
+		case "french":
+			language = "fr"
+		default:
+			if len(request.ProjectDetails.Language) == 2 {
+				language = request.ProjectDetails.Language
+			}
+		}
+		setParts = append(setParts, fmt.Sprintf("language = $%d", argIndex))
+		args = append(args, language)
+		argIndex++
+	}
+
+	if request.ProjectDetails.Status != "" {
+		setParts = append(setParts, fmt.Sprintf("status = $%d", argIndex))
+		args = append(args, request.ProjectDetails.Status)
+		argIndex++
+	}
+
+	// Handle Location fields
+	if request.Location.Address != "" {
+		setParts = append(setParts, fmt.Sprintf("address = $%d", argIndex))
+		args = append(args, sql.NullString{String: request.Location.Address, Valid: true})
+		argIndex++
+	}
+
+	if request.Location.City != "" {
+		setParts = append(setParts, fmt.Sprintf("city = $%d", argIndex))
+		args = append(args, sql.NullString{String: request.Location.City, Valid: true})
+		argIndex++
+	}
+
+	if request.Location.State != "" {
+		setParts = append(setParts, fmt.Sprintf("state = $%d", argIndex))
+		args = append(args, sql.NullString{String: request.Location.State, Valid: true})
+		argIndex++
+	}
+
+	if request.Location.ZipCode != "" {
+		setParts = append(setParts, fmt.Sprintf("zip_code = $%d", argIndex))
+		args = append(args, sql.NullString{String: request.Location.ZipCode, Valid: true})
+		argIndex++
+	}
+
+	if request.Location.Country != "" {
+		setParts = append(setParts, fmt.Sprintf("country = $%d", argIndex))
+		args = append(args, request.Location.Country)
+		argIndex++
+	}
+
+	// Handle Timeline fields
+	if request.Timeline.StartDate != "" {
+		if startDate, err := time.Parse("2006-01-02", request.Timeline.StartDate); err == nil {
+			setParts = append(setParts, fmt.Sprintf("start_date = $%d", argIndex))
+			args = append(args, sql.NullTime{Time: startDate, Valid: true})
+			argIndex++
+		}
+	}
+
+	if request.Timeline.SubstantialCompletionDate != "" {
+		if t, err := time.Parse("2006-01-02", request.Timeline.SubstantialCompletionDate); err == nil {
+			setParts = append(setParts, fmt.Sprintf("substantial_completion_date = $%d", argIndex))
+			args = append(args, sql.NullTime{Time: t, Valid: true})
+			argIndex++
+		}
+	}
+
+	if request.Timeline.ProjectFinishDate != "" {
+		if t, err := time.Parse("2006-01-02", request.Timeline.ProjectFinishDate); err == nil {
+			setParts = append(setParts, fmt.Sprintf("project_finish_date = $%d", argIndex))
+			args = append(args, sql.NullTime{Time: t, Valid: true})
+			argIndex++
+		}
+	}
+
+	if request.Timeline.WarrantyStartDate != "" {
+		if t, err := time.Parse("2006-01-02", request.Timeline.WarrantyStartDate); err == nil {
+			setParts = append(setParts, fmt.Sprintf("warranty_start_date = $%d", argIndex))
+			args = append(args, sql.NullTime{Time: t, Valid: true})
+			argIndex++
+		}
+	}
+
+	if request.Timeline.WarrantyEndDate != "" {
+		if t, err := time.Parse("2006-01-02", request.Timeline.WarrantyEndDate); err == nil {
+			setParts = append(setParts, fmt.Sprintf("warranty_end_date = $%d", argIndex))
+			args = append(args, sql.NullTime{Time: t, Valid: true})
+			argIndex++
+		}
+	}
+
+	// Handle Financial fields
+	if request.Financial.Budget != 0 {
+		setParts = append(setParts, fmt.Sprintf("budget = $%d", argIndex))
+		args = append(args, sql.NullFloat64{Float64: request.Financial.Budget, Valid: request.Financial.Budget > 0})
+		argIndex++
+	}
+
+	// Always update updated_by
 	setParts = append(setParts, fmt.Sprintf("updated_by = $%d", argIndex))
 	args = append(args, userID)
 	argIndex++
@@ -575,7 +694,7 @@ func (dao *ProjectDao) UpdateProject(ctx context.Context, projectID, orgID int64
 	}
 
 	query := fmt.Sprintf(`
-		UPDATE project.projects 
+		UPDATE project.projects
 		SET %s
 		%s
 		RETURNING id, org_id, location_id, project_number, name, description, project_type,
@@ -584,8 +703,8 @@ func (dao *ProjectDao) UpdateProject(ctx context.Context, projectID, orgID int64
 		          substantial_completion_date, project_finish_date, warranty_start_date, warranty_end_date,
 		          budget, contract_value, square_footage, address, city, state, zip_code,
 		          country, language, latitude, longitude, status, created_at, created_by, updated_at, updated_by
-	`, 
-		setParts[0]+", "+setParts[1:][0], // Join SET parts with commas
+	`,
+		strings.Join(setParts, ", "),
 		whereClause,
 	)
 
@@ -628,259 +747,7 @@ func (dao *ProjectDao) UpdateProject(ctx context.Context, projectID, orgID int64
 	return &project, nil
 }
 
-// DeleteProject deletes a project (soft delete)
-func (dao *ProjectDao) DeleteProject(ctx context.Context, projectID, orgID int64, userID int64) error {
-	result, err := dao.DB.ExecContext(ctx, `
-		UPDATE project.projects 
-		SET is_deleted = TRUE, updated_by = $1
-		WHERE id = $2 AND org_id = $3 AND is_deleted = FALSE
-	`, userID, projectID, orgID)
 
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"project_id": projectID,
-			"org_id":     orgID,
-			"error":      err.Error(),
-		}).Error("Failed to delete project")
-		return fmt.Errorf("failed to delete project: %w", err)
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		dao.Logger.WithFields(logrus.Fields{
-			"project_id": projectID,
-			"org_id":     orgID,
-		}).Warn("Project not found for deletion")
-		return fmt.Errorf("project not found")
-	}
-
-	dao.Logger.WithFields(logrus.Fields{
-		"project_id": projectID,
-		"org_id":     orgID,
-	}).Info("Successfully deleted project")
-
-	return nil
-}
-
-// CreateProjectManager creates a new project manager
-func (dao *ProjectDao) CreateProjectManager(ctx context.Context, projectID int64, request *models.CreateProjectManagerRequest, userID int64) (*models.ProjectManager, error) {
-	var managerID int64
-	var createdAt, updatedAt time.Time
-	
-	officeContact := sql.NullString{String: request.OfficeContact, Valid: request.OfficeContact != ""}
-	mobileContact := sql.NullString{String: request.MobileContact, Valid: request.MobileContact != ""}
-
-	query := `
-		INSERT INTO project.project_managers (
-			project_id, name, company, role, email, office_contact, mobile_contact, is_primary, created_by, updated_by
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING id, created_at, updated_at
-	`
-
-	err := dao.DB.QueryRowContext(ctx, query,
-		projectID, request.Name, request.Company, request.Role, request.Email,
-		officeContact, mobileContact, request.IsPrimary, userID, userID,
-	).Scan(&managerID, &createdAt, &updatedAt)
-
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"project_id": projectID,
-			"name":       request.Name,
-			"error":      err.Error(),
-		}).Error("Failed to create project manager")
-		return nil, fmt.Errorf("failed to create project manager: %w", err)
-	}
-
-	return &models.ProjectManager{
-		ID:            managerID,
-		ProjectID:     projectID,
-		Name:          request.Name,
-		Company:       request.Company,
-		Role:          request.Role,
-		Email:         request.Email,
-		OfficeContact: officeContact,
-		MobileContact: mobileContact,
-		IsPrimary:     request.IsPrimary,
-		CreatedAt:     createdAt,
-		CreatedBy:     userID,
-		UpdatedAt:     updatedAt,
-		UpdatedBy:     userID,
-	}, nil
-}
-
-// GetProjectManagersByProject retrieves all project managers for a project
-func (dao *ProjectDao) GetProjectManagersByProject(ctx context.Context, projectID int64) ([]models.ProjectManager, error) {
-	query := `
-		SELECT id, project_id, name, company, role, email, office_contact, mobile_contact, 
-		       is_primary, created_at, created_by, updated_at, updated_by
-		FROM project.project_managers
-		WHERE project_id = $1 AND is_deleted = FALSE
-		ORDER BY is_primary DESC, created_at ASC
-	`
-
-	rows, err := dao.DB.QueryContext(ctx, query, projectID)
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"project_id": projectID,
-			"error":      err.Error(),
-		}).Error("Failed to query project managers")
-		return nil, fmt.Errorf("failed to query project managers: %w", err)
-	}
-	defer rows.Close()
-
-	var managers []models.ProjectManager
-	for rows.Next() {
-		var manager models.ProjectManager
-		err := rows.Scan(
-			&manager.ID, &manager.ProjectID, &manager.Name, &manager.Company, &manager.Role,
-			&manager.Email, &manager.OfficeContact, &manager.MobileContact, &manager.IsPrimary,
-			&manager.CreatedAt, &manager.CreatedBy, &manager.UpdatedAt, &manager.UpdatedBy,
-		)
-		if err != nil {
-			dao.Logger.WithError(err).Error("Failed to scan project manager row")
-			return nil, fmt.Errorf("failed to scan project manager: %w", err)
-		}
-		managers = append(managers, manager)
-	}
-
-	return managers, nil
-}
-
-// GetProjectManagerByID retrieves a specific project manager by ID
-func (dao *ProjectDao) GetProjectManagerByID(ctx context.Context, managerID, projectID int64) (*models.ProjectManager, error) {
-	var manager models.ProjectManager
-	query := `
-		SELECT id, project_id, name, company, role, email, office_contact, mobile_contact, 
-		       is_primary, created_at, created_by, updated_at, updated_by
-		FROM project.project_managers
-		WHERE id = $1 AND project_id = $2 AND is_deleted = FALSE
-	`
-
-	err := dao.DB.QueryRowContext(ctx, query, managerID, projectID).Scan(
-		&manager.ID, &manager.ProjectID, &manager.Name, &manager.Company, &manager.Role,
-		&manager.Email, &manager.OfficeContact, &manager.MobileContact, &manager.IsPrimary,
-		&manager.CreatedAt, &manager.CreatedBy, &manager.UpdatedAt, &manager.UpdatedBy,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("project manager not found")
-	}
-
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"manager_id": managerID,
-			"project_id": projectID,
-			"error":      err.Error(),
-		}).Error("Failed to get project manager")
-		return nil, fmt.Errorf("failed to get project manager: %w", err)
-	}
-
-	return &manager, nil
-}
-
-// UpdateProjectManager updates an existing project manager
-func (dao *ProjectDao) UpdateProjectManager(ctx context.Context, managerID, projectID int64, request *models.UpdateProjectManagerRequest, userID int64) (*models.ProjectManager, error) {
-	// Build dynamic update query based on provided fields
-	setParts := []string{}
-	args := []interface{}{}
-	argIndex := 1
-
-	if request.Name != "" {
-		setParts = append(setParts, fmt.Sprintf("name = $%d", argIndex))
-		args = append(args, request.Name)
-		argIndex++
-	}
-	
-	if request.Company != "" {
-		setParts = append(setParts, fmt.Sprintf("company = $%d", argIndex))
-		args = append(args, request.Company)
-		argIndex++
-	}
-	
-	if request.Role != "" {
-		setParts = append(setParts, fmt.Sprintf("role = $%d", argIndex))
-		args = append(args, request.Role)
-		argIndex++
-	}
-	
-	if request.Email != "" {
-		setParts = append(setParts, fmt.Sprintf("email = $%d", argIndex))
-		args = append(args, request.Email)
-		argIndex++
-	}
-
-	// Always update updated_by
-	setParts = append(setParts, fmt.Sprintf("updated_by = $%d", argIndex))
-	args = append(args, userID)
-	argIndex++
-
-	// Add WHERE clause parameters
-	args = append(args, managerID, projectID)
-	whereClause := fmt.Sprintf("WHERE id = $%d AND project_id = $%d AND is_deleted = FALSE", argIndex, argIndex+1)
-
-	if len(setParts) == 1 { // Only updated_by was set
-		return nil, fmt.Errorf("no fields to update")
-	}
-
-	query := fmt.Sprintf(`
-		UPDATE project.project_managers 
-		SET %s
-		%s
-		RETURNING id, project_id, name, company, role, email, office_contact, mobile_contact, 
-		          is_primary, created_at, created_by, updated_at, updated_by
-	`, 
-		setParts[0]+", "+setParts[1:][0], // Join SET parts with commas
-		whereClause,
-	)
-
-	var manager models.ProjectManager
-	err := dao.DB.QueryRowContext(ctx, query, args...).Scan(
-		&manager.ID, &manager.ProjectID, &manager.Name, &manager.Company, &manager.Role,
-		&manager.Email, &manager.OfficeContact, &manager.MobileContact, &manager.IsPrimary,
-		&manager.CreatedAt, &manager.CreatedBy, &manager.UpdatedAt, &manager.UpdatedBy,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("project manager not found")
-	}
-
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"manager_id": managerID,
-			"project_id": projectID,
-			"error":      err.Error(),
-		}).Error("Failed to update project manager")
-		return nil, fmt.Errorf("failed to update project manager: %w", err)
-	}
-
-	return &manager, nil
-}
-
-// DeleteProjectManager deletes a project manager (soft delete)
-func (dao *ProjectDao) DeleteProjectManager(ctx context.Context, managerID, projectID int64, userID int64) error {
-	result, err := dao.DB.ExecContext(ctx, `
-		UPDATE project.project_managers 
-		SET is_deleted = TRUE, updated_by = $1
-		WHERE id = $2 AND project_id = $3 AND is_deleted = FALSE
-	`, userID, managerID, projectID)
-
-	if err != nil {
-		dao.Logger.WithFields(logrus.Fields{
-			"manager_id": managerID,
-			"project_id": projectID,
-			"error":      err.Error(),
-		}).Error("Failed to delete project manager")
-		return fmt.Errorf("failed to delete project manager: %w", err)
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return fmt.Errorf("project manager not found")
-	}
-
-	return nil
-}
 
 // CreateProjectAttachment creates a new project attachment
 func (dao *ProjectDao) CreateProjectAttachment(ctx context.Context, projectID int64, request *models.CreateProjectAttachmentRequest, userID int64) (*models.ProjectAttachment, error) {
@@ -1145,13 +1012,13 @@ func (dao *ProjectDao) UpdateProjectUserRole(ctx context.Context, assignmentID, 
 	}
 
 	query := fmt.Sprintf(`
-		UPDATE project.project_user_roles 
+		UPDATE project.project_user_roles
 		SET %s
 		%s
 		RETURNING id, project_id, user_id, role_id, trade_type, is_primary, start_date, end_date,
 		          created_at, created_by, updated_at, updated_by
-	`, 
-		setParts[0]+", "+setParts[1:][0], // Join SET parts with commas
+	`,
+		strings.Join(setParts, ", "), // Properly join SET parts with commas
 		whereClause,
 	)
 

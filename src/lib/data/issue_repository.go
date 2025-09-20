@@ -14,21 +14,21 @@ import (
 
 // IssueRepository defines the interface for issue data operations
 type IssueRepository interface {
-	// CreateIssue creates a new issue in the project
-	CreateIssue(ctx context.Context, projectID, userID int64, issue *models.CreateIssueRequest) (*models.IssueResponse, error)
-	
+	// CreateIssue creates a new issue in the project (unified structure, orgID from JWT)
+	CreateIssue(ctx context.Context, projectID, userID, orgID int64, issue *models.CreateIssueRequest) (*models.IssueResponse, error)
+
 	// GetIssueByID retrieves a specific issue by ID
 	GetIssueByID(ctx context.Context, issueID int64) (*models.IssueResponse, error)
-	
+
 	// GetIssuesByProject retrieves all issues for a specific project
 	GetIssuesByProject(ctx context.Context, projectID int64, filters map[string]string) ([]models.IssueResponse, error)
-	
-	// UpdateIssue updates an existing issue
-	UpdateIssue(ctx context.Context, issueID, userID int64, updateReq *models.UpdateIssueRequest) (*models.IssueResponse, error)
-	
+
+	// UpdateIssue updates an existing issue (unified structure)
+	UpdateIssue(ctx context.Context, issueID, userID, orgID int64, updateReq *models.UpdateIssueRequest) (*models.IssueResponse, error)
+
 	// DeleteIssue soft deletes an issue
 	DeleteIssue(ctx context.Context, issueID, userID int64) error
-	
+
 	// UpdateIssueStatus updates only the status of an issue
 	UpdateIssueStatus(ctx context.Context, issueID, userID int64, status string) error
 }
@@ -71,8 +71,24 @@ func (dao *IssueDao) generateIssueNumber(ctx context.Context, projectID int64, c
 	return fmt.Sprintf("%s-%s-%04d", projectCode, categoryPrefix, count), nil
 }
 
-// CreateIssue creates a new issue in the project
-func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, req *models.CreateIssueRequest) (*models.IssueResponse, error) {
+// CreateIssue creates a new issue in the project with unified structure
+func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID, orgID int64, req *models.CreateIssueRequest) (*models.IssueResponse, error) {
+	// Validate project belongs to organization
+	var projectOrgID int64
+	err := dao.DB.QueryRowContext(ctx, `
+		SELECT org_id FROM project.projects
+		WHERE id = $1 AND is_deleted = FALSE
+	`, projectID).Scan(&projectOrgID)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate project: %w", err)
+	}
+	if projectOrgID != orgID {
+		return nil, fmt.Errorf("project does not belong to your organization")
+	}
 	// Handle template ID (not in current request structure)
 	var templateID sql.NullInt64
 	// Start transaction
@@ -83,21 +99,36 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 	}
 	defer tx.Rollback()
 	
-	// Generate issue number
+	// Generate issue number using the flatter structure
 	issueNumber, err := dao.generateIssueNumber(ctx, projectID, req.Category)
 	if err != nil {
 		dao.Logger.WithError(err).Error("Failed to generate issue number")
 		return nil, err
 	}
-	
-	// Set defaults
-	if req.Priority == "" {
-		req.Priority = models.IssuePriorityMedium
+
+	// Set defaults from flatter structure
+	priority := req.Priority
+	if priority == "" {
+		priority = models.IssuePriorityMedium
 	}
-	// Set default severity (not in current request structure)
-	severity := models.IssueSeverityMinor
+	severity := req.Severity
+	if severity == "" {
+		severity = models.IssueSeverityMinor
+	}
+
+	// Get location_id from project if not provided in request
+	locationID := req.LocationID
+	if locationID == 0 {
+		err = dao.DB.QueryRowContext(ctx, `
+			SELECT location_id FROM project.projects
+			WHERE id = $1
+		`, projectID).Scan(&locationID)
+		if err != nil {
+			dao.Logger.WithError(err).Warn("Failed to get location ID from project")
+		}
+	}
 	
-	// Parse due date if provided
+	// Parse due date from flatter structure
 	var dueDate *time.Time
 	if req.DueDate != "" {
 		parsedDate, err := time.Parse("2006-01-02", req.DueDate)
@@ -106,8 +137,8 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 		}
 		dueDate = &parsedDate
 	}
-	
-	// Handle assigned to (now it's a user ID)
+
+	// Handle assigned to from flatter structure
 	var assignedToID sql.NullInt64
 	if req.AssignedTo != 0 {
 		assignedToID = sql.NullInt64{Int64: req.AssignedTo, Valid: true}
@@ -117,7 +148,7 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 	var issueID int64
 	var createdAt, updatedAt time.Time
 	
-	// Map issue type from issue_category
+	// Map issue type from issue_category in flatter structure
 	issueType := "general"
 	if req.IssueCategory != "" {
 		switch req.IssueCategory {
@@ -125,15 +156,19 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 			issueType = req.IssueCategory
 		}
 	}
-	
-	// Handle coordinates
+
+	// Handle coordinates from unified structure
 	var locationX, locationY sql.NullFloat64
 	var latitude, longitude sql.NullFloat64
 	if req.Location.Coordinates != nil {
 		locationX = sql.NullFloat64{Float64: req.Location.Coordinates.X, Valid: true}
 		locationY = sql.NullFloat64{Float64: req.Location.Coordinates.Y, Valid: true}
-		// Don't store drawing coordinates as lat/long - they are different scales
-		// latitude/longitude fields should remain null for drawing coordinates
+	}
+
+	// Handle GPS coordinates from flatter structure
+	if req.Location.GPSCoordinates != nil {
+		latitude = sql.NullFloat64{Float64: req.Location.GPSCoordinates.Latitude, Valid: true}
+		longitude = sql.NullFloat64{Float64: req.Location.GPSCoordinates.Longitude, Valid: true}
 	}
 	
 	err = tx.QueryRowContext(ctx, `
@@ -175,7 +210,7 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 		projectID, issueNumber, templateID,
 		req.Title, req.Description,
 		issueType, sql.NullString{String: req.IssueCategory, Valid: req.IssueCategory != ""}, sql.NullString{String: req.DetailCategory, Valid: req.DetailCategory != ""},
-		req.Priority, severity,
+		priority, severity,
 		sql.NullString{String: req.RootCause, Valid: req.RootCause != ""},
 		sql.NullString{String: req.Location.Description, Valid: req.Location.Description != ""},
 		sql.NullString{String: req.Location.Building, Valid: req.Location.Building != ""},
@@ -184,8 +219,8 @@ func (dao *IssueDao) CreateIssue(ctx context.Context, projectID, userID int64, r
 		locationX, locationY,
 		sql.NullString{String: req.Location.Room, Valid: req.Location.Room != ""}, // room_area = room for now
 		sql.NullString{String: req.Location.Level, Valid: req.Location.Level != ""}, // floor_level = level for now
-		sql.NullString{}, // discipline not in current request
-		sql.NullString{}, // trade not in current request
+		sql.NullString{String: req.Discipline, Valid: req.Discipline != ""}, // discipline from flatter structure
+		sql.NullString{String: req.Trade, Valid: req.Trade != ""}, // trade from flatter structure
 		userID, assignedToID, sql.NullInt64{}, // assigned_company_id not in request for now
 		sql.NullString{}, sql.NullString{}, // drawing_reference, specification_reference not in request
 		dueDate, pq.Array(req.DistributionList),
@@ -628,55 +663,77 @@ func (dao *IssueDao) GetIssuesByProject(ctx context.Context, projectID int64, fi
 }
 
 // UpdateIssue updates an existing issue
-func (dao *IssueDao) UpdateIssue(ctx context.Context, issueID, userID int64, req *models.UpdateIssueRequest) (*models.IssueResponse, error) {
-	// Build dynamic update query
+func (dao *IssueDao) UpdateIssue(ctx context.Context, issueID, userID, orgID int64, req *models.UpdateIssueRequest) (*models.IssueResponse, error) {
+	// First validate that issue exists and belongs to user's organization
+	var projectID, projectOrgID int64
+	err := dao.DB.QueryRowContext(ctx, `
+		SELECT p.id, p.org_id
+		FROM project.issues i
+		JOIN project.projects p ON i.project_id = p.id
+		WHERE i.id = $1 AND i.is_deleted = FALSE AND p.is_deleted = FALSE
+	`, issueID).Scan(&projectID, &projectOrgID)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("issue not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate issue: %w", err)
+	}
+	if projectOrgID != orgID {
+		return nil, fmt.Errorf("issue does not belong to your organization")
+	}
+
+	// Build dynamic update query using flatter structure
 	setParts := []string{"updated_by = $1", "updated_at = CURRENT_TIMESTAMP"}
 	args := []interface{}{userID}
 	argIndex := 2
-	
+
+	// Handle basic info from flatter structure
 	if req.Title != "" {
 		setParts = append(setParts, fmt.Sprintf("title = $%d", argIndex))
 		args = append(args, req.Title)
 		argIndex++
 	}
-	
+
 	if req.Description != "" {
 		setParts = append(setParts, fmt.Sprintf("description = $%d", argIndex))
 		args = append(args, req.Description)
 		argIndex++
 	}
-	
+
+	// Handle classification from flatter structure
 	if req.Category != "" {
 		setParts = append(setParts, fmt.Sprintf("category = $%d", argIndex))
 		args = append(args, req.Category)
 		argIndex++
 	}
-	
+
 	if req.DetailCategory != "" {
 		setParts = append(setParts, fmt.Sprintf("detail_category = $%d", argIndex))
 		args = append(args, req.DetailCategory)
 		argIndex++
 	}
-	
+
 	if req.Priority != "" {
 		setParts = append(setParts, fmt.Sprintf("priority = $%d", argIndex))
 		args = append(args, req.Priority)
 		argIndex++
 	}
-	
+
 	if req.Severity != "" {
 		setParts = append(setParts, fmt.Sprintf("severity = $%d", argIndex))
 		args = append(args, req.Severity)
 		argIndex++
 	}
-	
+
 	if req.RootCause != "" {
 		setParts = append(setParts, fmt.Sprintf("root_cause = $%d", argIndex))
 		args = append(args, req.RootCause)
 		argIndex++
 	}
-	
-	if req.Location != nil {
+
+	// Handle location (nested object)
+	if req.Location.Description != "" {
 		setParts = append(setParts, fmt.Sprintf("location_description = $%d", argIndex))
 		args = append(args, req.Location.Description)
 		argIndex++
@@ -708,43 +765,39 @@ func (dao *IssueDao) UpdateIssue(ctx context.Context, issueID, userID int64, req
 			args = append(args, req.Location.Coordinates.Y)
 			argIndex++
 		}
+
+		// Handle GPS coordinates
+		if req.Location.GPSCoordinates != nil {
+			setParts = append(setParts, fmt.Sprintf("latitude = $%d", argIndex))
+			args = append(args, req.Location.GPSCoordinates.Latitude)
+			argIndex++
+
+			setParts = append(setParts, fmt.Sprintf("longitude = $%d", argIndex))
+			args = append(args, req.Location.GPSCoordinates.Longitude)
+			argIndex++
+		}
 	}
-	
+
 	if req.Discipline != "" {
 		setParts = append(setParts, fmt.Sprintf("discipline = $%d", argIndex))
 		args = append(args, req.Discipline)
 		argIndex++
 	}
-	
+
 	if req.Trade != "" {
 		setParts = append(setParts, fmt.Sprintf("trade_type = $%d", argIndex))
 		args = append(args, req.Trade)
 		argIndex++
 	}
-	
-	if req.AssignedTo != "" {
-		// Parse assigned to
-		var assignedToID sql.NullInt64
-		var assignedUserID int64
-		_, err := fmt.Sscanf(req.AssignedTo, "%d", &assignedUserID)
-		if err == nil {
-			assignedToID = sql.NullInt64{Int64: assignedUserID, Valid: true}
-		} else {
-			// Try to find user by email
-			err = dao.DB.QueryRowContext(ctx, `
-				SELECT id FROM iam.users 
-				WHERE email = $1 AND is_deleted = FALSE
-			`, req.AssignedTo).Scan(&assignedUserID)
-			if err == nil {
-				assignedToID = sql.NullInt64{Int64: assignedUserID, Valid: true}
-			}
-		}
-		
+
+	if req.AssignedTo != 0 {
+		// Handle assigned to as int64 from flatter structure
+		assignedToID := sql.NullInt64{Int64: req.AssignedTo, Valid: true}
 		setParts = append(setParts, fmt.Sprintf("assigned_to = $%d", argIndex))
 		args = append(args, assignedToID)
 		argIndex++
 	}
-	
+
 	if req.DueDate != "" {
 		parsedDate, err := time.Parse("2006-01-02", req.DueDate)
 		if err != nil {
@@ -783,7 +836,7 @@ func (dao *IssueDao) UpdateIssue(ctx context.Context, issueID, userID int64, req
 	`, strings.Join(setParts, ", "), argIndex)
 	
 	var updatedAt time.Time
-	err := dao.DB.QueryRowContext(ctx, query, args...).Scan(&updatedAt)
+	err = dao.DB.QueryRowContext(ctx, query, args...).Scan(&updatedAt)
 	
 	if err == sql.ErrNoRows {
 		dao.Logger.WithField("issue_id", issueID).Warn("Issue not found for update")

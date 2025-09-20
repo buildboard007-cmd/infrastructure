@@ -300,11 +300,11 @@ func Handler(ctx context.Context, event events.CognitoEventUserPoolsPreTokenGenV
 			ScopesToAdd:           []string{},  // No additional OAuth scopes needed
 			ScopesToSuppress:      []string{},  // Keep all granted scopes
 		},
-		// Group Configuration (maps user roles to Cognito groups for authorization)
+		// Group Configuration (no roles in JWT - handled per-project)
 		GroupOverrideDetails: events.GroupConfigurationV2_0{
-			GroupsToOverride:   extractAllRoles(userProfile.Locations), // User's roles across all locations
-			IAMRolesToOverride: []string{},                             // Not using AWS IAM role mapping
-			PreferredRole:      nil,                                    // No single preferred role
+			GroupsToOverride:   []string{}, // No roles in JWT - fetched per-project when needed
+			IAMRolesToOverride: []string{}, // Not using AWS IAM role mapping
+			PreferredRole:      nil,        // No single preferred role
 		},
 	}
 
@@ -317,7 +317,7 @@ func Handler(ctx context.Context, event events.CognitoEventUserPoolsPreTokenGenV
 			"org_id":          userProfile.OrgID,
 			"org_name":        userProfile.OrgName,
 			"locations_count": len(userProfile.Locations),
-			"roles_count":     len(extractAllRoles(userProfile.Locations)),
+			"roles_count":     0, // No roles in JWT - handled per-project
 			"operation":       "Handler",
 		}).Debug("Successfully added custom claims to token")
 	}
@@ -364,47 +364,9 @@ func isValidTriggerSourceV2(triggerSource string) bool {
 	return false // Unsupported or V1.0 trigger
 }
 
-// extractAllRoles extracts unique role names from all user locations for Cognito groups.
-//
-// Users can have different roles at different locations within their organization.
-// For example:
-//   - "admin" at "New York Office"
-//   - "manager" at "San Francisco Office"
-//   - "employee" at "Remote Team"
-//
-// This function creates a deduplicated list of all roles across all locations,
-// which is then used to populate Cognito groups. This enables:
-//  1. Role-based access control in frontend applications
-//  2. API authorization based on user roles
-//  3. Simplified permission checking (user.hasRole("admin"))
-//
-// Cognito Groups Integration:
-//   - Each unique role becomes a Cognito group
-//   - Users are automatically added to groups based on their database roles
-//   - Groups appear in JWT tokens for authorization logic
-//
-// Deduplication:
-//   - Uses map[string]bool for O(1) duplicate detection
-//   - Preserves role names exactly as stored in database
-//   - Returns deterministic (but unordered) slice of unique roles
-func extractAllRoles(locations []models.UserLocation) []string {
-	// Use map for efficient deduplication of role names
-	roleMap := make(map[string]bool)
-
-	// Iterate through all locations and their associated roles
-	for _, location := range locations {
-		for _, role := range location.Roles {
-			roleMap[role.RoleName] = true // Add to set (duplicates ignored)
-		}
-	}
-
-	// Convert map keys to slice for return
-	roles := make([]string, 0, len(roleMap))
-	for role := range roleMap {
-		roles = append(roles, role)
-	}
-	return roles
-}
+// Note: extractAllRoles function removed - roles are no longer included in JWT tokens.
+// Roles are now fetched per-project when needed, keeping JWT tokens smaller and more focused.
+// Only accessible locations are included in the JWT for better architecture.
 
 // buildCustomClaims transforms UserProfile database model into JWT-compatible CustomClaims.
 //

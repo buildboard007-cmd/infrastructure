@@ -50,7 +50,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Handle different routes
 	switch request.HTTPMethod {
 	case http.MethodPost:
-		// POST /issues - Create new issue (project info in request body)
+		// POST /issues - Create new issue (unified structure, orgID from JWT)
 		if request.Resource == "/issues" {
 			return handleCreateIssue(ctx, claims.UserID, claims.OrgID, request.Body), nil
 		}
@@ -78,7 +78,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
 		
 	case http.MethodPut:
-		// PUT /issues/{issueId} - Update issue
+		// PUT /issues/{issueId} - Update issue (unified structure, orgID from JWT)
 		if strings.Contains(request.Resource, "/issues/{issueId}") {
 			issueID, err := strconv.ParseInt(request.PathParameters["issueId"], 10, 64)
 			if err != nil {
@@ -115,53 +115,40 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 }
 
-// handleCreateIssue handles POST /issues
+// handleCreateIssue handles POST /issues with unified structure and JWT-based orgID
 func handleCreateIssue(ctx context.Context, userID, orgID int64, body string) events.APIGatewayProxyResponse {
+	// Parse unified request structure
 	var createReq models.CreateIssueRequest
 	if err := json.Unmarshal([]byte(body), &createReq); err != nil {
 		logger.WithError(err).Error("Failed to parse create issue request")
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
-	// Validate organization ID matches auth
-	if createReq.OrganizationID != orgID {
-		return api.ErrorResponse(http.StatusForbidden, "Organization ID does not match your organization", logger)
-	}
-	
-	// Validate project belongs to org
-	var projectOrgID int64
-	err := sqlDB.QueryRowContext(ctx, `
-		SELECT org_id FROM project.projects 
-		WHERE id = $1 AND is_deleted = FALSE
-	`, createReq.ProjectID).Scan(&projectOrgID)
-	
-	if err == sql.ErrNoRows {
-		return api.ErrorResponse(http.StatusNotFound, "Project not found", logger)
-	}
-	if err != nil {
-		logger.WithError(err).Error("Failed to validate project")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to validate project", logger)
-	}
-	if projectOrgID != orgID {
-		return api.ErrorResponse(http.StatusForbidden, "Project does not belong to your organization", logger)
-	}
-	
-	// Get location ID from project if not provided
-	if createReq.LocationID == 0 {
-		var locationID int64
-		err = sqlDB.QueryRowContext(ctx, `
-			SELECT location_id FROM project.projects 
-			WHERE id = $1
-		`, createReq.ProjectID).Scan(&locationID)
-		if err != nil {
-			logger.WithError(err).Warn("Failed to get location ID from project")
-		} else {
-			createReq.LocationID = locationID
-		}
+	// Extract project_id from request (should be in request body)
+	projectID := createReq.ProjectID
+	if projectID == 0 {
+		return api.ErrorResponse(http.StatusBadRequest, "Project ID is required", logger)
 	}
 
-	// Create issue
-	issue, err := issueRepository.CreateIssue(ctx, createReq.ProjectID, userID, &createReq)
+	// Validate required fields from flatter structure
+	if createReq.Title == "" {
+		return api.ErrorResponse(http.StatusBadRequest, "Title is required", logger)
+	}
+	if createReq.Description == "" {
+		return api.ErrorResponse(http.StatusBadRequest, "Description is required", logger)
+	}
+	if createReq.Priority == "" {
+		return api.ErrorResponse(http.StatusBadRequest, "Priority is required", logger)
+	}
+	if createReq.AssignedTo == 0 {
+		return api.ErrorResponse(http.StatusBadRequest, "Assigned to is required", logger)
+	}
+	if createReq.DueDate == "" {
+		return api.ErrorResponse(http.StatusBadRequest, "Due date is required", logger)
+	}
+
+	// Create issue using repository with orgID from JWT (validation happens in repository)
+	issue, err := issueRepository.CreateIssue(ctx, projectID, userID, orgID, &createReq)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create issue")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create issue", logger)
@@ -248,38 +235,21 @@ func handleGetIssue(ctx context.Context, issueID, orgID int64) events.APIGateway
 
 // handleUpdateIssue handles PUT /issues/{issueId}
 func handleUpdateIssue(ctx context.Context, issueID, userID, orgID int64, body string) events.APIGatewayProxyResponse {
-	// First check if issue exists and belongs to org
-	issue, err := issueRepository.GetIssueByID(ctx, issueID)
-	if err != nil {
-		if err.Error() == "issue not found" {
-			return api.ErrorResponse(http.StatusNotFound, "Issue not found", logger)
-		}
-		logger.WithError(err).Error("Failed to get issue")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get issue", logger)
-	}
-
-	// Validate issue belongs to org
-	var projectOrgID int64
-	err = sqlDB.QueryRowContext(ctx, `
-		SELECT org_id FROM project.projects 
-		WHERE id = $1 AND is_deleted = FALSE
-	`, issue.ProjectID).Scan(&projectOrgID)
-	
-	if err != nil || projectOrgID != orgID {
-		return api.ErrorResponse(http.StatusForbidden, "Issue does not belong to your organization", logger)
-	}
-
+	// Parse unified request structure
 	var updateReq models.UpdateIssueRequest
 	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
 		logger.WithError(err).Error("Failed to parse update issue request")
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
-	// Update issue
-	updatedIssue, err := issueRepository.UpdateIssue(ctx, issueID, userID, &updateReq)
+	// Update issue using repository with orgID from JWT (validation happens in repository)
+	updatedIssue, err := issueRepository.UpdateIssue(ctx, issueID, userID, orgID, &updateReq)
 	if err != nil {
 		if err.Error() == "issue not found" {
 			return api.ErrorResponse(http.StatusNotFound, "Issue not found", logger)
+		}
+		if err.Error() == "issue does not belong to your organization" {
+			return api.ErrorResponse(http.StatusForbidden, "Issue does not belong to your organization", logger)
 		}
 		logger.WithError(err).Error("Failed to update issue")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update issue", logger)

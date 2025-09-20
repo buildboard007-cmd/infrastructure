@@ -1,0 +1,712 @@
+{
+  "info": {
+    "_postman_id": "project-management-api-collection-001",
+    "name": "Project Management API",
+    "description": "API collection for Project Management service including projects, attachments, and user assignments.\n\n🎯 SERVICE SCOPE:\nThis collection contains only the endpoints that are actually implemented in the project management service:\n- Project CRUD operations (create, read, update, list)\n- Project attachments management\n- Project user role assignments\n\n🚫 EXCLUDED ENDPOINTS:\n- Project Managers (not implemented in the Go service)\n- Issues (part of separate service)\n- RFI Management (part of separate service)\n\n✅ UNIFIED REQUEST FORMAT:\nBoth Create and Update Project use identical nested request structure:\n- basic_info: { name, description }\n- project_details: { project_stage, work_scope, etc. }\n- location: { address, city, state, etc. }\n- timeline: { start_date, completion_date, etc. }\n- financial: { budget }\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure location_id is set before creating projects\n- All dates should use future dates (2025+)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Project (Nested Structure)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Project created with API contract response', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('success');",
+              "    pm.expect(responseJson).to.have.property('message');",
+              "    pm.expect(responseJson).to.have.property('data');",
+              "    pm.expect(responseJson.data).to.have.property('project_id');",
+              "    pm.expect(responseJson.data).to.have.property('project_number');",
+              "    ",
+              "    // Store project_id for other requests",
+              "    pm.globals.set('project_id', responseJson.data.project_id);",
+              "    console.log('Created Project:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"location_id\": {{location_id}},\n    \"basic_info\": {\n        \"name\": \"Downtown Office Complex\",\n        \"description\": \"A modern office complex with sustainable design\"\n    },\n    \"project_details\": {\n        \"project_stage\": \"pre-construction\",\n        \"work_scope\": \"new\",\n        \"project_sector\": \"commercial\",\n        \"delivery_method\": \"design-build\",\n        \"square_footage\": 50000,\n        \"language\": \"en\",\n        \"status\": \"active\"\n    },\n    \"location\": {\n        \"address\": \"123 Business District, Downtown, NY 10001\",\n        \"city\": \"New York\",\n        \"state\": \"NY\",\n        \"zip_code\": \"10001\",\n        \"country\": \"USA\"\n    },\n    \"timeline\": {\n        \"start_date\": \"2025-09-15\",\n        \"substantial_completion_date\": \"2026-12-01\",\n        \"project_finish_date\": \"2027-01-15\"\n    },\n    \"financial\": {\n        \"budget\": 5000000.00\n    }\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Projects (with optional location filter)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has projects array', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('projects');",
+              "    pm.expect(responseJson.projects).to.be.an('array');",
+              "    console.log('Filtered Projects:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects?location_id={{location_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects"
+          ],
+          "query": [
+            {
+              "key": "location_id",
+              "value": "{{location_id}}",
+              "description": "Optional: Filter projects by location ID"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get All Projects",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has projects array', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('projects');",
+              "    pm.expect(responseJson).to.have.property('total');",
+              "    pm.expect(responseJson.projects).to.be.an('array');",
+              "    console.log('Projects:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Project by ID",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has project data', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('project_id');",
+              "    pm.expect(responseJson).to.have.property('name');",
+              "    pm.expect(responseJson).to.have.property('project_number');",
+              "    console.log('Project Details:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update Project (Unified Nested Structure)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Project updated successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('project_id');",
+              "    pm.expect(responseJson).to.have.property('name');",
+              "    console.log('Updated Project:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"location_id\": {{location_id}},\n    \"basic_info\": {\n        \"name\": \"Downtown Office Complex - Updated\",\n        \"description\": \"Updated description for modern office complex with enhanced features\"\n    },\n    \"project_details\": {\n        \"project_stage\": \"course-of-construction\",\n        \"work_scope\": \"new\",\n        \"project_sector\": \"commercial\",\n        \"delivery_method\": \"design-build\",\n        \"square_footage\": 55000,\n        \"language\": \"en\",\n        \"status\": \"active\"\n    },\n    \"location\": {\n        \"address\": \"123 Business District, Downtown, NY 10001 - Updated\",\n        \"city\": \"New York\",\n        \"state\": \"NY\",\n        \"zip_code\": \"10001\",\n        \"country\": \"USA\"\n    },\n    \"timeline\": {\n        \"start_date\": \"2025-09-15\",\n        \"substantial_completion_date\": \"2026-12-15\",\n        \"project_finish_date\": \"2027-02-01\"\n    },\n    \"financial\": {\n        \"budget\": 5500000.00\n    }\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create Project Attachment",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Attachment created successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('file_name');",
+              "    pm.expect(responseJson).to.have.property('project_id');",
+              "    ",
+              "    // Store attachment_id for other requests",
+              "    pm.globals.set('attachment_id', responseJson.id);",
+              "    console.log('Created Attachment:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"file_name\": \"project_blueprint.pdf\",\n    \"file_path\": \"/attachments/projects/blueprint_v1.pdf\",\n    \"file_size\": 2048000,\n    \"file_type\": \"application/pdf\",\n    \"attachment_type\": \"project_photo\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/attachments",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "attachments"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Project Attachments",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has attachments array', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.be.an('array');",
+              "    console.log('Project Attachments:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/attachments",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "attachments"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Project Attachment by ID",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has attachment data', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('file_name');",
+              "    console.log('Attachment Details:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/attachments/{{attachment_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "attachments",
+            "{{attachment_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete Project Attachment",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 204', function () {",
+              "    pm.response.to.have.status(204);",
+              "});",
+              "",
+              "console.log('Project attachment deleted successfully.');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/attachments/{{attachment_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "attachments",
+            "{{attachment_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Assign User to Project",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('User assigned to project successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('project_id');",
+              "    pm.expect(responseJson).to.have.property('user_id');",
+              "    ",
+              "    // Store assignment_id for other requests",
+              "    pm.globals.set('assignment_id', responseJson.id);",
+              "    console.log('User Assignment:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"user_id\": {{user_id}},\n    \"role_id\": {{role_id}},\n    \"trade_type\": \"electrical\",\n    \"is_primary\": true,\n    \"start_date\": \"2024-06-01\",\n    \"end_date\": \"2025-12-31\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/users",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "users"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Project User Roles",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has user roles array', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.be.an('array');",
+              "    console.log('Project User Roles:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/users",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "users"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update Project User Role",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('User role updated successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('project_id');",
+              "    console.log('Updated User Role:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"role_id\": {{role_id}},\n    \"trade_type\": \"plumbing\",\n    \"is_primary\": false,\n    \"end_date\": \"2026-01-31\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/users/{{assignment_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "users",
+            "{{assignment_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Remove User from Project",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 204', function () {",
+              "    pm.response.to.have.status(204);",
+              "});",
+              "",
+              "console.log('User removed from project successfully.');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/users/{{assignment_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "users",
+            "{{assignment_id}}"
+          ]
+        }
+      }
+    }
+  ]
+}

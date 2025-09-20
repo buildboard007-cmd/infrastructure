@@ -20,17 +20,16 @@ type LocationRole struct {
 	Description string `json:"description,omitempty"`     // Optional detailed description of role responsibilities
 }
 
-// UserLocation represents a physical or logical location within an organization with user-specific role information.
-// Users can have different roles at different locations.
+// UserLocation represents a physical or logical location within an organization.
+// This structure contains only location information - roles are handled separately per-project.
 // Examples: 'New York Office', 'Remote Team', 'Manufacturing Plant'
 //
-// Database mapping: iam.location table + associated roles via iam.user_location_role
+// Database mapping: iam.location table
 type UserLocation struct {
 	ID           int64  `json:"id"`                        // Primary key from iam.location.id
 	Name         string `json:"name"`                      // Human-readable location name
 	LocationType string `json:"location_type"`             // Location type (office, warehouse, job_site, yard)
 	Address      string `json:"address,omitempty"`         // Optional physical address
-	Roles        []LocationRole `json:"roles"`                     // All roles this user has at this location
 }
 
 // UserProfile represents the complete user profile aggregated from the iam.user_summary view.
@@ -95,44 +94,31 @@ func (u *UserProfile) GetFullName() string {
 	return ""
 }
 
-// GetAllRoles returns all unique role names across all locations for this user
-func (u *UserProfile) GetAllRoles() []string {
-	roleMap := make(map[string]bool)
+// GetAccessibleLocationIDs returns all location IDs this user can access
+func (u *UserProfile) GetAccessibleLocationIDs() []int64 {
+	locationIDs := make([]int64, 0, len(u.Locations))
 	for _, location := range u.Locations {
-		for _, role := range location.Roles {
-			roleMap[role.RoleName] = true
-		}
+		locationIDs = append(locationIDs, location.ID)
 	}
-	
-	roles := make([]string, 0, len(roleMap))
-	for role := range roleMap {
-		roles = append(roles, role)
-	}
-	return roles
+	return locationIDs
 }
 
-// HasRole checks if the user has a specific role at any location
-func (u *UserProfile) HasRole(roleName string) bool {
-	for _, location := range u.Locations {
-		for _, role := range location.Roles {
-			if role.RoleName == roleName {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// HasRoleAtLocation checks if the user has a specific role at a specific location
-func (u *UserProfile) HasRoleAtLocation(roleName string, locationID int64) bool {
+// HasLocationAccess checks if the user has access to a specific location
+func (u *UserProfile) HasLocationAccess(locationID int64) bool {
 	for _, location := range u.Locations {
 		if location.ID == locationID {
-			for _, role := range location.Roles {
-				if role.RoleName == roleName {
-					return true
-				}
-			}
+			return true
 		}
 	}
 	return false
+}
+
+// GetLocationByID returns the location details if user has access to it
+func (u *UserProfile) GetLocationByID(locationID int64) *UserLocation {
+	for _, location := range u.Locations {
+		if location.ID == locationID {
+			return &location
+		}
+	}
+	return nil
 }

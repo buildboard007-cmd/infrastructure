@@ -51,7 +51,8 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 	}
 
 	// Check authorization based on the endpoint being accessed
-	if request.Resource != "/users/{userId}/location" && !claims.IsSuperAdmin {
+	// Allow any user to update their own selected location, otherwise require super admin
+	if request.Resource != "/users/{userId}/location" && request.Resource != "/user/selected-location/{locationId}" && !claims.IsSuperAdmin {
 		logger.WithField("user_id", claims.UserID).Warn("User is not a super admin")
 		return api.ErrorResponse(http.StatusForbidden, "Forbidden: Only super admins can manage users", logger), nil
 	}
@@ -66,6 +67,10 @@ func LambdaHandler(ctx context.Context, request events.APIGatewayProxyRequest) (
 		}
 		return handleGetUsers(ctx, request, claims), nil
 	case http.MethodPut:
+		// Handle user selected location update via PUT /users/{userId}/selected-location/{locationId}
+		if request.PathParameters["userId"] != "" && request.PathParameters["locationId"] != "" && request.Resource == "/users/{userId}/selected-location/{locationId}" {
+			return handleUserSelectedLocationUpdate(ctx, request, claims), nil
+		}
 		return handleUpdateUser(ctx, request, claims), nil
 	case http.MethodDelete:
 		return handleDeleteUser(ctx, request, claims), nil
@@ -264,6 +269,53 @@ func handleLocationUpdate(ctx context.Context, request events.APIGatewayProxyReq
 
 	return api.SuccessResponse(http.StatusOK, map[string]interface{}{
 		"message":     "Location updated successfully",
+		"user_id":     updatedUser.UserID,
+		"location_id": updatedUser.LastSelectedLocationID.Int64,
+	}, logger)
+}
+
+// handleUserSelectedLocationUpdate handles PUT /user/selected-location/{locationId}
+// Updates the current user's selected location preference (last_selected_location_id)
+func handleUserSelectedLocationUpdate(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) events.APIGatewayProxyResponse {
+	locationID, err := strconv.ParseInt(request.PathParameters["locationId"], 10, 64)
+	if err != nil {
+		logger.WithError(err).Error("Invalid location ID")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid location ID", logger)
+	}
+
+	// Verify the location exists and belongs to the user's organization
+	// (This ensures users can only select locations they have access to)
+	locationRepository := &data.LocationDao{
+		DB:     sqlDB,
+		Logger: logger,
+	}
+
+	_, err = locationRepository.GetLocationByID(ctx, locationID, claims.OrgID)
+	if err != nil {
+		logger.WithError(err).Error("Location not found or not accessible")
+		return api.ErrorResponse(http.StatusNotFound, "Location not found or not accessible", logger)
+	}
+
+	// Update the user's selected location preference
+	userUpdate := &models.User{
+		LastSelectedLocationID: sql.NullInt64{Int64: locationID, Valid: true},
+	}
+
+	// Update the current user's location preference (from JWT token)
+	updatedUser, err := userRepository.UpdateUser(ctx, claims.UserID, claims.OrgID, userUpdate, claims.UserID)
+	if err != nil {
+		logger.WithError(err).Error("Failed to update user's selected location")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update selected location", logger)
+	}
+
+	logger.WithFields(logrus.Fields{
+		"user_id":     claims.UserID,
+		"location_id": locationID,
+		"org_id":      claims.OrgID,
+	}).Info("User selected location updated successfully")
+
+	return api.SuccessResponse(http.StatusOK, map[string]interface{}{
+		"message":     "Selected location updated successfully",
 		"user_id":     updatedUser.UserID,
 		"location_id": updatedUser.LastSelectedLocationID.Int64,
 	}, logger)

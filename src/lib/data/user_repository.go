@@ -164,100 +164,182 @@ func (dao *UserDao) GetUserProfile(cognitoID string) (*models.UserProfile, error
 		return nil, fmt.Errorf("error fetching user profile: %w", err)
 	}
 
-	// Step 2: Fetch accessible locations based on RBAC contexts
-	if len(accessContexts) > 0 {
-		// Build location query based on access contexts
+	// Step 2: Fetch accessible locations based on user type
+	// For super admins: Load ALL locations in their organization
+	// For regular users: Load only locations they have access to via RBAC
+	if profile.IsSuperAdmin {
+		// Super admin: fetch ALL locations in their organization
 		locationQuery := `
-			SELECT DISTINCT 
-				l.id, l.name, l.location_type,
-				COUNT(DISTINCT p.id) as project_count
+			SELECT DISTINCT l.id, l.name, l.location_type
 			FROM iam.locations l
-			LEFT JOIN project.projects p ON l.id = p.location_id AND p.is_deleted = false
-			WHERE (
-		`
-		
-		var queryConditions []string
-		var queryArgs []interface{}
-		argIndex := 1
-		
-		// Parse access contexts and build query conditions
-		var projectIds []int64
-		var locationIds []int64
-		
-		for _, context := range accessContexts {
-			parts := strings.Split(context, ":")
-			if len(parts) == 2 {
-				contextType := parts[0]
-				contextId := parts[1]
-				
-				switch contextType {
-				case "ORG":
-					queryConditions = append(queryConditions, fmt.Sprintf("l.org_id = $%d", argIndex))
-					queryArgs = append(queryArgs, contextId)
-					argIndex++
-				case "LOC":
-					locationIds = append(locationIds, parseInt64(contextId))
-				case "PROJ":
-					projectIds = append(projectIds, parseInt64(contextId))
-				}
-			}
-		}
-		
-		// Add location IDs condition
-		if len(locationIds) > 0 {
-			queryConditions = append(queryConditions, fmt.Sprintf("l.id = ANY($%d::bigint[])", argIndex))
-			queryArgs = append(queryArgs, locationIds)
-			argIndex++
-		}
-		
-		// Add project-based location access
-		if len(projectIds) > 0 {
-			queryConditions = append(queryConditions, fmt.Sprintf("p.id = ANY($%d::bigint[])", argIndex))
-			queryArgs = append(queryArgs, projectIds)
-			argIndex++
-		}
-		
-		if len(queryConditions) > 0 {
-			locationQuery += strings.Join(queryConditions, " OR ")
-		} else {
-			locationQuery += "1=0" // No access
-		}
-		
-		locationQuery += `
-			) AND l.is_deleted = false
-			GROUP BY l.id, l.name, l.location_type
+			WHERE l.org_id = $1 AND l.is_deleted = false
 			ORDER BY l.name;
 		`
-		
-		// Execute location query
-		rows, err := dao.DB.Query(locationQuery, queryArgs...)
+
+		dao.Logger.WithFields(logrus.Fields{
+			"cognito_id": cognitoID,
+			"org_id":     profile.OrgID,
+			"operation":  "GetUserProfile",
+		}).Debug("Fetching all organization locations for super admin")
+
+		rows, err := dao.DB.Query(locationQuery, profile.OrgID)
 		if err != nil {
 			dao.Logger.WithFields(logrus.Fields{
 				"cognito_id": cognitoID,
+				"org_id":     profile.OrgID,
 				"error":      err.Error(),
-			}).Error("Error fetching user locations")
+			}).Error("Error fetching super admin locations")
 			profile.Locations = []models.UserLocation{}
 		} else {
 			defer rows.Close()
-			
+
 			var locations []models.UserLocation
 			for rows.Next() {
 				var loc models.UserLocation
-				var projectCount int
-				if err := rows.Scan(&loc.ID, &loc.Name, &loc.LocationType, &projectCount); err != nil {
+				if err := rows.Scan(&loc.ID, &loc.Name, &loc.LocationType); err != nil {
 					dao.Logger.WithFields(logrus.Fields{
 						"cognito_id": cognitoID,
 						"error":      err.Error(),
 					}).Warn("Error scanning location row")
 					continue
 				}
+				// No roles in location data - roles will be fetched per-project when needed
 				locations = append(locations, loc)
 			}
 			profile.Locations = locations
+
+			dao.Logger.WithFields(logrus.Fields{
+				"cognito_id":     cognitoID,
+				"org_id":         profile.OrgID,
+				"location_count": len(locations),
+				"operation":      "GetUserProfile",
+			}).Debug("Loaded all organization locations for super admin")
+		}
+	} else if len(accessContexts) > 0 {
+		// Regular user: fetch ONLY locations they have access to based on user_assignments
+		// Parse access contexts to determine accessible locations
+		var accessibleLocationIds []int64
+		var hasOrgAccess bool
+
+		for _, context := range accessContexts {
+			parts := strings.Split(context, ":")
+			if len(parts) == 2 {
+				contextType := parts[0]
+				contextIdStr := parts[1]
+
+				switch contextType {
+				case "ORG":
+					// User has organization-level access - gets all locations in org
+					hasOrgAccess = true
+				case "LOC":
+					// User has specific location access
+					if locationId := parseInt64(contextIdStr); locationId > 0 {
+						accessibleLocationIds = append(accessibleLocationIds, locationId)
+					}
+				case "PROJ":
+					// User has project access - need to find the location of this project
+					if projectId := parseInt64(contextIdStr); projectId > 0 {
+						// Get location ID from project
+						var projectLocationId int64
+						projLocationQuery := `SELECT location_id FROM project.projects WHERE id = $1 AND is_deleted = false`
+						err := dao.DB.QueryRow(projLocationQuery, projectId).Scan(&projectLocationId)
+						if err == nil && projectLocationId > 0 {
+							accessibleLocationIds = append(accessibleLocationIds, projectLocationId)
+						}
+					}
+				}
+			}
+		}
+
+		// Build location query based on access level
+		var locationQuery string
+		var queryArgs []interface{}
+
+		if hasOrgAccess {
+			// User has org-level access - get all locations in organization
+			locationQuery = `
+				SELECT DISTINCT l.id, l.name, l.location_type
+				FROM iam.locations l
+				WHERE l.org_id = $1 AND l.is_deleted = false
+				ORDER BY l.name;
+			`
+			queryArgs = []interface{}{profile.OrgID}
+		} else if len(accessibleLocationIds) > 0 {
+			// User has specific location access
+			// Remove duplicates
+			uniqueLocationIds := make(map[int64]bool)
+			var deduplicatedIds []int64
+			for _, id := range accessibleLocationIds {
+				if !uniqueLocationIds[id] {
+					uniqueLocationIds[id] = true
+					deduplicatedIds = append(deduplicatedIds, id)
+				}
+			}
+
+			locationQuery = `
+				SELECT DISTINCT l.id, l.name, l.location_type
+				FROM iam.locations l
+				WHERE l.id = ANY($1::bigint[]) AND l.is_deleted = false
+				ORDER BY l.name;
+			`
+			queryArgs = []interface{}{deduplicatedIds}
+		} else {
+			// User has no location access
+			profile.Locations = []models.UserLocation{}
+			dao.Logger.WithFields(logrus.Fields{
+				"cognito_id": cognitoID,
+				"operation":  "GetUserProfile",
+			}).Debug("User has no location access based on assignments")
+			return &profile, nil
+		}
+
+		dao.Logger.WithFields(logrus.Fields{
+			"cognito_id":      cognitoID,
+			"access_contexts": accessContexts,
+			"has_org_access":  hasOrgAccess,
+			"location_ids":    accessibleLocationIds,
+			"operation":       "GetUserProfile",
+		}).Debug("Fetching accessible locations for regular user")
+
+		// Execute location query
+		rows, err := dao.DB.Query(locationQuery, queryArgs...)
+		if err != nil {
+			dao.Logger.WithFields(logrus.Fields{
+				"cognito_id": cognitoID,
+				"error":      err.Error(),
+			}).Error("Error fetching accessible locations for regular user")
+			profile.Locations = []models.UserLocation{}
+		} else {
+			defer rows.Close()
+
+			var locations []models.UserLocation
+			for rows.Next() {
+				var loc models.UserLocation
+				if err := rows.Scan(&loc.ID, &loc.Name, &loc.LocationType); err != nil {
+					dao.Logger.WithFields(logrus.Fields{
+						"cognito_id": cognitoID,
+						"error":      err.Error(),
+					}).Warn("Error scanning location row")
+					continue
+				}
+				// No roles in location data - roles will be fetched per-project when needed
+				locations = append(locations, loc)
+			}
+			profile.Locations = locations
+
+			dao.Logger.WithFields(logrus.Fields{
+				"cognito_id":     cognitoID,
+				"location_count": len(locations),
+				"operation":      "GetUserProfile",
+			}).Debug("Loaded accessible locations for regular user")
 		}
 	} else {
-		// No access contexts - empty locations
+		// No access contexts and not super admin - empty locations
 		profile.Locations = []models.UserLocation{}
+		dao.Logger.WithFields(logrus.Fields{
+			"cognito_id": cognitoID,
+			"operation":  "GetUserProfile",
+		}).Debug("No accessible locations for user")
 	}
 
 	// Log successful profile fetch

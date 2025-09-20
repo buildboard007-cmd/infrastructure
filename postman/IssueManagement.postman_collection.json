@@ -1,0 +1,739 @@
+{
+  "info": {
+    "_postman_id": "issue-management-api-collection-001",
+    "name": "Issue Management API",
+    "description": "API collection for Issue Management service including issue creation, tracking, updates, and resolution.\n\n🎯 SERVICE SCOPE:\nThis collection contains endpoints that are actually implemented in the issue management service:\n- Issue CRUD operations (create, read, update, delete)\n- Project-specific issue listing\n- Issue status management\n- Assignment and tracking workflows\n\n✅ UNIFIED REQUEST STRUCTURE (v3.0 - UI Compatible):\n- Create Issue: POST /issues (flatter structure with location nested)\n- List Issues: GET /projects/{projectId}/issues (with filters)\n- Get Issue: GET /issues/{issueId} (detailed view)\n- Update Issue: PUT /issues/{issueId} (same structure as create)\n- Update Status: PATCH /issues/{issueId}/status (status only)\n- Delete Issue: DELETE /issues/{issueId} (soft delete)\n\n📋 REQUEST FORMAT (UI Compatible):\n```json\n{\n  \"project_id\": 123,\n  \"issue_category\": \"quality\",\n  \"category\": \"defect\",\n  \"title\": \"Issue Title\",\n  \"description\": \"Issue Description\",\n  \"priority\": \"high\",\n  \"severity\": \"major\",\n  \"location\": {\n    \"description\": \"Location details\",\n    \"coordinates\": { \"x\": 0, \"y\": 0 }\n  },\n  \"assigned_to\": 5,\n  \"due_date\": \"2025-09-30\",\n  \"distribution_list\": [\"email@example.com\"]\n}\n```\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Project validation happens server-side\n- Enhanced data integrity constraints\n\n📋 CATEGORIES & PRIORITIES:\n- Categories: safety, quality, schedule, cost, design, other\n- Priorities: critical, high, medium, low, planned\n- Severities: blocking, major, minor, cosmetic\n- Statuses: open, in_progress, ready_for_review, closed, rejected, on_hold\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure project_id exists before creating issues\n- All dates should use YYYY-MM-DD format\n- Location information is required for issue creation\n- Same request structure for create and update operations\n\n🏗️ CONSTRUCTION WORKFLOW:\n1. Field workers create issues during inspections\n2. Issues are assigned to responsible parties\n3. Status updates track progress to resolution\n4. Issues are reviewed and closed when complete\n\n📱 MOBILE-OPTIMIZED:\n- Designed for field workers using mobile devices\n- GPS coordinates support for precise location tracking\n- Photo attachments and distribution lists for communication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Issue",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Issue created successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('issue_number');",
+              "    pm.expect(responseJson).to.have.property('project_id');",
+              "    pm.expect(responseJson).to.have.property('title');",
+              "    pm.expect(responseJson).to.have.property('status');",
+              "    ",
+              "    // Store issue_id for other requests",
+              "    pm.globals.set('issue_id', responseJson.id);",
+              "    console.log('Created Issue:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"project_id\": {{project_id}},\n    \"location_id\": {{location_id}},\n    \"issue_category\": \"quality\",\n    \"category\": \"defect\",\n    \"detail_category\": \"finish_defect\",\n    \"title\": \"Drywall crack in conference room\",\n    \"description\": \"Visible crack in drywall along the east wall of the main conference room. Crack runs approximately 18 inches vertically starting 3 feet from the floor.\",\n    \"priority\": \"medium\",\n    \"severity\": \"minor\",\n    \"root_cause\": \"settling\",\n    \"location\": {\n        \"description\": \"Main conference room, east wall\",\n        \"building\": \"Building A\",\n        \"level\": \"Floor 2\",\n        \"room\": \"Conference Room 201\",\n        \"coordinates\": {\n            \"x\": 150.5,\n            \"y\": 75.2\n        }\n    },\n    \"discipline\": \"drywall\",\n    \"trade\": \"finishing\",\n    \"assigned_to\": {{user_id}},\n    \"due_date\": \"2025-10-01\",\n    \"distribution_list\": [\n        \"project.manager@company.com\",\n        \"quality.control@company.com\"\n    ]\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Project Issues (with filters)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has issues array', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('issues');",
+              "    pm.expect(responseJson).to.have.property('total');",
+              "    pm.expect(responseJson).to.have.property('page');",
+              "    pm.expect(responseJson).to.have.property('page_size');",
+              "    pm.expect(responseJson.issues).to.be.an('array');",
+              "    console.log('Project Issues:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/issues?status=open&priority=high&page=1&page_size=20",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "issues"
+          ],
+          "query": [
+            {
+              "key": "status",
+              "value": "open",
+              "description": "Filter by issue status (open, in_progress, closed, etc.)"
+            },
+            {
+              "key": "priority",
+              "value": "high",
+              "description": "Filter by priority (critical, high, medium, low, planned)"
+            },
+            {
+              "key": "assigned_to",
+              "value": "{{user_id}}",
+              "description": "Filter by assigned user ID",
+              "disabled": true
+            },
+            {
+              "key": "category",
+              "value": "quality",
+              "description": "Filter by issue category",
+              "disabled": true
+            },
+            {
+              "key": "page",
+              "value": "1",
+              "description": "Page number for pagination"
+            },
+            {
+              "key": "page_size",
+              "value": "20",
+              "description": "Number of items per page (max 100)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get All Project Issues",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has issues array', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('issues');",
+              "    pm.expect(responseJson).to.have.property('total');",
+              "    pm.expect(responseJson.issues).to.be.an('array');",
+              "    console.log('All Project Issues:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/issues",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "issues"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Issue by ID",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has issue details', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('issue_number');",
+              "    pm.expect(responseJson).to.have.property('title');",
+              "    pm.expect(responseJson).to.have.property('description');",
+              "    pm.expect(responseJson).to.have.property('status');",
+              "    pm.expect(responseJson).to.have.property('priority');",
+              "    console.log('Issue Details:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues/{{issue_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues",
+            "{{issue_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update Issue (Full Update)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Issue updated successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('title');",
+              "    pm.expect(responseJson).to.have.property('status');",
+              "    console.log('Updated Issue:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"title\": \"Drywall crack in conference room - Updated\",\n    \"description\": \"Updated: Large visible crack in drywall along the east wall of the main conference room. Crack runs approximately 24 inches vertically starting 3 feet from the floor. Appears to be expanding.\",\n    \"category\": \"defect\",\n    \"detail_category\": \"finish_defect\",\n    \"priority\": \"high\",\n    \"severity\": \"major\",\n    \"root_cause\": \"structural_settlement\",\n    \"location\": {\n        \"description\": \"Main conference room, east wall - near entrance\",\n        \"building\": \"Building A\",\n        \"level\": \"Floor 2\",\n        \"room\": \"Conference Room 201\",\n        \"coordinates\": {\n            \"x\": 155.0,\n            \"y\": 80.0\n        }\n    },\n    \"discipline\": \"drywall\",\n    \"trade\": \"finishing\",\n    \"assigned_to\": {{user_id}},\n    \"due_date\": \"2025-09-30\",\n    \"distribution_list\": [\n        \"project.manager@company.com\",\n        \"quality.control@company.com\",\n        \"structural.engineer@company.com\"\n    ],\n    \"status\": \"in_progress\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues/{{issue_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues",
+            "{{issue_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update Issue Status Only",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Issue status updated successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('message');",
+              "    pm.expect(responseJson).to.have.property('status');",
+              "    pm.expect(responseJson.message).to.include('updated successfully');",
+              "    console.log('Status Update Response:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"status\": \"ready_for_review\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues/{{issue_id}}/status",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues",
+            "{{issue_id}}",
+            "status"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Close Issue",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Issue closed successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('message');",
+              "    pm.expect(responseJson).to.have.property('status');",
+              "    pm.expect(responseJson.status).to.equal('closed');",
+              "    console.log('Issue Closed:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"status\": \"closed\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues/{{issue_id}}/status",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues",
+            "{{issue_id}}",
+            "status"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete Issue",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Issue deleted successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('message');",
+              "    pm.expect(responseJson.message).to.include('deleted successfully');",
+              "    console.log('Issue deleted successfully.');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues/{{issue_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues",
+            "{{issue_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create Critical Safety Issue",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Critical issue created successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('priority');",
+              "    pm.expect(responseJson.priority).to.equal('critical');",
+              "    ",
+              "    // Store critical_issue_id for tracking",
+              "    pm.globals.set('critical_issue_id', responseJson.id);",
+              "    console.log('Created Critical Issue:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"project_id\": {{project_id}},\n    \"location_id\": {{location_id}},\n    \"basic_info\": {\n        \"title\": \"CRITICAL: Unsecured scaffolding on 3rd floor\",\n        \"description\": \"Scaffolding platform is not properly secured to building structure. High risk of collapse. Work area must be evacuated immediately and access restricted until repairs are completed.\"\n    },\n    \"classification\": {\n        \"issue_category\": \"safety\",\n        \"category\": \"hazard\",\n        \"detail_category\": \"fall_hazard\",\n        \"priority\": \"critical\",\n        \"severity\": \"blocking\",\n        \"root_cause\": \"improper_installation\"\n    },\n    \"location\": {\n        \"description\": \"North side scaffolding, 3rd floor exterior\",\n        \"building\": \"Building A\",\n        \"level\": \"Floor 3\",\n        \"room\": \"Exterior - North Wall\",\n        \"coordinates\": {\n            \"x\": 200.0,\n            \"y\": 150.0\n        }\n    },\n    \"assignment\": {\n        \"assigned_to\": {{user_id}},\n        \"due_date\": \"2025-09-21\",\n        \"discipline\": \"safety\",\n        \"trade\": \"scaffolding\"\n    },\n    \"communication\": {\n        \"distribution_list\": [\n            \"safety.manager@company.com\",\n            \"project.manager@company.com\",\n            \"site.supervisor@company.com\",\n            \"emergency.contact@company.com\"\n        ]\n    }\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Critical and High Priority Issues",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response contains high priority issues', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('issues');",
+              "    pm.expect(responseJson.issues).to.be.an('array');",
+              "    ",
+              "    // Check that all returned issues have critical or high priority",
+              "    responseJson.issues.forEach(issue => {",
+              "        pm.expect(['critical', 'high']).to.include(issue.priority);",
+              "    });",
+              "    ",
+              "    console.log('High Priority Issues:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/issues?priority=critical,high&status=open,in_progress",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "issues"
+          ],
+          "query": [
+            {
+              "key": "priority",
+              "value": "critical,high",
+              "description": "Filter for critical and high priority issues"
+            },
+            {
+              "key": "status",
+              "value": "open,in_progress",
+              "description": "Filter for open and in-progress issues"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Issues by Category - Safety",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response contains safety issues', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('issues');",
+              "    pm.expect(responseJson.issues).to.be.an('array');",
+              "    console.log('Safety Issues:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/issues?category=safety",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "issues"
+          ],
+          "query": [
+            {
+              "key": "category",
+              "value": "safety",
+              "description": "Filter by safety category"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get My Assigned Issues",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response contains assigned issues', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('issues');",
+              "    pm.expect(responseJson.issues).to.be.an('array');",
+              "    console.log('My Assigned Issues:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/issues?assigned_to={{user_id}}&status=open,in_progress",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "projects",
+            "{{project_id}}",
+            "issues"
+          ],
+          "query": [
+            {
+              "key": "assigned_to",
+              "value": "{{user_id}}",
+              "description": "Filter by assigned user ID"
+            },
+            {
+              "key": "status",
+              "value": "open,in_progress",
+              "description": "Filter for active issues"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
