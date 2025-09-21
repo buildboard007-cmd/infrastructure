@@ -16,7 +16,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -112,7 +111,12 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			if err != nil {
 				return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
 			}
-			return handleGetProjectRFIs(ctx, projectID, claims.OrgID, request.QueryStringParameters), nil
+			// Ensure filters map is not nil
+			filters := request.QueryStringParameters
+			if filters == nil {
+				filters = make(map[string]string)
+			}
+			return handleGetProjectRFIs(ctx, projectID, claims.OrgID, filters), nil
 		}
 
 		// GET /rfis/{rfiId} - Get specific RFI
@@ -182,113 +186,66 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 }
 
-// handleCreateRFI handles the creation of a new RFI
+// handleCreateRFI handles the creation of a new RFI with unified structure and JWT-based orgID
 func handleCreateRFI(ctx context.Context, userID, orgID int64, body string) events.APIGatewayProxyResponse {
-	var req models.CreateRFIRequest
-	if err := json.Unmarshal([]byte(body), &req); err != nil {
+	// Parse unified request structure
+	var createReq models.CreateRFIRequest
+	if err := json.Unmarshal([]byte(body), &createReq); err != nil {
 		logger.WithError(err).Error("Failed to parse create RFI request")
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
-	// Validate required fields
-	if req.ProjectID == 0 || req.Subject == "" || req.Question == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Missing required fields", logger)
+	// Extract project_id from request (should be in request body)
+	projectID := createReq.ProjectID
+	if projectID == 0 {
+		return api.ErrorResponse(http.StatusBadRequest, "Project ID is required", logger)
 	}
 
-	// Generate RFI number if not provided
-	if req.RFINumber == "" {
-		rfiNumber, err := rfiRepository.GenerateRFINumber(ctx, req.ProjectID)
-		if err != nil {
-			logger.WithError(err).Error("Failed to generate RFI number")
-			return api.ErrorResponse(http.StatusInternalServerError, "Failed to generate RFI number", logger)
+	// Validate required fields from unified structure
+	if createReq.Subject == "" {
+		return api.ErrorResponse(http.StatusBadRequest, "Subject is required", logger)
+	}
+	if createReq.Question == "" {
+		return api.ErrorResponse(http.StatusBadRequest, "Question is required", logger)
+	}
+	if createReq.Priority == "" {
+		return api.ErrorResponse(http.StatusBadRequest, "Priority is required", logger)
+	}
+	if createReq.Category == "" {
+		return api.ErrorResponse(http.StatusBadRequest, "Category is required", logger)
+	}
+
+	// Validate category value
+	validCategories := []string{
+		"DESIGN", "SPECIFICATION", "SCHEDULE", "COORDINATION",
+		"GENERAL", "SUBMITTAL", "CHANGE_EVENT",
+	}
+	isValidCategory := false
+	for _, c := range validCategories {
+		if createReq.Category == c {
+			isValidCategory = true
+			break
 		}
-		req.RFINumber = rfiNumber
+	}
+	if !isValidCategory {
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid category value", logger)
 	}
 
-	// Parse due date
-	var dueDate *time.Time
-	if req.DueDate != "" {
-		if parsedDate, err := time.Parse("2006-01-02", req.DueDate); err == nil {
-			dueDate = &parsedDate
-		}
-	}
-
-	// Convert request to RFI model
-	rfi := &models.RFI{
-		ProjectID:               req.ProjectID,
-		OrgID:                   req.OrgID,
-		LocationID:              req.LocationID,
-		RFINumber:               req.RFINumber,
-		Subject:                 req.Subject,
-		Question:                req.Question,
-		Description:             req.Description,
-		Category:                req.Category,
-		Discipline:              req.Discipline,
-		TradeType:               req.TradeType,
-		ProjectPhase:            req.ProjectPhase,
-		Priority:                req.Priority,
-		Status:                  models.RFIStatusDraft,
-		SubmittedBy:             userID,
-		ReviewerEmail:           req.ReviewerEmail,
-		ApproverEmail:           req.ApproverEmail,
-		CCList:                  req.CCList,
-		DistributionList:        req.DistributionList,
-		DueDate:                 dueDate,
-		CostImpact:              req.CostImpact == "Yes",
-		ScheduleImpact:          req.ScheduleImpact == "Yes",
-		CostImpactAmount:        req.CostImpactAmount,
-		ScheduleImpactDays:      req.ScheduleImpactDays,
-		CostImpactDetails:       req.CostImpactDetails,
-		ScheduleImpactDetails:   req.ScheduleImpactDetails,
-		LocationDescription:     req.Location,
-		DrawingReferences:       req.DrawingReferences,
-		SpecificationReferences: req.SpecificationReferences,
-		RelatedSubmittals:       req.RelatedSubmittals,
-		RelatedChangeEvents:     req.RelatedChangeEvents,
-		WorkflowType:            req.WorkflowType,
-		RequiresApproval:        req.RequiresApproval,
-		UrgencyJustification:    req.UrgencyJustification,
-		BusinessJustification:   req.BusinessJustification,
-		CreatedBy:               userID,
-		UpdatedBy:               userID,
-	}
-
-	// Set default values if not provided
-	if rfi.Priority == "" {
-		rfi.Priority = models.RFIPriorityMedium
-	}
-	if rfi.WorkflowType == "" {
-		rfi.WorkflowType = models.RFIWorkflowStandard
-	}
-
-	// Create RFI
-	createdRFI, err := rfiRepository.CreateRFI(ctx, rfi)
+	// Create RFI using repository with orgID from JWT (validation happens in repository)
+	createdRFI, err := rfiRepository.CreateRFI(ctx, projectID, userID, orgID, &createReq)
 	if err != nil {
+		if err.Error() == "project does not belong to your organization" {
+			return api.ErrorResponse(http.StatusForbidden, "Project does not belong to your organization", logger)
+		}
 		logger.WithError(err).Error("Failed to create RFI")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create RFI", logger)
-	}
-
-	// Process attachments if any
-	for _, attachment := range req.Attachments {
-		attachment.RFIID = createdRFI.ID
-		attachment.UploadedBy = userID
-		attachment.CreatedBy = userID
-		attachment.UpdatedBy = userID
-
-		if attachment.AttachmentType == "" {
-			attachment.AttachmentType = "document"
-		}
-
-		_, err := rfiRepository.AddRFIAttachment(ctx, &attachment)
-		if err != nil {
-			logger.WithError(err).Warn("Failed to add attachment to RFI")
-		}
 	}
 
 	logger.WithFields(logrus.Fields{
 		"rfi_id":     createdRFI.ID,
 		"project_id": createdRFI.ProjectID,
 		"user_id":    userID,
+		"org_id":     orgID,
 	}).Info("RFI created successfully")
 
 	return api.SuccessResponse(http.StatusCreated, createdRFI, logger)
@@ -340,30 +297,27 @@ func handleGetRFI(ctx context.Context, rfiID, orgID int64) events.APIGatewayProx
 	return api.SuccessResponse(http.StatusOK, rfi, logger)
 }
 
-// handleUpdateRFI handles updating an RFI
+// handleUpdateRFI handles updating an RFI with unified structure and orgID validation
 func handleUpdateRFI(ctx context.Context, rfiID, userID, orgID int64, body string) events.APIGatewayProxyResponse {
-	var req models.UpdateRFIRequest
-	if err := json.Unmarshal([]byte(body), &req); err != nil {
+	// Parse unified request structure
+	var updateReq models.UpdateRFIRequest
+	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
 		logger.WithError(err).Error("Failed to parse update RFI request")
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
-	// Check if RFI exists
-	existingRFI, err := rfiRepository.GetRFI(ctx, rfiID)
+	// Update RFI using repository with orgID from JWT (validation happens in repository)
+	updatedRFI, err := rfiRepository.UpdateRFI(ctx, rfiID, userID, orgID, &updateReq)
 	if err != nil {
 		if err.Error() == "RFI not found" {
 			return api.ErrorResponse(http.StatusNotFound, "RFI not found", logger)
 		}
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to retrieve RFI", logger)
-	}
-
-	// Check if user can update (must be in draft or user is submitter)
-	if existingRFI.Status != models.RFIStatusDraft && existingRFI.SubmittedBy != userID {
-		return api.ErrorResponse(http.StatusForbidden, "Cannot update RFI in current status", logger)
-	}
-
-	// Update RFI
-	if err := rfiRepository.UpdateRFI(ctx, rfiID, &req, userID); err != nil {
+		if err.Error() == "RFI does not belong to your organization" {
+			return api.ErrorResponse(http.StatusForbidden, "RFI does not belong to your organization", logger)
+		}
+		if err.Error() == "Cannot update RFI in current status" {
+			return api.ErrorResponse(http.StatusForbidden, "Cannot update RFI in current status", logger)
+		}
 		logger.WithError(err).Error("Failed to update RFI")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update RFI", logger)
 	}
@@ -371,9 +325,10 @@ func handleUpdateRFI(ctx context.Context, rfiID, userID, orgID int64, body strin
 	logger.WithFields(logrus.Fields{
 		"rfi_id":  rfiID,
 		"user_id": userID,
+		"org_id":  orgID,
 	}).Info("RFI updated successfully")
 
-	return api.SuccessResponse(http.StatusOK, "RFI updated successfully", logger)
+	return api.SuccessResponse(http.StatusOK, updatedRFI, logger)
 }
 
 // handleUpdateRFIStatus handles updating RFI status
@@ -388,11 +343,11 @@ func handleUpdateRFIStatus(ctx context.Context, rfiID, userID, orgID int64, body
 	validStatuses := []string{
 		models.RFIStatusDraft,
 		models.RFIStatusSubmitted,
-		models.RFIStatusInReview,
-		models.RFIStatusResponded,
+		models.RFIStatusUnderReview,
+		models.RFIStatusAnswered,
 		models.RFIStatusClosed,
-		models.RFIStatusCancelled,
-		models.RFIStatusOnHold,
+		models.RFIStatusVoid,
+		models.RFIStatusRequiresRevision,
 	}
 
 	isValid := false

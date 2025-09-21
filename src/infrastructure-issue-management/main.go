@@ -63,7 +63,12 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			if err != nil {
 				return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
 			}
-			return handleGetProjectIssues(ctx, projectID, claims.OrgID, request.QueryStringParameters), nil
+			// Ensure filters map is not nil
+			filters := request.QueryStringParameters
+			if filters == nil {
+				filters = make(map[string]string)
+			}
+			return handleGetProjectIssues(ctx, projectID, claims.OrgID, filters), nil
 		}
 		
 		// GET /issues/{issueId} - Get specific issue
@@ -147,10 +152,35 @@ func handleCreateIssue(ctx context.Context, userID, orgID int64, body string) ev
 		return api.ErrorResponse(http.StatusBadRequest, "Due date is required", logger)
 	}
 
+	// Validate assigned_to user exists and belongs to organization
+	var assignedUserOrgID int64
+	err := sqlDB.QueryRowContext(ctx, `
+		SELECT org_id FROM iam.users
+		WHERE id = $1 AND is_deleted = FALSE
+	`, createReq.AssignedTo).Scan(&assignedUserOrgID)
+
+	if err == sql.ErrNoRows {
+		return api.ErrorResponse(http.StatusBadRequest, fmt.Sprintf("Invalid assigned_to user ID. User %d does not exist.", createReq.AssignedTo), logger)
+	}
+	if err != nil {
+		logger.WithError(err).Error("Failed to validate assigned user")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to validate assigned user", logger)
+	}
+	if assignedUserOrgID != orgID {
+		return api.ErrorResponse(http.StatusBadRequest, fmt.Sprintf("Invalid assigned_to user ID. User %d does not belong to your organization.", createReq.AssignedTo), logger)
+	}
+
 	// Create issue using repository with orgID from JWT (validation happens in repository)
 	issue, err := issueRepository.CreateIssue(ctx, projectID, userID, orgID, &createReq)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create issue")
+		// Check for specific database errors to provide better error messages
+		if strings.Contains(err.Error(), "project does not belong to your organization") {
+			return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID. Project does not belong to your organization.", logger)
+		}
+		if strings.Contains(err.Error(), "foreign key constraint") {
+			return api.ErrorResponse(http.StatusBadRequest, "Invalid reference data provided", logger)
+		}
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create issue", logger)
 	}
 

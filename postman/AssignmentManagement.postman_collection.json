@@ -1,0 +1,1053 @@
+{
+	"info": {
+		"_postman_id": "assignment-management-api-collection-001",
+		"name": "Assignment Management API",
+		"description": "API collection for Unified Assignment Management service including user assignments to projects, locations, organizations, and other contexts.\n\n🎯 SERVICE SCOPE:\nThis collection contains endpoints that are actually implemented in the assignment management service:\n- Assignment CRUD operations (create, read, update, delete)\n- User-specific assignment queries\n- Context-specific assignment queries (project teams, location teams)\n- Bulk assignment operations\n- Assignment transfer functionality\n- Permission checking and validation\n\n✅ UNIFIED ASSIGNMENT SYSTEM:\n- Single user_assignments table handles all assignment types\n- Supports multiple contexts: organization, project, location, department, equipment, phase\n- Role-based assignments with temporal support (start/end dates)\n- Primary assignment tracking and trade specialization\n- Organization-level security and validation\n\n📋 ASSIGNMENT CONTEXTS & ROLES:\n- Contexts: organization, project, location, department, equipment, phase\n- Roles: Company Admin (7), Project Manager (8), Site Supervisor (9), Field Worker (10)\n- Trade Types: electrical, plumbing, hvac, general, finishing, structural\n- Assignment Types: primary/secondary, temporary/permanent\n\n🔐 SECURITY FEATURES:\n- Organization ID extracted from JWT token (not request body)\n- Context validation ensures assignments are within organization\n- User validation prevents assignment to non-existent users\n- Permission inheritance from organization → location → project\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Valid user IDs in org 7: 16, 21, 27, 29\n- Valid project IDs: 30, and others in your organization\n- All dates should use YYYY-MM-DD format\n- Assignment validation happens server-side\n\n🏗️ CONSTRUCTION WORKFLOW:\n1. Assign users to organization-wide roles (Company Admin)\n2. Assign project managers to specific projects\n3. Assign site supervisors to job site locations\n4. Assign field workers to projects with trade specialization\n5. Transfer assignments when personnel changes occur\n6. Bulk assign teams to new projects\n\n📱 INTEGRATION:\n- Token Customizer uses assignments to populate JWT with accessible locations\n- Frontend gets real-time permission updates through JWT\n- Supports Procore/Bluebeam-style assignment management",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Create Assignment",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Assignment created successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('user_id');",
+							"    pm.expect(responseJson).to.have.property('role_id');",
+							"    pm.expect(responseJson).to.have.property('context_type');",
+							"    pm.expect(responseJson).to.have.property('context_id');",
+							"    ",
+							"    // Store assignment_id for other requests",
+							"    pm.globals.set('assignment_id', responseJson.id);",
+							"    console.log('Created Assignment:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"user_id\": {{user_id}},\n    \"role_id\": 8,\n    \"context_type\": \"project\",\n    \"context_id\": {{project_id}},\n    \"trade_type\": \"electrical\",\n    \"is_primary\": true,\n    \"start_date\": \"2025-09-20\",\n    \"end_date\": \"2025-12-31\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments"
+					]
+				},
+				"description": "Assign a user to any context (organization, project, location, department, equipment, phase) with specified role and optional trade specialization."
+			}
+		},
+		{
+			"name": "Get Assignments (with filters)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has assignments array', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('assignments');",
+							"    pm.expect(responseJson).to.have.property('total');",
+							"    pm.expect(responseJson.assignments).to.be.an('array');",
+							"    console.log('Assignment List:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments?context_type=project&is_active=true&page=1&page_size=10",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments"
+					],
+					"query": [
+						{
+							"key": "user_id",
+							"value": "{{user_id}}",
+							"disabled": true,
+							"description": "Filter by user ID"
+						},
+						{
+							"key": "role_id",
+							"value": "8",
+							"disabled": true,
+							"description": "Filter by role ID"
+						},
+						{
+							"key": "context_type",
+							"value": "project",
+							"description": "Filter by context type"
+						},
+						{
+							"key": "context_id",
+							"value": "{{project_id}}",
+							"disabled": true,
+							"description": "Filter by context ID"
+						},
+						{
+							"key": "is_primary",
+							"value": "true",
+							"disabled": true,
+							"description": "Filter by primary assignments"
+						},
+						{
+							"key": "is_active",
+							"value": "true",
+							"description": "Filter by active assignments (based on dates)"
+						},
+						{
+							"key": "trade_type",
+							"value": "electrical",
+							"disabled": true,
+							"description": "Filter by trade type"
+						},
+						{
+							"key": "page",
+							"value": "1",
+							"description": "Page number"
+						},
+						{
+							"key": "page_size",
+							"value": "10",
+							"description": "Number of results per page"
+						}
+					]
+				},
+				"description": "Get assignments with optional filters. Enable/disable query parameters as needed."
+			}
+		},
+		{
+			"name": "Get Assignment by ID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Assignment details retrieved', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('user_name');",
+							"    pm.expect(responseJson).to.have.property('role_name');",
+							"    pm.expect(responseJson).to.have.property('context_name');",
+							"    console.log('Assignment Details:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments/{{assignment_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments",
+						"{{assignment_id}}"
+					]
+				},
+				"description": "Get a specific assignment by ID with enriched data (user name, role name, context name, organization info)."
+			}
+		},
+		{
+			"name": "Update Assignment",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Assignment updated successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('updated_at');",
+							"    console.log('Updated Assignment:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"role_id\": 9,\n    \"trade_type\": \"plumbing\",\n    \"is_primary\": false,\n    \"end_date\": \"2025-06-30\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments/{{assignment_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments",
+						"{{assignment_id}}"
+					]
+				},
+				"description": "Update an existing assignment. Only include fields you want to change."
+			}
+		},
+		{
+			"name": "Delete Assignment",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Assignment deleted successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('message');",
+							"    console.log('Delete Response:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments/{{assignment_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments",
+						"{{assignment_id}}"
+					]
+				},
+				"description": "Soft delete an assignment (sets is_deleted = true)."
+			}
+		},
+		{
+			"name": "Bulk Create Assignments",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Bulk assignments created', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('message');",
+							"    pm.expect(responseJson).to.have.property('count');",
+							"    pm.expect(responseJson).to.have.property('assignments');",
+							"    pm.expect(responseJson.assignments).to.be.an('array');",
+							"    console.log('Bulk Assignment Response:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"user_ids\": [{{user_id}}, 21, 27],\n    \"role_id\": 10,\n    \"context_type\": \"project\",\n    \"context_id\": {{project_id}},\n    \"trade_type\": \"general\",\n    \"is_primary\": false,\n    \"start_date\": \"2025-09-20\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments/bulk",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments",
+						"bulk"
+					]
+				},
+				"description": "Assign multiple users to the same context (project/location) with the same role. Useful for assigning entire teams."
+			}
+		},
+		{
+			"name": "Transfer Assignments",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Assignments transferred', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('message');",
+							"    console.log('Transfer Response:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"from_user_id\": {{user_id}},\n    \"to_user_id\": 21,\n    \"assignment_ids\": [{{assignment_id}}],\n    \"preserve_primary\": true\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments/transfer",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments",
+						"transfer"
+					]
+				},
+				"description": "Transfer assignments from one user to another. Leave assignment_ids empty to transfer all active assignments."
+			}
+		},
+		{
+			"name": "Get User Assignments Summary",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('User assignment summary retrieved', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('user_id');",
+							"    pm.expect(responseJson).to.have.property('user_name');",
+							"    pm.expect(responseJson).to.have.property('total_assignments');",
+							"    pm.expect(responseJson).to.have.property('active_assignments');",
+							"    pm.expect(responseJson).to.have.property('assignments_by_type');",
+							"    pm.expect(responseJson).to.have.property('assignments');",
+							"    console.log('User Assignment Summary:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/assignments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users",
+						"{{user_id}}",
+						"assignments"
+					]
+				},
+				"description": "Get comprehensive summary of all assignments for a user including statistics and breakdown by type."
+			}
+		},
+		{
+			"name": "Get User Active Assignments",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Active assignments retrieved', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.be.an('array');",
+							"    responseJson.forEach(assignment => {",
+							"        pm.expect(assignment).to.have.property('is_active', true);",
+							"    });",
+							"    console.log('Active Assignments:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/assignments/active",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users",
+						"{{user_id}}",
+						"assignments",
+						"active"
+					]
+				},
+				"description": "Get only active assignments for a user (based on start/end dates)."
+			}
+		},
+		{
+			"name": "Get User Projects",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('User project contexts retrieved', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('user_id');",
+							"    pm.expect(responseJson).to.have.property('context_type', 'project');",
+							"    pm.expect(responseJson).to.have.property('context_ids');",
+							"    pm.expect(responseJson).to.have.property('count');",
+							"    pm.expect(responseJson.context_ids).to.be.an('array');",
+							"    console.log('User Project Contexts:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/contexts/project",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users",
+						"{{user_id}}",
+						"contexts",
+						"project"
+					]
+				},
+				"description": "Get all project IDs that a user has access to."
+			}
+		},
+		{
+			"name": "Get User Locations",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('User location contexts retrieved', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('user_id');",
+							"    pm.expect(responseJson).to.have.property('context_type', 'location');",
+							"    pm.expect(responseJson).to.have.property('context_ids');",
+							"    pm.expect(responseJson).to.have.property('count');",
+							"    pm.expect(responseJson.context_ids).to.be.an('array');",
+							"    console.log('User Location Contexts:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/contexts/location",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users",
+						"{{user_id}}",
+						"contexts",
+						"location"
+					]
+				},
+				"description": "Get all location IDs that a user has access to."
+			}
+		},
+		{
+			"name": "Get Project Team",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Project team assignments retrieved', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('context_type', 'project');",
+							"    pm.expect(responseJson).to.have.property('context_id');",
+							"    pm.expect(responseJson).to.have.property('context_name');",
+							"    pm.expect(responseJson).to.have.property('total_assignments');",
+							"    pm.expect(responseJson).to.have.property('active_assignments');",
+							"    pm.expect(responseJson).to.have.property('assignments_by_role');",
+							"    pm.expect(responseJson).to.have.property('assignments');",
+							"    console.log('Project Team:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/contexts/project/{{project_id}}/assignments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"contexts",
+						"project",
+						"{{project_id}}",
+						"assignments"
+					]
+				},
+				"description": "Get all assignments for a specific project - shows the project team with roles and statistics."
+			}
+		},
+		{
+			"name": "Get Location Team",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Location team assignments retrieved', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('context_type', 'location');",
+							"    pm.expect(responseJson).to.have.property('context_id');",
+							"    pm.expect(responseJson).to.have.property('context_name');",
+							"    pm.expect(responseJson).to.have.property('assignments');",
+							"    console.log('Location Team:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/contexts/location/{{location_id}}/assignments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"contexts",
+						"location",
+						"{{location_id}}",
+						"assignments"
+					]
+				},
+				"description": "Get all assignments for a specific location - shows who works at this job site."
+			}
+		},
+		{
+			"name": "Check User Permission",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Permission check completed', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('has_permission');",
+							"    pm.expect(responseJson.has_permission).to.be.a('boolean');",
+							"    if (responseJson.has_permission) {",
+							"        pm.expect(responseJson).to.have.property('user_roles');",
+							"    } else {",
+							"        pm.expect(responseJson).to.have.property('reason');",
+							"    }",
+							"    console.log('Permission Check:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"user_id\": {{user_id}},\n    \"context_type\": \"project\",\n    \"context_id\": {{project_id}},\n    \"permission\": \"read\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions/check",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"permissions",
+						"check"
+					]
+				},
+				"description": "Check if a user has specific permission for a context. Returns true/false with reasoning."
+			}
+		},
+		{
+			"name": "Assign Project Manager",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Project manager assigned', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('role_name', 'Project Manager');",
+							"    pm.expect(responseJson).to.have.property('context_type', 'project');",
+							"    pm.expect(responseJson).to.have.property('is_primary', true);",
+							"    console.log('Project Manager Assignment:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"user_id\": {{user_id}},\n    \"role_id\": 8,\n    \"context_type\": \"project\",\n    \"context_id\": {{project_id}},\n    \"is_primary\": true,\n    \"start_date\": \"2025-09-20\",\n    \"end_date\": \"2025-12-31\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments"
+					]
+				},
+				"description": "Example: Assign a user as primary Project Manager for a specific project."
+			}
+		},
+		{
+			"name": "Assign Site Supervisor to Location",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Site supervisor assigned', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('role_name', 'Site Supervisor');",
+							"    pm.expect(responseJson).to.have.property('context_type', 'location');",
+							"    pm.expect(responseJson).to.have.property('is_primary', true);",
+							"    console.log('Site Supervisor Assignment:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"user_id\": 21,\n    \"role_id\": 9,\n    \"context_type\": \"location\",\n    \"context_id\": {{location_id}},\n    \"is_primary\": true\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments"
+					]
+				},
+				"description": "Example: Assign a user as Site Supervisor for a specific location (all projects at that location)."
+			}
+		},
+		{
+			"name": "Assign Field Worker with Trade",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Field worker with trade assigned', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('role_name', 'Field Worker');",
+							"    pm.expect(responseJson).to.have.property('context_type', 'project');",
+							"    pm.expect(responseJson).to.have.property('trade_type');",
+							"    console.log('Field Worker Assignment:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"user_id\": 27,\n    \"role_id\": 10,\n    \"context_type\": \"project\",\n    \"context_id\": {{project_id}},\n    \"trade_type\": \"electrical\",\n    \"is_primary\": false,\n    \"start_date\": \"2025-09-20\",\n    \"end_date\": \"2025-11-30\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"assignments"
+					]
+				},
+				"description": "Example: Assign a field worker with specific trade specialty for a limited time period."
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "access_token",
+			"value": "",
+			"description": "JWT ID Token from Cognito authentication"
+		},
+		{
+			"key": "project_id",
+			"value": "30",
+			"description": "Project ID for testing (default: 30)"
+		},
+		{
+			"key": "user_id",
+			"value": "16",
+			"description": "User ID for testing (default: 16 - buildboard007+222@gmail.com)"
+		},
+		{
+			"key": "location_id",
+			"value": "27",
+			"description": "Location ID for testing (default: 27)"
+		},
+		{
+			"key": "assignment_id",
+			"value": "",
+			"description": "Assignment ID (set automatically by create requests)"
+		}
+	]
+}

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "rfi-management-api-collection-001",
     "name": "RFI Management API",
-    "description": "API collection for Request for Information (RFI) Management service including RFI lifecycle, comments, attachments, and workflow management.\n\n🎯 SERVICE SCOPE:\nThis collection contains endpoints that are actually implemented in the RFI management service:\n- RFI CRUD operations (create, read, update, delete)\n- Project-specific RFI listing\n- RFI workflow management (submit, respond, approve, reject)\n- Comments and attachments management\n- Status tracking and updates\n\n✅ RFI WORKFLOW:\n1. Create RFI: POST /rfis (draft status)\n2. Submit for Review: POST /rfis/{rfiId}/submit (submitted status)\n3. Add Comments/Attachments: POST /rfis/{rfiId}/comments or /attachments\n4. Respond to RFI: POST /rfis/{rfiId}/respond (responded status)\n5. Approve/Reject: POST /rfis/{rfiId}/approve or /reject (approved/rejected status)\n6. Status Updates: PATCH /rfis/{rfiId}/status\n\n📋 RFI CATEGORIES & STATUSES:\n- Categories: architectural, structural, mechanical, electrical, plumbing, other\n- Priorities: critical, high, medium, low\n- Statuses: draft, submitted, under_review, responded, approved, rejected, closed\n- Disciplines: architecture, structural, mechanical, electrical, plumbing, civil\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Project validation happens server-side\n- Enhanced data integrity constraints\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure project_id exists before creating RFIs\n- All dates should use YYYY-MM-DD format\n- RFI numbers are auto-generated if not provided\n\n🏗️ CONSTRUCTION WORKFLOW:\n1. Field workers create RFIs during construction\n2. RFIs are submitted to architects/engineers for review\n3. Responses include clarifications, drawings, or change instructions\n4. Approval workflow for cost/schedule impacts\n5. RFIs are closed when information is provided and accepted\n\n📱 MOBILE-OPTIMIZED:\n- Designed for field workers using mobile devices\n- Photo attachments support for site conditions\n- Distribution lists for stakeholder communication",
+    "description": "API collection for Request for Information (RFI) Management service including RFI lifecycle, comments, attachments, and workflow management.\n\n🎯 SERVICE SCOPE:\nThis collection contains endpoints that are actually implemented in the RFI management service:\n- RFI CRUD operations (create, read, update, delete)\n- Project-specific RFI listing\n- RFI workflow management (submit, respond, approve, reject)\n- Comments and attachments management\n- Status tracking and updates\n\n✅ RFI WORKFLOW:\n1. Create RFI: POST /rfis (DRAFT status)\n2. Submit for Review: POST /rfis/{rfiId}/submit (SUBMITTED status)\n3. Add Comments/Attachments: POST /rfis/{rfiId}/comments or /attachments\n4. Respond to RFI: POST /rfis/{rfiId}/respond (ANSWERED status)\n5. Approve/Reject: POST /rfis/{rfiId}/approve or /reject (approved/rejected status)\n6. Status Updates: PATCH /rfis/{rfiId}/status\n\n📋 RFI CATEGORIES & STATUSES (UI Compatible):\n- Categories: DESIGN, SPECIFICATION, SCHEDULE, COORDINATION, GENERAL, SUBMITTAL, CHANGE_EVENT\n- Priorities: LOW, MEDIUM, HIGH, URGENT\n- Statuses: DRAFT, SUBMITTED, UNDER_REVIEW, ANSWERED, CLOSED, VOID, REQUIRES_REVISION\n- Disciplines: architecture, structural, mechanical, electrical, plumbing, civil\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Project validation happens server-side\n- Enhanced data integrity constraints\n- Unified request structure for create/update operations\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure project_id exists before creating RFIs\n- All dates should use YYYY-MM-DD format\n- RFI numbers are auto-generated if not provided\n- Uses snake_case field names to match UI expectations\n- References object with nested arrays for drawing/spec references\n\n🏗️ CONSTRUCTION WORKFLOW:\n1. Field workers create RFIs during construction\n2. RFIs are submitted to architects/engineers for review\n3. Responses include clarifications, drawings, or change instructions\n4. Approval workflow for cost/schedule impacts\n5. RFIs are closed when information is provided and accepted\n\n📱 MOBILE-OPTIMIZED:\n- Designed for field workers using mobile devices\n- Photo attachments support for site conditions\n- Distribution lists for stakeholder communication",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -50,7 +50,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"project_id\": {{project_id}},\n    \"location_id\": {{location_id}},\n    \"subject\": \"Clarification on Foundation Detail at Grid Line A-5\",\n    \"question\": \"The foundation detail shown in drawing S-101 at grid line A-5 conflicts with the specifications in section 03300. The drawing shows a 24-inch square footing, but the specification calls for a 30-inch square footing. Which requirement takes precedence?\",\n    \"description\": \"Need immediate clarification as we are ready to pour concrete footings in this area. The conflict affects the reinforcement layout and concrete quantity.\",\n    \"category\": \"structural\",\n    \"discipline\": \"structural\",\n    \"trade_type\": \"concrete\",\n    \"project_phase\": \"construction\",\n    \"priority\": \"high\",\n    \"reviewer_email\": \"structural.engineer@company.com\",\n    \"cc_list\": [\n        \"project.manager@company.com\",\n        \"superintendent@company.com\"\n    ],\n    \"distribution_list\": [\n        \"project.manager@company.com\",\n        \"structural.engineer@company.com\",\n        \"quality.control@company.com\"\n    ],\n    \"due_date\": \"2025-10-15\",\n    \"cost_impact\": true,\n    \"schedule_impact\": true,\n    \"cost_impact_amount\": 2500.00,\n    \"schedule_impact_days\": 2,\n    \"cost_impact_details\": \"Additional concrete and rebar required if 30-inch footing is confirmed\",\n    \"schedule_impact_details\": \"2-day delay if we need to revise footing layout and re-order materials\",\n    \"location_description\": \"Building A, Foundation at Grid Line A-5\",\n    \"drawing_references\": \"S-101, S-102\",\n    \"specification_references\": \"Section 03300 - Cast-in-Place Concrete\",\n    \"urgency_justification\": \"Concrete pour scheduled for next week, need resolution before material ordering\",\n    \"business_justification\": \"Avoiding rework and schedule delays\"\n}"
+          "raw": "{\n    \"project_id\": {{project_id}},\n    \"location_id\": {{location_id}},\n    \"subject\": \"Clarification on Foundation Detail at Grid Line A-5\",\n    \"question\": \"The foundation detail shown in drawing S-101 at grid line A-5 conflicts with the specifications in section 03300. The drawing shows a 24-inch square footing, but the specification calls for a 30-inch square footing. Which requirement takes precedence?\",\n    \"description\": \"Need immediate clarification as we are ready to pour concrete footings in this area. The conflict affects the reinforcement layout and concrete quantity.\",\n    \"category\": \"DESIGN\",\n    \"discipline\": \"structural\",\n    \"trade_type\": \"concrete\",\n    \"project_phase\": \"construction\",\n    \"priority\": \"HIGH\",\n    \"distribution_list\": [\n        \"project.manager@company.com\",\n        \"structural.engineer@company.com\",\n        \"quality.control@company.com\"\n    ],\n    \"due_date\": \"2025-10-15\",\n    \"cost_impact_amount\": 2500.00,\n    \"schedule_impact_days\": 2,\n    \"location_description\": \"Building A, Foundation at Grid Line A-5\",\n    \"references\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\"],\n        \"specification_sections\": [\"Section 03300 - Cast-in-Place Concrete\"],\n        \"related_rfis\": []\n    },\n    \"attachments\": []\n}"
         },
         "url": {
           "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis",
@@ -83,8 +83,8 @@
               "pm.test('Response has RFIs list', function () {",
               "    const responseJson = pm.response.json();",
               "    pm.expect(responseJson).to.have.property('rfis');",
-              "    pm.expect(responseJson).to.have.property('total');",
-              "    console.log('Found', responseJson.total, 'RFIs');",
+              "    pm.expect(responseJson).to.have.property('total_count');",
+              "    console.log('Found', responseJson.total_count, 'RFIs');",
               "});"
             ],
             "type": "text/javascript"
@@ -101,7 +101,7 @@
           }
         ],
         "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/rfis?status=submitted&priority=high",
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/projects/{{project_id}}/rfis?status=SUBMITTED&priority=HIGH",
           "protocol": "https",
           "host": [
             "74zc1md7sc",
@@ -119,11 +119,11 @@
           "query": [
             {
               "key": "status",
-              "value": "submitted"
+              "value": "SUBMITTED"
             },
             {
               "key": "priority",
-              "value": "high"
+              "value": "HIGH"
             }
           ]
         }
@@ -220,7 +220,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"subject\": \"UPDATED: Clarification on Foundation Detail at Grid Line A-5\",\n    \"question\": \"Updated question: The foundation detail shown in drawing S-101 at grid line A-5 conflicts with the specifications in section 03300. The drawing shows a 24-inch square footing, but the specification calls for a 30-inch square footing. Which requirement takes precedence? Please also confirm the reinforcement schedule.\",\n    \"description\": \"UPDATED: Need immediate clarification as we are ready to pour concrete footings in this area. The conflict affects the reinforcement layout and concrete quantity. Site conditions show good bearing capacity.\",\n    \"priority\": \"critical\",\n    \"cost_impact_amount\": 3500.00,\n    \"schedule_impact_days\": 3,\n    \"cost_impact_details\": \"Revised estimate: Additional concrete, rebar, and formwork required if 30-inch footing is confirmed\",\n    \"schedule_impact_details\": \"3-day delay if we need to revise footing layout, re-order materials, and adjust reinforcement schedule\",\n    \"drawing_references\": \"S-101, S-102, S-105\",\n    \"urgency_justification\": \"Updated: Concrete pour scheduled for Monday, need resolution by Friday for weekend material preparation\"\n}"
+          "raw": "{\n    \"subject\": \"UPDATED: Clarification on Foundation Detail at Grid Line A-5\",\n    \"question\": \"Updated question: The foundation detail shown in drawing S-101 at grid line A-5 conflicts with the specifications in section 03300. The drawing shows a 24-inch square footing, but the specification calls for a 30-inch square footing. Which requirement takes precedence? Please also confirm the reinforcement schedule.\",\n    \"description\": \"UPDATED: Need immediate clarification as we are ready to pour concrete footings in this area. The conflict affects the reinforcement layout and concrete quantity. Site conditions show good bearing capacity.\",\n    \"priority\": \"URGENT\",\n    \"cost_impact_amount\": 3500.00,\n    \"schedule_impact_days\": 3,\n    \"location_description\": \"Building A, Foundation at Grid Line A-5 - Updated with site conditions\",\n    \"references\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\", \"S-105\"],\n        \"specification_sections\": [\"Section 03300 - Cast-in-Place Concrete\"],\n        \"related_rfis\": []\n    }\n}"
         },
         "url": {
           "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
@@ -278,7 +278,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"status\": \"under_review\"\n}"
+          "raw": "{\n    \"status\": \"UNDER_REVIEW\",\n    \"comment\": \"Moving to under review status for structural engineer evaluation\"\n}"
         },
         "url": {
           "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/status",
@@ -337,7 +337,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"submit_notes\": \"All required information and attachments have been provided. This RFI is ready for architectural review.\",\n    \"notify_reviewer\": true,\n    \"expected_response_date\": \"2025-10-10\"\n}"
+          "raw": "{\n    \"comment\": \"All required information and attachments have been provided. This RFI is ready for structural review.\"\n}"
         },
         "url": {
           "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/submit",
@@ -396,7 +396,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"response\": \"After reviewing both the drawings and specifications, the specification takes precedence. Please use the 30-inch square footing as specified in section 03300. The drawing will be revised in the next update. Use the reinforcement schedule shown in drawing S-102 but adjust for the larger footing size.\",\n    \"response_status\": \"information_provided\",\n    \"response_date\": \"2025-09-25\",\n    \"technical_clarification\": \"The 30-inch footing provides better load distribution for the actual soil conditions. The 24-inch footing shown in the drawing was based on preliminary soil reports.\",\n    \"action_required\": \"Proceed with 30-inch footing construction as specified. Submit shop drawings for reinforcement layout confirmation.\",\n    \"cost_impact_approved\": true,\n    \"schedule_impact_approved\": true\n}"
+          "raw": "{\n    \"response\": \"After reviewing both the drawings and specifications, the specification takes precedence. Please use the 30-inch square footing as specified in section 03300. The drawing will be revised in the next update. Use the reinforcement schedule shown in drawing S-102 but adjust for the larger footing size. The 30-inch footing provides better load distribution for the actual soil conditions.\",\n    \"response_status\": \"information_provided\"\n}"
         },
         "url": {
           "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/respond",
@@ -455,7 +455,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"approval_comments\": \"RFI response is comprehensive and addresses all concerns. The structural engineer's recommendation to use 30-inch footings is approved. Cost and schedule impacts are acceptable given the improved foundation performance.\",\n    \"approval_date\": \"2025-09-26\",\n    \"cost_approved\": true,\n    \"schedule_approved\": true,\n    \"conditions\": \"Proceed as recommended. Submit as-built drawings upon completion for record purposes.\"\n}"
+          "raw": "{\n    \"approval_comments\": \"RFI response is comprehensive and addresses all concerns. The structural engineer's recommendation to use 30-inch footings is approved. Cost and schedule impacts are acceptable given the improved foundation performance. Proceed as recommended. Submit as-built drawings upon completion for record purposes.\"\n}"
         },
         "url": {
           "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/approve",
@@ -514,7 +514,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"rejection_reason\": \"Insufficient information provided. Please include soil bearing capacity test results and provide clearer site photos showing the actual conditions at grid line A-5.\",\n    \"rejection_date\": \"2025-09-26\",\n    \"additional_info_required\": [\n        \"Soil bearing capacity test results\",\n        \"High-resolution site photos\",\n        \"Survey data for exact grid line location\",\n        \"Geotechnical engineer recommendations\"\n    ],\n    \"resubmission_deadline\": \"2025-10-02\",\n    \"reviewer_notes\": \"The current information is not sufficient to make an informed decision on the foundation size. Additional geotechnical data is critical for this determination.\"\n}"
+          "raw": "{\n    \"rejection_reason\": \"Insufficient information provided. Please include soil bearing capacity test results and provide clearer site photos showing the actual conditions at grid line A-5. The current information is not sufficient to make an informed decision on the foundation size. Additional geotechnical data is critical for this determination.\"\n}"
         },
         "url": {
           "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/reject",
@@ -573,7 +573,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"comment\": \"Site visit completed today. Confirmed that the existing conditions match the drawing dimensions. However, the soil appears more compact than anticipated. Recommend geotechnical engineer visit before making final footing size determination.\",\n    \"comment_type\": \"field_observation\",\n    \"is_internal\": false,\n    \"notify_stakeholders\": true\n}"
+          "raw": "{\n    \"comment\": \"Site visit completed today. Confirmed that the existing conditions match the drawing dimensions. However, the soil appears more compact than anticipated. Recommend geotechnical engineer visit before making final footing size determination.\"\n}"
         },
         "url": {
           "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/comments",
@@ -607,7 +607,7 @@
               "",
               "pm.test('Comments retrieved successfully', function () {",
               "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('comments');",
+              "    pm.expect(Array.isArray(responseJson)).to.be.true;",
               "    console.log('RFI Comments:', JSON.stringify(responseJson, null, 2));",
               "});"
             ],
@@ -716,7 +716,7 @@
               "",
               "pm.test('Attachments retrieved successfully', function () {",
               "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('attachments');",
+              "    pm.expect(Array.isArray(responseJson)).to.be.true;",
               "    console.log('RFI Attachments:', JSON.stringify(responseJson, null, 2));",
               "});"
             ],

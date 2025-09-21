@@ -13,17 +13,17 @@ type RFI struct {
 	RFINumber               string         `json:"rfi_number"`
 	Subject                 string         `json:"subject"`
 	Question                string         `json:"question"`
-	Description             string         `json:"description,omitempty"`
-	Category                string         `json:"category,omitempty"`
-	Discipline              string         `json:"discipline,omitempty"`
-	TradeType               string         `json:"trade_type,omitempty"`
-	ProjectPhase            string         `json:"project_phase,omitempty"`
+	Description             *string `json:"description,omitempty"`
+	Category                *string `json:"category,omitempty"`
+	Discipline              *string `json:"discipline,omitempty"`
+	TradeType               *string `json:"trade_type,omitempty"`
+	ProjectPhase            *string `json:"project_phase,omitempty"`
 	Priority                string         `json:"priority"`
 	Status                  string         `json:"status"`
 	SubmittedBy             int64          `json:"submitted_by"`
 	AssignedTo              *int64         `json:"assigned_to,omitempty"`
-	ReviewerEmail           string         `json:"reviewer_email,omitempty"`
-	ApproverEmail           string         `json:"approver_email,omitempty"`
+	ReviewerEmail           *string `json:"reviewer_email,omitempty"`
+	ApproverEmail           *string `json:"approver_email,omitempty"`
 	ResponseBy              *int64         `json:"response_by,omitempty"`
 	CCList                  []string       `json:"cc_list,omitempty"`
 	DistributionList        []string       `json:"distribution_list,omitempty"`
@@ -31,28 +31,28 @@ type RFI struct {
 	DueDate                 *time.Time     `json:"due_date,omitempty"`
 	ResponseDate            *time.Time     `json:"response_date,omitempty"`
 	ClosedDate              *time.Time     `json:"closed_date,omitempty"`
-	Response                string         `json:"response,omitempty"`
-	ResponseStatus          string         `json:"response_status,omitempty"`
+	Response                *string `json:"response,omitempty"`
+	ResponseStatus          *string `json:"response_status,omitempty"`
 	CostImpact              bool           `json:"cost_impact"`
 	ScheduleImpact          bool           `json:"schedule_impact"`
 	CostImpactAmount        *float64       `json:"cost_impact_amount,omitempty"`
 	ScheduleImpactDays      int            `json:"schedule_impact_days,omitempty"`
-	CostImpactDetails       string         `json:"cost_impact_details,omitempty"`
-	ScheduleImpactDetails   string         `json:"schedule_impact_details,omitempty"`
-	LocationDescription     string         `json:"location_description,omitempty"`
-	DrawingReferences       string         `json:"drawing_references,omitempty"`
-	SpecificationReferences string         `json:"specification_references,omitempty"`
-	RelatedSubmittals       string         `json:"related_submittals,omitempty"`
-	RelatedChangeEvents     string         `json:"related_change_events,omitempty"`
+	CostImpactDetails       *string `json:"cost_impact_details,omitempty"`
+	ScheduleImpactDetails   *string `json:"schedule_impact_details,omitempty"`
+	LocationDescription     *string `json:"location_description,omitempty"`
+	DrawingReferences       *string `json:"drawing_references,omitempty"`
+	SpecificationReferences *string `json:"specification_references,omitempty"`
+	RelatedSubmittals       *string `json:"related_submittals,omitempty"`
+	RelatedChangeEvents     *string `json:"related_change_events,omitempty"`
 	RelatedRFIs             []string       `json:"related_rfis,omitempty"`
 	WorkflowType            string         `json:"workflow_type"`
 	RequiresApproval        bool           `json:"requires_approval"`
-	ApprovalStatus          string         `json:"approval_status,omitempty"`
+	ApprovalStatus          *string `json:"approval_status,omitempty"`
 	ApprovedBy              *int64         `json:"approved_by,omitempty"`
 	ApprovalDate            *time.Time     `json:"approval_date,omitempty"`
-	ApprovalComments        string         `json:"approval_comments,omitempty"`
-	UrgencyJustification    string         `json:"urgency_justification,omitempty"`
-	BusinessJustification   string         `json:"business_justification,omitempty"`
+	ApprovalComments        *string `json:"approval_comments,omitempty"`
+	UrgencyJustification    *string `json:"urgency_justification,omitempty"`
+	BusinessJustification   *string `json:"business_justification,omitempty"`
 	DaysOpen                int            `json:"days_open,omitempty"`
 	IsOverdue               bool           `json:"is_overdue"`
 	CreatedAt               time.Time      `json:"created_at"`
@@ -99,73 +99,63 @@ type RFIComment struct {
 	IsDeleted     bool       `json:"is_deleted"`
 }
 
-// CreateRFIRequest represents the request to create a new RFI
-type CreateRFIRequest struct {
-	OrgID                   int64          `json:"org_id" validate:"required"`
-	ProjectID               int64          `json:"project_id" validate:"required"`
-	LocationID              *int64         `json:"location_id,omitempty"`
-	Subject                 string         `json:"subject" validate:"required,max=500"`
-	Question                string         `json:"question" validate:"required"`
-	Description             string         `json:"description,omitempty"`
-	Category                string         `json:"category,omitempty"`
-	Discipline              string         `json:"discipline,omitempty"`
-	TradeType               string         `json:"trade_type,omitempty"`
-	ProjectPhase            string         `json:"project_phase,omitempty"`
-	Priority                string         `json:"priority,omitempty"`
-	ReviewerEmail           string         `json:"reviewer,omitempty"`
-	ApproverEmail           string         `json:"approver,omitempty"`
-	CCList                  []string       `json:"ccList,omitempty"`
-	DistributionList        []string       `json:"distributionList,omitempty"`
-	DueDate                 string         `json:"dueDate,omitempty"`
-	CostImpact              string         `json:"costImpact,omitempty"`
-	ScheduleImpact          string         `json:"scheduleImpact,omitempty"`
-	CostImpactAmount        *float64       `json:"costImpactAmount,omitempty"`
-	ScheduleImpactDays      int            `json:"scheduleImpactDays,omitempty"`
-	CostImpactDetails       string         `json:"costImpactDetails,omitempty"`
-	ScheduleImpactDetails   string         `json:"scheduleImpactDetails,omitempty"`
-	Location                string         `json:"location,omitempty"`
-	DrawingReferences       string         `json:"drawingReferences,omitempty"`
-	SpecificationReferences string         `json:"specificationReferences,omitempty"`
-	RelatedSubmittals       string         `json:"relatedSubmittals,omitempty"`
-	RelatedChangeEvents     string         `json:"relatedChangeEvents,omitempty"`
-	WorkflowType            string         `json:"workflowType,omitempty"`
-	RequiresApproval        bool           `json:"requiresApproval"`
-	UrgencyJustification    string         `json:"urgencyJustification,omitempty"`
-	BusinessJustification   string         `json:"businessJustification,omitempty"`
-	RFINumber               string         `json:"rfiNumber,omitempty"`
-	Attachments             []RFIAttachment `json:"attachments,omitempty"`
+// RFIReferences represents drawing and specification references
+type RFIReferences struct {
+	DrawingNumbers        []string `json:"drawing_numbers,omitempty"`
+	SpecificationSections []string `json:"specification_sections,omitempty"`
+	RelatedRFIs           []string `json:"related_rfis,omitempty"`
 }
 
-// UpdateRFIRequest represents the request to update an RFI
-type UpdateRFIRequest struct {
-	Subject                 string         `json:"subject,omitempty"`
-	Question                string         `json:"question,omitempty"`
-	Description             string         `json:"description,omitempty"`
-	Category                string         `json:"category,omitempty"`
-	Discipline              string         `json:"discipline,omitempty"`
-	TradeType               string         `json:"trade_type,omitempty"`
-	ProjectPhase            string         `json:"project_phase,omitempty"`
-	Priority                string         `json:"priority,omitempty"`
-	AssignedTo              *int64         `json:"assigned_to,omitempty"`
-	ReviewerEmail           string         `json:"reviewer,omitempty"`
-	ApproverEmail           string         `json:"approver,omitempty"`
-	CCList                  []string       `json:"ccList,omitempty"`
-	DistributionList        []string       `json:"distributionList,omitempty"`
-	DueDate                 string         `json:"dueDate,omitempty"`
-	CostImpact              string         `json:"costImpact,omitempty"`
-	ScheduleImpact          string         `json:"scheduleImpact,omitempty"`
-	CostImpactAmount        *float64       `json:"costImpactAmount,omitempty"`
-	ScheduleImpactDays      int            `json:"scheduleImpactDays,omitempty"`
-	CostImpactDetails       string         `json:"costImpactDetails,omitempty"`
-	ScheduleImpactDetails   string         `json:"scheduleImpactDetails,omitempty"`
-	Location                string         `json:"location,omitempty"`
-	DrawingReferences       string         `json:"drawingReferences,omitempty"`
-	SpecificationReferences string         `json:"specificationReferences,omitempty"`
-	RelatedSubmittals       string         `json:"relatedSubmittals,omitempty"`
-	RelatedChangeEvents     string         `json:"relatedChangeEvents,omitempty"`
-	UrgencyJustification    string         `json:"urgencyJustification,omitempty"`
-	BusinessJustification   string         `json:"businessJustification,omitempty"`
+// RFIRequest represents the unified request structure for both create and update operations (UI Compatible)
+type RFIRequest struct {
+	// Project Context (from path parameter and JWT)
+	ProjectID  int64  `json:"project_id,omitempty"`  // Set from path parameter
+	LocationID *int64 `json:"location_id,omitempty"` // Optional
+
+	// Basic Information (matching UI snake_case)
+	RFINumber string `json:"rfi_number,omitempty"` // Auto-generated if not provided
+	Subject   string `json:"subject" binding:"required,max=500"`
+	Question  string `json:"question" binding:"required"`
+
+	// Classification (matching UI values)
+	Priority string `json:"priority" binding:"required,oneof=LOW MEDIUM HIGH URGENT"`
+	Category string `json:"category" binding:"required,oneof=DESIGN SPECIFICATION SCHEDULE COORDINATION GENERAL SUBMITTAL CHANGE_EVENT"`
+
+	// Scheduling
+	DueDate string `json:"due_date,omitempty"` // YYYY-MM-DD format
+
+	// Assignment
+	AssignedTo *string `json:"assigned_to,omitempty"` // User ID as string (ball-in-court)
+
+	// Communication
+	DistributionList []string `json:"distribution_list,omitempty"`
+
+	// Attachments
+	Attachments []string `json:"attachments,omitempty"` // Array of file URLs
+
+	// References (nested object like UI expects)
+	References *RFIReferences `json:"references,omitempty"`
+
+	// Status (for updates only)
+	Status   string `json:"status,omitempty" binding:"omitempty,oneof=DRAFT SUBMITTED UNDER_REVIEW ANSWERED CLOSED VOID REQUIRES_REVISION"`
+	Response string `json:"response,omitempty"` // For answering RFIs
+
+	// Additional fields for comprehensive RFI management
+	ResponseAttachments []string `json:"response_attachments,omitempty"`
+	Description         string   `json:"description,omitempty"`
+	Discipline          string   `json:"discipline,omitempty"`
+	TradeType           string   `json:"trade_type,omitempty"`
+	ProjectPhase        string   `json:"project_phase,omitempty"`
+	CostImpactAmount    *float64 `json:"cost_impact_amount,omitempty"`
+	ScheduleImpactDays  *int     `json:"schedule_impact_days,omitempty"`
+	LocationDescription string   `json:"location_description,omitempty"`
 }
+
+// CreateRFIRequest uses the unified structure
+type CreateRFIRequest RFIRequest
+
+// UpdateRFIRequest uses the same unified structure
+type UpdateRFIRequest RFIRequest
 
 // UpdateRFIStatusRequest represents the request to update RFI status
 type UpdateRFIStatusRequest struct {
@@ -219,23 +209,34 @@ type RejectRFIRequest struct {
 	RejectionReason string `json:"rejection_reason" validate:"required"`
 }
 
-// RFI Status constants
+// RFI Status constants (matching UI expectations)
 const (
-	RFIStatusDraft      = "draft"
-	RFIStatusSubmitted  = "submitted"
-	RFIStatusInReview   = "in_review"
-	RFIStatusResponded  = "responded"
-	RFIStatusClosed     = "closed"
-	RFIStatusCancelled  = "cancelled"
-	RFIStatusOnHold     = "on_hold"
+	RFIStatusDraft           = "DRAFT"
+	RFIStatusSubmitted       = "SUBMITTED"
+	RFIStatusUnderReview     = "UNDER_REVIEW"
+	RFIStatusAnswered        = "ANSWERED"
+	RFIStatusClosed          = "CLOSED"
+	RFIStatusVoid            = "VOID"
+	RFIStatusRequiresRevision = "REQUIRES_REVISION"
 )
 
-// RFI Priority constants
+// RFI Priority constants (matching UI expectations)
 const (
-	RFIPriorityLow      = "low"
-	RFIPriorityMedium   = "medium"
-	RFIPriorityHigh     = "high"
-	RFIPriorityCritical = "critical"
+	RFIPriorityLow    = "LOW"
+	RFIPriorityMedium = "MEDIUM"
+	RFIPriorityHigh   = "HIGH"
+	RFIPriorityUrgent = "URGENT"
+)
+
+// RFI Category constants (matching UI expectations)
+const (
+	RFICategoryDesign        = "DESIGN"
+	RFICategorySpecification = "SPECIFICATION"
+	RFICategorySchedule      = "SCHEDULE"
+	RFICategoryCoordination  = "COORDINATION"
+	RFICategoryGeneral       = "GENERAL"
+	RFICategorySubmittal     = "SUBMITTAL"
+	RFICategoryChangeEvent   = "CHANGE_EVENT"
 )
 
 // RFI Comment Type constants
@@ -254,3 +255,4 @@ const (
 	RFIWorkflowExpress  = "EXPRESS"
 	RFIWorkflowCustom   = "CUSTOM"
 )
+
