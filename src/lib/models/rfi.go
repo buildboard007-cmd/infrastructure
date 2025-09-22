@@ -154,8 +154,14 @@ type RFIRequest struct {
 // CreateRFIRequest uses the unified structure
 type CreateRFIRequest RFIRequest
 
-// UpdateRFIRequest uses the same unified structure
-type UpdateRFIRequest RFIRequest
+// UpdateRFIRequest extends RFIRequest with action-based fields for consolidation
+type UpdateRFIRequest struct {
+	RFIRequest
+	// Action-based update fields (for consolidation)
+	Action       *string `json:"action,omitempty"`        // submit, approve, reject, respond
+	Notes        string  `json:"notes,omitempty"`         // General notes/comments
+	ResponseText string  `json:"response_text,omitempty"` // Response text for respond action
+}
 
 // UpdateRFIStatusRequest represents the request to update RFI status
 type UpdateRFIStatusRequest struct {

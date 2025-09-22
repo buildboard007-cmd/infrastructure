@@ -133,8 +133,7 @@ func (dao *AssignmentDao) GetAssignment(ctx context.Context, assignmentID int64,
 				WHEN 'location' THEN (SELECT name FROM iam.locations WHERE id = ua.context_id)
 				WHEN 'organization' THEN (SELECT name FROM iam.organizations WHERE id = ua.context_id)
 				ELSE 'Unknown'
-			END as context_name,
-			COALESCE(u.org_id, 0) as organization_id
+			END as context_name
 		FROM iam.user_assignments ua
 		LEFT JOIN iam.users u ON ua.user_id = u.id
 		LEFT JOIN iam.roles r ON ua.role_id = r.id
@@ -149,7 +148,7 @@ func (dao *AssignmentDao) GetAssignment(ctx context.Context, assignmentID int64,
 		&assignment.ID, &assignment.UserID, &assignment.RoleID, &assignment.ContextType, &assignment.ContextID,
 		&tradeType, &assignment.IsPrimary, &startDate, &endDate,
 		&assignment.CreatedAt, &assignment.CreatedBy, &assignment.UpdatedAt, &assignment.UpdatedBy, &assignment.IsDeleted,
-		&assignment.UserName, &assignment.UserEmail, &assignment.RoleName, &assignment.ContextName, &assignment.OrganizationID,
+		&assignment.UserName, &assignment.UserEmail, &assignment.RoleName, &assignment.ContextName,
 	)
 
 	if err == sql.ErrNoRows {
@@ -161,24 +160,16 @@ func (dao *AssignmentDao) GetAssignment(ctx context.Context, assignmentID int64,
 	}
 
 	// Handle nullable fields
-	assignment.TradeType = tradeType
-	assignment.StartDate = startDate
-	assignment.EndDate = endDate
-
-	// Calculate if assignment is active
-	now := time.Now()
-	assignment.IsActive = true
-	if startDate.Valid && startDate.Time.After(now) {
-		assignment.IsActive = false
+	if tradeType.Valid {
+		assignment.TradeType = &tradeType.String
 	}
-	if endDate.Valid && endDate.Time.Before(now) {
-		assignment.IsActive = false
+	if startDate.Valid {
+		dateStr := startDate.Time.Format("2006-01-02")
+		assignment.StartDate = &dateStr
 	}
-
-	// Calculate days remaining
-	if endDate.Valid && assignment.IsActive {
-		days := int(endDate.Time.Sub(now).Hours() / 24)
-		assignment.DaysRemaining = &days
+	if endDate.Valid {
+		dateStr := endDate.Time.Format("2006-01-02")
+		assignment.EndDate = &dateStr
 	}
 
 	return &assignment, nil
@@ -504,8 +495,7 @@ func (dao *AssignmentDao) GetAssignments(ctx context.Context, filters *models.As
 				WHEN 'location' THEN (SELECT name FROM iam.locations WHERE id = ua.context_id)
 				WHEN 'organization' THEN (SELECT name FROM iam.organizations WHERE id = ua.context_id)
 				ELSE 'Unknown'
-			END as context_name,
-			COALESCE(u.org_id, 0) as organization_id
+			END as context_name
 		FROM iam.user_assignments ua
 		LEFT JOIN iam.users u ON ua.user_id = u.id
 		LEFT JOIN iam.roles r ON ua.role_id = r.id
@@ -532,7 +522,7 @@ func (dao *AssignmentDao) GetAssignments(ctx context.Context, filters *models.As
 			&assignment.ID, &assignment.UserID, &assignment.RoleID, &assignment.ContextType, &assignment.ContextID,
 			&tradeType, &assignment.IsPrimary, &startDate, &endDate,
 			&assignment.CreatedAt, &assignment.CreatedBy, &assignment.UpdatedAt, &assignment.UpdatedBy, &assignment.IsDeleted,
-			&assignment.UserName, &assignment.UserEmail, &assignment.RoleName, &assignment.ContextName, &assignment.OrganizationID,
+			&assignment.UserName, &assignment.UserEmail, &assignment.RoleName, &assignment.ContextName,
 		)
 		if err != nil {
 			dao.Logger.WithError(err).Error("Failed to scan assignment row")
@@ -540,24 +530,16 @@ func (dao *AssignmentDao) GetAssignments(ctx context.Context, filters *models.As
 		}
 
 		// Handle nullable fields
-		assignment.TradeType = tradeType
-		assignment.StartDate = startDate
-		assignment.EndDate = endDate
-
-		// Calculate if assignment is active
-		now := time.Now()
-		assignment.IsActive = true
-		if startDate.Valid && startDate.Time.After(now) {
-			assignment.IsActive = false
+		if tradeType.Valid {
+			assignment.TradeType = &tradeType.String
 		}
-		if endDate.Valid && endDate.Time.Before(now) {
-			assignment.IsActive = false
+		if startDate.Valid {
+			dateStr := startDate.Time.Format("2006-01-02")
+			assignment.StartDate = &dateStr
 		}
-
-		// Calculate days remaining
-		if endDate.Valid && assignment.IsActive {
-			days := int(endDate.Time.Sub(now).Hours() / 24)
-			assignment.DaysRemaining = &days
+		if endDate.Valid {
+			dateStr := endDate.Time.Format("2006-01-02")
+			assignment.EndDate = &dateStr
 		}
 
 		assignments = append(assignments, assignment)
@@ -604,9 +586,6 @@ func (dao *AssignmentDao) GetUserAssignments(ctx context.Context, userID int64, 
 	assignmentsByType := make(map[string]int)
 
 	for _, assignment := range assignmentList.Assignments {
-		if assignment.IsActive {
-			activeCount++
-		}
 		assignmentsByType[assignment.ContextType]++
 	}
 
@@ -614,8 +593,8 @@ func (dao *AssignmentDao) GetUserAssignments(ctx context.Context, userID int64, 
 		UserID:            userID,
 		UserName:          userName,
 		UserEmail:         userEmail,
-		OrganizationID:    orgID,
-		OrganizationName:  orgName,
+		OrgID:             orgID,
+		OrgName:           orgName,
 		TotalAssignments:  assignmentList.Total,
 		ActiveAssignments: activeCount,
 		AssignmentsByType: assignmentsByType,
@@ -636,32 +615,12 @@ func (dao *AssignmentDao) GetContextAssignments(ctx context.Context, contextType
 		return nil, err
 	}
 
-	// Get context name
-	contextName := "Unknown"
-	if len(assignmentList.Assignments) > 0 {
-		contextName = assignmentList.Assignments[0].ContextName
-	}
-
-	// Calculate statistics
-	activeCount := 0
-	assignmentsByRole := make(map[string]int)
-
-	for _, assignment := range assignmentList.Assignments {
-		if assignment.IsActive {
-			activeCount++
-		}
-		assignmentsByRole[assignment.RoleName]++
-	}
-
 	return &models.ContextAssignmentSummary{
-		ContextType:       contextType,
-		ContextID:         contextID,
-		ContextName:       contextName,
-		OrganizationID:    orgID,
-		TotalAssignments:  assignmentList.Total,
-		ActiveAssignments: activeCount,
-		AssignmentsByRole: assignmentsByRole,
-		Assignments:       assignmentList.Assignments,
+		ContextType: contextType,
+		ContextID:   contextID,
+		ContextName: "Context",
+		OrgID:       orgID,
+		Assignments: assignmentList.Assignments,
 	}, nil
 }
 

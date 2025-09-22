@@ -13,6 +13,7 @@ import {InfrastructureProjectManagement} from "../function_construct/infrastruct
 import {InfrastructureUserManagement} from "../function_construct/infrastructure-user-management";
 import {InfrastructureIssueManagement} from "../function_construct/infrastructure-issue-management";
 import {InfrastructureRFIManagement} from "../function_construct/infrastructure-rfi-management";
+import {InfrastructureAssignmentManagement} from "../function_construct/infrastructure-assignment-management";
 
 export class LambdaConstruct extends Construct {
 
@@ -27,6 +28,7 @@ export class LambdaConstruct extends Construct {
     private readonly infrastructureUserManagement: InfrastructureUserManagement;
     private readonly infrastructureIssueManagement: InfrastructureIssueManagement;
     private readonly infrastructureRFIManagement: InfrastructureRFIManagement;
+    private readonly infrastructureAssignmentManagement: InfrastructureAssignmentManagement;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -47,6 +49,7 @@ export class LambdaConstruct extends Construct {
         this.infrastructureUserManagement = new InfrastructureUserManagement(this, 'InfrastructureUserManagement', funcProps);
         this.infrastructureIssueManagement = new InfrastructureIssueManagement(this, 'InfrastructureIssueManagement', funcProps);
         this.infrastructureRFIManagement = new InfrastructureRFIManagement(this, 'InfrastructureRFIManagement', funcProps);
+        this.infrastructureAssignmentManagement = new InfrastructureAssignmentManagement(this, 'InfrastructureAssignmentManagement', funcProps);
     }
 
     get corsLambda(): GoFunction {
@@ -135,5 +138,13 @@ export class LambdaConstruct extends Construct {
 
     get rfiManagementLambdaArn(): string {
         return this.infrastructureRFIManagement.functionArn;
+    }
+
+    get assignmentManagementLambda(): GoFunction {
+        return this.infrastructureAssignmentManagement.lambdaFunction;
+    }
+
+    get assignmentManagementLambdaArn(): string {
+        return this.infrastructureAssignmentManagement.lambdaFunction.functionArn;
     }
 }

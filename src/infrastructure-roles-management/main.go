@@ -121,21 +121,44 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 // handleCreateRole handles POST /roles
 func handleCreateRole(ctx context.Context, userID, orgID int64, body string) events.APIGatewayProxyResponse {
-	var createReq models.CreateRoleRequest
+	var createReq models.RoleRequest
 	if err := json.Unmarshal([]byte(body), &createReq); err != nil {
 		logger.WithError(err).Error("Failed to parse create role request")
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
 	}
 
 	// Validate required fields
-	if createReq.RoleName == "" || len(createReq.RoleName) < 2 || len(createReq.RoleName) > 100 {
+	if createReq.Name == "" || len(createReq.Name) < 2 || len(createReq.Name) > 100 {
 		return api.ErrorResponse(http.StatusBadRequest, "Role name must be between 2 and 100 characters", logger)
+	}
+
+	// Set defaults for creation
+	roleType := createReq.RoleType
+	if roleType == "" {
+		roleType = "custom" // Default to custom
+	}
+
+	accessLevel := createReq.AccessLevel
+	if accessLevel == "" {
+		accessLevel = "project" // Default to project level
+	}
+
+	// Determine OrgID based on role type
+	var targetOrgID *int64
+	if roleType == "standard" {
+		targetOrgID = nil // Standard roles are not tied to a specific org
+	} else {
+		targetOrgID = &orgID // Custom roles belong to the organization
 	}
 
 	// Create role object
 	role := &models.Role{
-		RoleName:    createReq.RoleName,
-		Description: createReq.Description,
+		Name:                     createReq.Name,
+		Description:              &createReq.Description,
+		OrgID:       targetOrgID,
+		RoleType:    roleType,
+		Category:    createReq.Category,
+		AccessLevel: accessLevel,
 	}
 
 	// Create role
@@ -180,7 +203,7 @@ func handleGetRoleWithPermissions(ctx context.Context, roleID, orgID int64) even
 
 // handleUpdateRole handles PUT /roles/{id}
 func handleUpdateRole(ctx context.Context, roleID, orgID int64, body string) events.APIGatewayProxyResponse {
-	var updateReq models.UpdateRoleRequest
+	var updateReq models.RoleRequest
 	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
 		logger.WithError(err).Error("Failed to parse update role request")
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
@@ -188,8 +211,8 @@ func handleUpdateRole(ctx context.Context, roleID, orgID int64, body string) eve
 
 	// Create role object with updates
 	role := &models.Role{
-		RoleName:    updateReq.RoleName,
-		Description: updateReq.Description,
+		Name:        updateReq.Name,
+		Description: &updateReq.Description,
 	}
 
 	updatedRole, err := roleRepository.UpdateRole(ctx, roleID, orgID, role)

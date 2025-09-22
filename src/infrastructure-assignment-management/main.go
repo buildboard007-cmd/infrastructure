@@ -29,6 +29,17 @@ var (
 )
 
 // Handler processes API Gateway requests for assignment management operations
+//
+// SIMPLIFIED API ENDPOINTS:
+//
+// Core CRUD Operations:
+//   GET    /assignments/{id}                                 - Get single assignment
+//   POST   /assignments                                      - Create assignment
+//   PUT    /assignments/{id}                                 - Update assignment
+//   DELETE /assignments/{id}                                 - Delete assignment
+//
+// Project Team Query:
+//   GET    /contexts/{contextType}/{contextId}/assignments  - Get team for project/location
 func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	logger.WithFields(logrus.Fields{
 		"method":      request.HTTPMethod,
@@ -57,39 +68,19 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	// Route the request based on path and method
 	switch {
-	// Basic assignment CRUD operations
-	case request.Resource == "/assignments" && request.HTTPMethod == "POST":
-		return handleCreateAssignment(ctx, request, claims)
-	case request.Resource == "/assignments" && request.HTTPMethod == "GET":
-		return handleGetAssignments(ctx, request, claims)
+	// Core assignment CRUD operations
 	case request.Resource == "/assignments/{assignmentId}" && request.HTTPMethod == "GET":
 		return handleGetAssignment(ctx, request, claims)
+	case request.Resource == "/assignments" && request.HTTPMethod == "POST":
+		return handleCreateAssignment(ctx, request, claims)
 	case request.Resource == "/assignments/{assignmentId}" && request.HTTPMethod == "PUT":
 		return handleUpdateAssignment(ctx, request, claims)
 	case request.Resource == "/assignments/{assignmentId}" && request.HTTPMethod == "DELETE":
 		return handleDeleteAssignment(ctx, request, claims)
 
-	// Bulk operations
-	case request.Resource == "/assignments/bulk" && request.HTTPMethod == "POST":
-		return handleCreateBulkAssignments(ctx, request, claims)
-	case request.Resource == "/assignments/transfer" && request.HTTPMethod == "POST":
-		return handleTransferAssignments(ctx, request, claims)
-
-	// User-specific endpoints
-	case request.Resource == "/users/{userId}/assignments" && request.HTTPMethod == "GET":
-		return handleGetUserAssignments(ctx, request, claims)
-	case request.Resource == "/users/{userId}/assignments/active" && request.HTTPMethod == "GET":
-		return handleGetUserActiveAssignments(ctx, request, claims)
-	case request.Resource == "/users/{userId}/contexts/{contextType}" && request.HTTPMethod == "GET":
-		return handleGetUserContexts(ctx, request, claims)
-
-	// Context-specific endpoints
+	// Project team endpoint
 	case request.Resource == "/contexts/{contextType}/{contextId}/assignments" && request.HTTPMethod == "GET":
 		return handleGetContextAssignments(ctx, request, claims)
-
-	// Permission checking
-	case request.Resource == "/permissions/check" && request.HTTPMethod == "POST":
-		return handleCheckPermission(ctx, request, claims)
 
 	default:
 		logger.WithFields(logrus.Fields{
@@ -119,72 +110,6 @@ func handleCreateAssignment(ctx context.Context, request events.APIGatewayProxyR
 	return api.SuccessResponse(http.StatusCreated, assignment, logger), nil
 }
 
-// handleGetAssignments handles GET /assignments with query filters
-func handleGetAssignments(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	filters := &models.AssignmentFilters{}
-
-	// Parse query parameters into filters
-	if userID := request.QueryStringParameters["user_id"]; userID != "" {
-		if id, err := strconv.ParseInt(userID, 10, 64); err == nil {
-			filters.UserID = &id
-		}
-	}
-
-	if roleID := request.QueryStringParameters["role_id"]; roleID != "" {
-		if id, err := strconv.ParseInt(roleID, 10, 64); err == nil {
-			filters.RoleID = &id
-		}
-	}
-
-	if contextType := request.QueryStringParameters["context_type"]; contextType != "" {
-		filters.ContextType = contextType
-	}
-
-	if contextID := request.QueryStringParameters["context_id"]; contextID != "" {
-		if id, err := strconv.ParseInt(contextID, 10, 64); err == nil {
-			filters.ContextID = &id
-		}
-	}
-
-	if isPrimary := request.QueryStringParameters["is_primary"]; isPrimary != "" {
-		if primary, err := strconv.ParseBool(isPrimary); err == nil {
-			filters.IsPrimary = &primary
-		}
-	}
-
-	if isActive := request.QueryStringParameters["is_active"]; isActive != "" {
-		if active, err := strconv.ParseBool(isActive); err == nil {
-			filters.IsActive = &active
-		}
-	}
-
-	if tradeType := request.QueryStringParameters["trade_type"]; tradeType != "" {
-		filters.TradeType = tradeType
-	}
-
-	if page := request.QueryStringParameters["page"]; page != "" {
-		if p, err := strconv.Atoi(page); err == nil {
-			filters.Page = p
-		}
-	}
-
-	if pageSize := request.QueryStringParameters["page_size"]; pageSize != "" {
-		if ps, err := strconv.Atoi(pageSize); err == nil {
-			filters.PageSize = ps
-		}
-	}
-
-	// Set organization filter from JWT
-	filters.OrganizationID = &claims.OrgID
-
-	assignments, err := assignmentRepository.GetAssignments(ctx, filters, claims.OrgID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to get assignments")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get assignments", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusOK, assignments, logger), nil
-}
 
 // handleGetAssignment handles GET /assignments/{assignmentId}
 func handleGetAssignment(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
@@ -254,110 +179,8 @@ func handleDeleteAssignment(ctx context.Context, request events.APIGatewayProxyR
 	return api.SuccessResponse(http.StatusOK, map[string]string{"message": "Assignment deleted successfully"}, logger), nil
 }
 
-// handleCreateBulkAssignments handles POST /assignments/bulk
-func handleCreateBulkAssignments(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	var bulkRequest models.BulkAssignmentRequest
-	if err := api.ParseJSONBody(request.Body, &bulkRequest); err != nil {
-		logger.WithError(err).Error("Invalid request body for bulk assignment")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
-	}
 
-	userID := claims.UserID
-	assignments, err := assignmentRepository.CreateBulkAssignments(ctx, &bulkRequest, userID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to create bulk assignments")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create bulk assignments", logger), nil
-	}
 
-	response := map[string]interface{}{
-		"message":     "Bulk assignments created successfully",
-		"count":       len(assignments),
-		"assignments": assignments,
-	}
-
-	return api.SuccessResponse(http.StatusCreated, response, logger), nil
-}
-
-// handleTransferAssignments handles POST /assignments/transfer
-func handleTransferAssignments(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	var transferRequest models.AssignmentTransferRequest
-	if err := api.ParseJSONBody(request.Body, &transferRequest); err != nil {
-		logger.WithError(err).Error("Invalid request body for transfer assignments")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
-	}
-
-	userID := claims.UserID
-	err := assignmentRepository.TransferAssignments(ctx, &transferRequest, userID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to transfer assignments")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to transfer assignments", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusOK, map[string]string{"message": "Assignments transferred successfully"}, logger), nil
-}
-
-// handleGetUserAssignments handles GET /users/{userId}/assignments
-func handleGetUserAssignments(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	userID, err := strconv.ParseInt(request.PathParameters["userId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid user ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid user ID", logger), nil
-	}
-
-	userAssignments, err := assignmentRepository.GetUserAssignments(ctx, userID, claims.OrgID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to get user assignments")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get user assignments", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusOK, userAssignments, logger), nil
-}
-
-// handleGetUserActiveAssignments handles GET /users/{userId}/assignments/active
-func handleGetUserActiveAssignments(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	userID, err := strconv.ParseInt(request.PathParameters["userId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid user ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid user ID", logger), nil
-	}
-
-	activeAssignments, err := assignmentRepository.GetActiveAssignments(ctx, userID, claims.OrgID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to get user active assignments")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get user active assignments", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusOK, activeAssignments, logger), nil
-}
-
-// handleGetUserContexts handles GET /users/{userId}/contexts/{contextType}
-func handleGetUserContexts(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	userID, err := strconv.ParseInt(request.PathParameters["userId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid user ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid user ID", logger), nil
-	}
-
-	contextType := request.PathParameters["contextType"]
-	if contextType == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Context type is required", logger), nil
-	}
-
-	contextIDs, err := assignmentRepository.GetUserContexts(ctx, userID, contextType, claims.OrgID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to get user contexts")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get user contexts", logger), nil
-	}
-
-	response := map[string]interface{}{
-		"user_id":      userID,
-		"context_type": contextType,
-		"context_ids":  contextIDs,
-		"count":        len(contextIDs),
-	}
-
-	return api.SuccessResponse(http.StatusOK, response, logger), nil
-}
 
 // handleGetContextAssignments handles GET /contexts/{contextType}/{contextId}/assignments
 func handleGetContextAssignments(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
@@ -381,22 +204,6 @@ func handleGetContextAssignments(ctx context.Context, request events.APIGatewayP
 	return api.SuccessResponse(http.StatusOK, contextAssignments, logger), nil
 }
 
-// handleCheckPermission handles POST /permissions/check
-func handleCheckPermission(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	var permissionRequest models.PermissionCheckRequest
-	if err := api.ParseJSONBody(request.Body, &permissionRequest); err != nil {
-		logger.WithError(err).Error("Invalid request body for permission check")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
-	}
-
-	permissionResponse, err := assignmentRepository.CheckPermission(ctx, &permissionRequest, claims.OrgID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to check permission")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to check permission", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusOK, permissionResponse, logger), nil
-}
 
 // setupPostgresSQLClient initializes the PostgreSQL database connection and repository
 func setupPostgresSQLClient(ssmParams map[string]string) error {

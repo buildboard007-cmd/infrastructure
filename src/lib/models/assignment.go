@@ -57,16 +57,28 @@ type BulkAssignmentRequest struct {
 	EndDate     string  `json:"end_date,omitempty"`
 }
 
-// AssignmentResponse represents the enriched assignment response with related data
+// AssignmentResponse represents the clean assignment response without sql.Null* types
 type AssignmentResponse struct {
-	UserAssignment
-	UserName        string `json:"user_name,omitempty"`
-	UserEmail       string `json:"user_email,omitempty"`
-	RoleName        string `json:"role_name,omitempty"`
-	ContextName     string `json:"context_name,omitempty"` // Project name, location name, etc.
-	OrganizationID  int64  `json:"organization_id,omitempty"`
-	IsActive        bool   `json:"is_active"` // Based on start/end dates
-	DaysRemaining   *int   `json:"days_remaining,omitempty"`
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	RoleID      int64     `json:"role_id"`
+	ContextType string    `json:"context_type"`
+	ContextID   int64     `json:"context_id"`
+	TradeType   *string   `json:"trade_type,omitempty"`
+	IsPrimary   bool      `json:"is_primary"`
+	StartDate   *string   `json:"start_date,omitempty"`   // YYYY-MM-DD format
+	EndDate     *string   `json:"end_date,omitempty"`     // YYYY-MM-DD format
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedBy   int64     `json:"created_by"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	UpdatedBy   int64     `json:"updated_by"`
+	IsDeleted   bool      `json:"is_deleted"`
+
+	// Enriched fields
+	UserName    string `json:"user_name,omitempty"`
+	UserEmail   string `json:"user_email,omitempty"`
+	RoleName    string `json:"role_name,omitempty"`
+	ContextName string `json:"context_name,omitempty"`
 }
 
 // AssignmentListResponse represents the response for listing assignments
@@ -82,24 +94,21 @@ type UserAssignmentSummary struct {
 	UserID           int64                    `json:"user_id"`
 	UserName         string                   `json:"user_name"`
 	UserEmail        string                   `json:"user_email"`
-	OrganizationID   int64                    `json:"organization_id"`
-	OrganizationName string                   `json:"organization_name"`
+	OrgID            int64                    `json:"org_id"`
+	OrgName          string                   `json:"org_name"`
 	TotalAssignments int                      `json:"total_assignments"`
 	ActiveAssignments int                     `json:"active_assignments"`
 	AssignmentsByType map[string]int          `json:"assignments_by_type"` // {"organization": 1, "project": 3, "location": 2}
 	Assignments      []AssignmentResponse     `json:"assignments"`
 }
 
-// ContextAssignmentSummary represents a summary of all assignments for a context (project, location, etc.)
+// ContextAssignmentSummary represents assignments for a context (project, location, etc.)
 type ContextAssignmentSummary struct {
-	ContextType      string               `json:"context_type"`
-	ContextID        int64                `json:"context_id"`
-	ContextName      string               `json:"context_name"`
-	OrganizationID   int64                `json:"organization_id"`
-	TotalAssignments int                  `json:"total_assignments"`
-	ActiveAssignments int                 `json:"active_assignments"`
-	AssignmentsByRole map[string]int      `json:"assignments_by_role"` // {"Project Manager": 1, "Field Worker": 5}
-	Assignments      []AssignmentResponse `json:"assignments"`
+	ContextType string               `json:"context_type"`
+	ContextID   int64                `json:"context_id"`
+	ContextName string               `json:"context_name"`
+	OrgID       int64                `json:"org_id"`
+	Assignments []AssignmentResponse `json:"assignments"`
 }
 
 // AssignmentTransferRequest represents the request to transfer assignments from one user to another

@@ -79,6 +79,7 @@ export class SubStack extends NestedStack {
         const userManagementIntegration = new LambdaIntegration(this.lambdaConstruct.userManagementLambda);
         const issueManagementIntegration = new LambdaIntegration(this.lambdaConstruct.issueManagementLambda);
         const rfiManagementIntegration = new LambdaIntegration(this.lambdaConstruct.rfiManagementLambda);
+        const assignmentManagementIntegration = new LambdaIntegration(this.lambdaConstruct.assignmentManagementLambda);
         // CORS Lambda integration removed - using API Gateway CORS instead
 
         // Create /org resource with Cognito authorization
@@ -317,25 +318,15 @@ export class SubStack extends NestedStack {
         });
         // CORS handled at API Gateway level
 
-        // Add RFI management routes
-        // Create /projects/{projectId}/rfis resource for RFI management
-        const projectRFIsResource = projectIdResource.addResource('rfis');
-        projectRFIsResource.addMethod('GET', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        projectRFIsResource.addMethod('POST', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // CORS handled at API Gateway level
+        // CONSOLIDATED RFI MANAGEMENT (6 endpoints total)
 
-        // Create /rfis resource for direct RFI operations
+        // Core RFI CRUD operations
         const rfisResource = this.api.root.addResource('rfis');
         rfisResource.addMethod('POST', rfiManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
         // CORS handled at API Gateway level
 
-        // Create /rfis/{rfiId} resource for specific RFI operations
         const rfiIdResource = rfisResource.addResource('{rfiId}');
         rfiIdResource.addMethod('GET', rfiManagementIntegration, {
             authorizer: cognitoAuthorizer
@@ -343,72 +334,54 @@ export class SubStack extends NestedStack {
         rfiIdResource.addMethod('PUT', rfiManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        // rfiIdResource.addMethod('DELETE', rfiManagementIntegration, {
-        //     authorizer: cognitoAuthorizer
-        // }); // Temporarily commented to avoid API Gateway limits
         // CORS handled at API Gateway level
 
-        // Create /rfis/{rfiId}/status resource for status-only updates
-        const rfiStatusResource = rfiIdResource.addResource('status');
-        rfiStatusResource.addMethod('PATCH', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // CORS handled at API Gateway level
-
-        // Create /rfis/{rfiId}/submit resource for submitting RFI
-        const rfiSubmitResource = rfiIdResource.addResource('submit');
-        rfiSubmitResource.addMethod('POST', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // CORS handled at API Gateway level
-
-        // Create /rfis/{rfiId}/respond resource for responding to RFI
-        const rfiRespondResource = rfiIdResource.addResource('respond');
-        rfiRespondResource.addMethod('POST', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // CORS handled at API Gateway level
-
-        // Create /rfis/{rfiId}/approve resource for approving RFI
-        const rfiApproveResource = rfiIdResource.addResource('approve');
-        rfiApproveResource.addMethod('PATCH', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // CORS handled at API Gateway level
-
-        // Create /rfis/{rfiId}/reject resource for rejecting RFI
-        const rfiRejectResource = rfiIdResource.addResource('reject');
-        rfiRejectResource.addMethod('PATCH', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // CORS handled at API Gateway level
-
-        // Create /rfis/{rfiId}/attachments resource for RFI attachment management
+        // Sub-resource operations
         const rfiAttachmentsResource = rfiIdResource.addResource('attachments');
-        rfiAttachmentsResource.addMethod('GET', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
         rfiAttachmentsResource.addMethod('POST', rfiManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        // CORS handled at API Gateway level
 
-        // Create /rfis/{rfiId}/attachments/{attachmentId} resource for specific attachment operations
-        const rfiAttachmentIdResource = rfiAttachmentsResource.addResource('{attachmentId}');
-        rfiAttachmentIdResource.addMethod('GET', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // rfiAttachmentIdResource.addMethod('DELETE', rfiManagementIntegration, {
-        //     authorizer: cognitoAuthorizer
-        // }); // Temporarily commented to avoid API Gateway limits
-        // CORS handled at API Gateway level
-
-        // Create /rfis/{rfiId}/comments resource for RFI comment management
         const rfiCommentsResource = rfiIdResource.addResource('comments');
-        rfiCommentsResource.addMethod('GET', rfiManagementIntegration, {
+        rfiCommentsResource.addMethod('POST', rfiManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
-        rfiCommentsResource.addMethod('POST', rfiManagementIntegration, {
+        // CORS handled at API Gateway level
+
+        // Create /assignments resource for direct assignment operations
+        const assignmentsResource = this.api.root.addResource('assignments');
+        assignmentsResource.addMethod('POST', assignmentManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
+        // Create /assignments/{assignmentId} resource for specific assignment operations
+        const assignmentIdResource = assignmentsResource.addResource('{assignmentId}');
+        assignmentIdResource.addMethod('GET', assignmentManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        assignmentIdResource.addMethod('PUT', assignmentManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        assignmentIdResource.addMethod('DELETE', assignmentManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
+        // Shared /contexts resource for both RFI and assignment queries
+        const contextsResource = this.api.root.addResource('contexts');
+        const contextTypeResource = contextsResource.addResource('{contextType}');
+        const contextIdResource = contextTypeResource.addResource('{contextId}');
+
+        // Context-based RFI queries (replaces /projects/{projectId}/rfis)
+        const contextRfisResource = contextIdResource.addResource('rfis');
+        contextRfisResource.addMethod('GET', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+
+        // Context-based assignment queries (project team queries)
+        const contextAssignmentsResource = contextIdResource.addResource('assignments');
+        contextAssignmentsResource.addMethod('GET', assignmentManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
         // CORS handled at API Gateway level

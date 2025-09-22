@@ -1,0 +1,500 @@
+{
+  "info": {
+    "_postman_id": "roles-management-api-collection-001",
+    "name": "Roles Management API",
+    "description": "API collection for Roles Management service including role creation, listing, updates, and permission management.\n\n🎯 SERVICE SCOPE:\nThis collection contains endpoints that are actually implemented in the roles management service:\n- Role CRUD operations (create, read, update, delete)\n- Organization role listing (standard + custom roles)\n- Role permission management\n- Role assignment workflows\n\n✅ UNIFIED REQUEST STRUCTURE (v3.0 - UI Compatible):\n- Create Role: POST /roles (unified structure)\n- List Roles: GET /roles (returns standard + custom roles)\n- Get Role: GET /roles/{roleId} (detailed view with permissions)\n- Update Role: PUT /roles/{roleId} (same structure as create)\n- Delete Role: DELETE /roles/{roleId} (soft delete)\n- Assign Permission: POST /roles/{roleId}/permissions\n- Remove Permission: DELETE /roles/{roleId}/permissions\n\n📋 REQUEST FORMAT (UI Compatible):\n```json\n{\n  \"name\": \"Project Manager\",\n  \"description\": \"Manages project operations\",\n  \"role_type\": \"custom\",\n  \"category\": \"management\",\n  \"access_level\": \"project\"\n}\n```\n\n🏗️ ROLE STRUCTURE:\n- **Role Types**: 'standard' (across all orgs) or 'custom' (specific to org)\n- **Categories**: 'management', 'field', 'office', 'external', 'admin'\n- **Access Levels**: 'organization', 'location', 'project'\n- **Organization Logic**: Standard roles (org_id = NULL), Custom roles (org_id = specific org)\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Super admin access required for role management\n- Enhanced data integrity constraints\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Super admin privileges required for all operations\n- Same request structure for create and update operations\n\n🏗️ CONSTRUCTION WORKFLOW:\n1. Super admins create standard roles (available to all orgs)\n2. Organization admins create custom roles (specific to their org)\n3. Roles are assigned to users through user assignment workflow\n4. Permissions can be attached to roles for fine-grained access control\n\n📊 ROLE EXAMPLES:\n- **Standard Roles**: Super Admin, System Manager, Field Technician\n- **Custom Roles**: Company Admin, Project Manager, Site Supervisor, Field Worker\n\n🔄 API WORKFLOW:\n1. List available roles (GET /roles) - returns both standard and custom\n2. Create new roles (POST /roles) - specify type and category\n3. Manage permissions (POST/DELETE /roles/{id}/permissions)\n4. Update role details (PUT /roles/{id})\n5. Remove roles when no longer needed (DELETE /roles/{id})",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Role",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Role created successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('name');",
+              "    pm.expect(responseJson).to.have.property('role_type');",
+              "    pm.expect(responseJson).to.have.property('category');",
+              "    pm.expect(responseJson).to.have.property('access_level');",
+              "    ",
+              "    // Store role_id for other requests",
+              "    pm.globals.set('role_id', responseJson.id);",
+              "    console.log('Created Role:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Senior Project Manager\",\n  \"description\": \"Manages large-scale construction projects\",\n  \"role_type\": \"custom\",\n  \"category\": \"management\",\n  \"access_level\": \"project\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "roles"
+          ]
+        }
+      }
+    },
+    {
+      "name": "List Organization Roles",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Returns roles list', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('roles');",
+              "    pm.expect(responseJson).to.have.property('total');",
+              "    pm.expect(responseJson.roles).to.be.an('array');",
+              "    ",
+              "    if (responseJson.roles.length > 0) {",
+              "        const role = responseJson.roles[0];",
+              "        pm.expect(role).to.have.property('id');",
+              "        pm.expect(role).to.have.property('name');",
+              "        pm.expect(role).to.have.property('role_type');",
+              "        pm.expect(role).to.have.property('category');",
+              "        pm.expect(role).to.have.property('access_level');",
+              "        ",
+              "        // Store first role_id for other requests",
+              "        pm.globals.set('existing_role_id', role.id);",
+              "    }",
+              "    ",
+              "    console.log('Organization Roles:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "roles"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Role Details",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Returns role details with permissions', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('name');",
+              "    pm.expect(responseJson).to.have.property('role_type');",
+              "    pm.expect(responseJson).to.have.property('category');",
+              "    pm.expect(responseJson).to.have.property('access_level');",
+              "    pm.expect(responseJson).to.have.property('permissions');",
+              "    pm.expect(responseJson.permissions).to.be.an('array');",
+              "    ",
+              "    console.log('Role Details:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{existing_role_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "roles",
+            "{{existing_role_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update Role",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Role updated successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('name');",
+              "    pm.expect(responseJson).to.have.property('role_type');",
+              "    pm.expect(responseJson).to.have.property('category');",
+              "    pm.expect(responseJson).to.have.property('access_level');",
+              "    ",
+              "    console.log('Updated Role:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Updated Role Name\",\n  \"description\": \"Updated role description\",\n  \"category\": \"management\",\n  \"access_level\": \"location\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{existing_role_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "roles",
+            "{{existing_role_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create Standard Role",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Standard role created successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('name');",
+              "    pm.expect(responseJson.role_type).to.equal('standard');",
+              "    pm.expect(responseJson.org_id).to.be.null;",
+              "    ",
+              "    console.log('Created Standard Role:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Quality Inspector\",\n  \"description\": \"Standard quality control inspector role\",\n  \"role_type\": \"standard\",\n  \"category\": \"field\",\n  \"access_level\": \"project\"\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "roles"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Assign Permission to Role",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Permission assigned successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('message');",
+              "    pm.expect(responseJson.message).to.include('assigned');",
+              "    ",
+              "    console.log('Permission Assignment Result:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"permission_id\": {{permission_id}}\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{existing_role_id}}/permissions",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "roles",
+            "{{existing_role_id}}",
+            "permissions"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Remove Permission from Role",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Permission removed successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('message');",
+              "    pm.expect(responseJson.message).to.include('unassigned');",
+              "    ",
+              "    console.log('Permission Removal Result:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"permission_id\": {{permission_id}}\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{existing_role_id}}/permissions",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "roles",
+            "{{existing_role_id}}",
+            "permissions"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete Role",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 204', function () {",
+              "    pm.response.to.have.status(204);",
+              "});",
+              "",
+              "pm.test('Role deleted successfully', function () {",
+              "    console.log('Role deleted successfully');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/roles/{{role_id}}",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "roles",
+            "{{role_id}}"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "access_token",
+      "value": "",
+      "description": "JWT ID Token from Cognito authentication"
+    },
+    {
+      "key": "role_id",
+      "value": "",
+      "description": "ID of the role created during tests"
+    },
+    {
+      "key": "existing_role_id",
+      "value": "7",
+      "description": "ID of an existing role for testing"
+    },
+    {
+      "key": "permission_id",
+      "value": "1",
+      "description": "ID of a permission to assign/remove"
+    }
+  ]
+}

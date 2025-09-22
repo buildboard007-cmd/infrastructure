@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"infrastructure/lib/api"
 	"infrastructure/lib/auth"
@@ -15,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -32,538 +30,276 @@ var (
 	rfiRepository data.RFIRepository
 )
 
+// Handler processes API Gateway requests for RFI management operations
+//
+// CONSOLIDATED API ENDPOINTS (6 total):
+//
+// Core CRUD Operations:
+//   GET    /rfis/{id}                                    - Get RFI with all data (attachments, comments)
+//   POST   /rfis                                         - Create RFI
+//   PUT    /rfis/{id}                                    - Update RFI (including status changes via action field)
+//
+// Context Query:
+//   GET    /contexts/{contextType}/{contextId}/rfis     - Get RFIs for project/location
+//
+// Sub-resources:
+//   POST   /rfis/{id}/attachments                       - Add attachment
+//   POST   /rfis/{id}/comments                          - Add comment
 func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	logger.WithFields(logrus.Fields{
-		"operation": "Handler",
-		"method":    request.HTTPMethod,
-		"path":      request.Path,
-		"resource":  request.Resource,
-	}).Info("RFI management request received")
+		"method":      request.HTTPMethod,
+		"path":        request.Path,
+		"resource":    request.Resource,
+		"path_params": request.PathParameters,
+		"operation":   "Handler",
+	}).Debug("Processing RFI management request")
 
 	// Extract claims from JWT token via API Gateway authorizer
 	claims, err := auth.ExtractClaimsFromRequest(request)
 	if err != nil {
-		logger.WithError(err).Error("Authentication failed")
+		logger.WithFields(logrus.Fields{
+			"error":     err.Error(),
+			"operation": "Handler",
+		}).Error("Authentication failed")
 		return api.ErrorResponse(http.StatusUnauthorized, "Authentication failed", logger), nil
 	}
 
-	// Handle different routes
-	switch request.HTTPMethod {
-	case http.MethodPost:
-		// POST /rfis - Create new RFI
-		if request.Resource == "/rfis" {
-			return handleCreateRFI(ctx, claims.UserID, claims.OrgID, request.Body), nil
-		}
-		// POST /rfis/{rfiId}/submit - Submit RFI for review
-		if strings.Contains(request.Resource, "/rfis/{rfiId}/submit") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleSubmitRFI(ctx, rfiID, claims.UserID, request.Body), nil
-		}
-		// POST /rfis/{rfiId}/respond - Respond to RFI
-		if strings.Contains(request.Resource, "/rfis/{rfiId}/respond") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleRespondToRFI(ctx, rfiID, claims.UserID, request.Body), nil
-		}
-		// POST /rfis/{rfiId}/approve - Approve RFI
-		if strings.Contains(request.Resource, "/rfis/{rfiId}/approve") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleApproveRFI(ctx, rfiID, claims.UserID, request.Body), nil
-		}
-		// POST /rfis/{rfiId}/reject - Reject RFI
-		if strings.Contains(request.Resource, "/rfis/{rfiId}/reject") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleRejectRFI(ctx, rfiID, claims.UserID, request.Body), nil
-		}
-		// POST /rfis/{rfiId}/comments - Add comment to RFI
-		if strings.Contains(request.Resource, "/rfis/{rfiId}/comments") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleAddRFIComment(ctx, rfiID, claims.UserID, request.Body), nil
-		}
-		// POST /rfis/{rfiId}/attachments - Add attachment to RFI
-		if strings.Contains(request.Resource, "/rfis/{rfiId}/attachments") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleAddRFIAttachment(ctx, rfiID, claims.UserID, request.Body), nil
-		}
-		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
+	logger.WithFields(logrus.Fields{
+		"user_id":   claims.UserID,
+		"org_id":    claims.OrgID,
+		"email":     claims.Email,
+		"operation": "Handler",
+	}).Debug("User authenticated successfully")
 
-	case http.MethodGet:
-		// GET /projects/{projectId}/rfis - List RFIs for project
-		if strings.Contains(request.Resource, "/projects/{projectId}/rfis") {
-			projectID, err := strconv.ParseInt(request.PathParameters["projectId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
-			}
-			// Ensure filters map is not nil
-			filters := request.QueryStringParameters
-			if filters == nil {
-				filters = make(map[string]string)
-			}
-			return handleGetProjectRFIs(ctx, projectID, claims.OrgID, filters), nil
-		}
+	// Route the request based on path and method
+	switch {
+	// Core RFI CRUD operations
+	case request.Resource == "/rfis/{rfiId}" && request.HTTPMethod == "GET":
+		return handleGetRFI(ctx, request, claims)
+	case request.Resource == "/rfis" && request.HTTPMethod == "POST":
+		return handleCreateRFI(ctx, request, claims)
+	case request.Resource == "/rfis/{rfiId}" && request.HTTPMethod == "PUT":
+		return handleUpdateRFI(ctx, request, claims)
 
-		// GET /rfis/{rfiId} - Get specific RFI
-		if strings.Contains(request.Resource, "/rfis/{rfiId}") && !strings.Contains(request.Resource, "/comments") && !strings.Contains(request.Resource, "/attachments") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleGetRFI(ctx, rfiID, claims.OrgID), nil
-		}
+	// Context-based RFI queries
+	case request.Resource == "/contexts/{contextType}/{contextId}/rfis" && request.HTTPMethod == "GET":
+		return handleGetContextRFIs(ctx, request, claims)
 
-		// GET /rfis/{rfiId}/comments - Get RFI comments
-		if strings.Contains(request.Resource, "/rfis/{rfiId}/comments") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleGetRFIComments(ctx, rfiID), nil
-		}
-
-		// GET /rfis/{rfiId}/attachments - Get RFI attachments
-		if strings.Contains(request.Resource, "/rfis/{rfiId}/attachments") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleGetRFIAttachments(ctx, rfiID), nil
-		}
-
-		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
-
-	case http.MethodPut:
-		// PUT /rfis/{rfiId} - Update RFI
-		if strings.Contains(request.Resource, "/rfis/{rfiId}") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleUpdateRFI(ctx, rfiID, claims.UserID, claims.OrgID, request.Body), nil
-		}
-		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
-
-	case http.MethodPatch:
-		// PATCH /rfis/{rfiId}/status - Update RFI status
-		if strings.Contains(request.Resource, "/rfis/{rfiId}/status") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleUpdateRFIStatus(ctx, rfiID, claims.UserID, claims.OrgID, request.Body), nil
-		}
-		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
-
-	case http.MethodDelete:
-		// DELETE /rfis/{rfiId} - Delete RFI
-		if strings.Contains(request.Resource, "/rfis/{rfiId}") {
-			rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-			if err != nil {
-				return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-			}
-			return handleDeleteRFI(ctx, rfiID, claims.UserID, claims.OrgID), nil
-		}
-		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
+	// Sub-resource operations
+	case request.Resource == "/rfis/{rfiId}/attachments" && request.HTTPMethod == "POST":
+		return handleAddRFIAttachment(ctx, request, claims)
+	case request.Resource == "/rfis/{rfiId}/comments" && request.HTTPMethod == "POST":
+		return handleAddRFIComment(ctx, request, claims)
 
 	default:
-		return api.ErrorResponse(http.StatusMethodNotAllowed, "Method not allowed", logger), nil
+		logger.WithFields(logrus.Fields{
+			"method":    request.HTTPMethod,
+			"resource":  request.Resource,
+			"operation": "Handler",
+		}).Warn("Endpoint not found")
+		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
 	}
 }
 
-// handleCreateRFI handles the creation of a new RFI with unified structure and JWT-based orgID
-func handleCreateRFI(ctx context.Context, userID, orgID int64, body string) events.APIGatewayProxyResponse {
-	// Parse unified request structure
+// handleCreateRFI handles POST /rfis
+func handleCreateRFI(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
 	var createReq models.CreateRFIRequest
-	if err := json.Unmarshal([]byte(body), &createReq); err != nil {
-		logger.WithError(err).Error("Failed to parse create RFI request")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
+	if err := api.ParseJSONBody(request.Body, &createReq); err != nil {
+		logger.WithError(err).Error("Invalid request body for create RFI")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
 	}
 
-	// Extract project_id from request (should be in request body)
-	projectID := createReq.ProjectID
-	if projectID == 0 {
-		return api.ErrorResponse(http.StatusBadRequest, "Project ID is required", logger)
-	}
-
-	// Validate required fields from unified structure
-	if createReq.Subject == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Subject is required", logger)
-	}
-	if createReq.Question == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Question is required", logger)
-	}
-	if createReq.Priority == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Priority is required", logger)
-	}
-	if createReq.Category == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Category is required", logger)
-	}
-
-	// Validate category value
-	validCategories := []string{
-		"DESIGN", "SPECIFICATION", "SCHEDULE", "COORDINATION",
-		"GENERAL", "SUBMITTAL", "CHANGE_EVENT",
-	}
-	isValidCategory := false
-	for _, c := range validCategories {
-		if createReq.Category == c {
-			isValidCategory = true
-			break
-		}
-	}
-	if !isValidCategory {
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid category value", logger)
-	}
-
-	// Create RFI using repository with orgID from JWT (validation happens in repository)
-	createdRFI, err := rfiRepository.CreateRFI(ctx, projectID, userID, orgID, &createReq)
+	userID := claims.UserID
+	createdRFI, err := rfiRepository.CreateRFI(ctx, createReq.ProjectID, userID, claims.OrgID, &createReq)
 	if err != nil {
-		if err.Error() == "project does not belong to your organization" {
-			return api.ErrorResponse(http.StatusForbidden, "Project does not belong to your organization", logger)
-		}
 		logger.WithError(err).Error("Failed to create RFI")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create RFI", logger)
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create RFI", logger), nil
 	}
 
-	logger.WithFields(logrus.Fields{
-		"rfi_id":     createdRFI.ID,
-		"project_id": createdRFI.ProjectID,
-		"user_id":    userID,
-		"org_id":     orgID,
-	}).Info("RFI created successfully")
-
-	return api.SuccessResponse(http.StatusCreated, createdRFI, logger)
+	return api.SuccessResponse(http.StatusCreated, createdRFI, logger), nil
 }
 
-// handleGetProjectRFIs handles getting all RFIs for a project
-func handleGetProjectRFIs(ctx context.Context, projectID, orgID int64, filters map[string]string) events.APIGatewayProxyResponse {
-	rfis, err := rfiRepository.GetRFIsByProject(ctx, projectID, filters)
+// handleGetRFI handles GET /rfis/{rfiId} - returns RFI with all attachments and comments
+func handleGetRFI(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
+	rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
 	if err != nil {
-		logger.WithError(err).Error("Failed to get project RFIs")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to retrieve RFIs", logger)
+		logger.WithError(err).Error("Invalid RFI ID")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
 	}
 
-	response := models.RFIListResponse{
-		RFIs:       rfis,
-		TotalCount: len(rfis),
-	}
-
-	logger.WithFields(logrus.Fields{
-		"project_id": projectID,
-		"count":      len(rfis),
-	}).Info("Project RFIs retrieved successfully")
-
-	return api.SuccessResponse(http.StatusOK, response, logger)
-}
-
-// handleGetRFI handles getting a specific RFI
-func handleGetRFI(ctx context.Context, rfiID, orgID int64) events.APIGatewayProxyResponse {
 	rfi, err := rfiRepository.GetRFI(ctx, rfiID)
 	if err != nil {
 		if err.Error() == "RFI not found" {
-			return api.ErrorResponse(http.StatusNotFound, "RFI not found", logger)
+			return api.ErrorResponse(http.StatusNotFound, "RFI not found", logger), nil
 		}
 		logger.WithError(err).Error("Failed to get RFI")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to retrieve RFI", logger)
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get RFI", logger), nil
 	}
 
-	// Get comments and attachments
+	// Enrich with comments and attachments
 	comments, _ := rfiRepository.GetRFIComments(ctx, rfiID)
 	attachments, _ := rfiRepository.GetRFIAttachments(ctx, rfiID)
 
 	rfi.Comments = comments
 	rfi.Attachments = attachments
 
-	logger.WithFields(logrus.Fields{
-		"rfi_id": rfiID,
-	}).Info("RFI retrieved successfully")
-
-	return api.SuccessResponse(http.StatusOK, rfi, logger)
+	return api.SuccessResponse(http.StatusOK, rfi, logger), nil
 }
 
-// handleUpdateRFI handles updating an RFI with unified structure and orgID validation
-func handleUpdateRFI(ctx context.Context, rfiID, userID, orgID int64, body string) events.APIGatewayProxyResponse {
-	// Parse unified request structure
-	var updateReq models.UpdateRFIRequest
-	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
-		logger.WithError(err).Error("Failed to parse update RFI request")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
+// handleUpdateRFI handles PUT /rfis/{rfiId} - supports action field for status changes
+func handleUpdateRFI(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
+	rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
+	if err != nil {
+		logger.WithError(err).Error("Invalid RFI ID")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
 	}
 
-	// Update RFI using repository with orgID from JWT (validation happens in repository)
-	updatedRFI, err := rfiRepository.UpdateRFI(ctx, rfiID, userID, orgID, &updateReq)
+	var updateReq models.UpdateRFIRequest
+	if err := api.ParseJSONBody(request.Body, &updateReq); err != nil {
+		logger.WithError(err).Error("Invalid request body for update RFI")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
+	}
+
+	userID := claims.UserID
+
+	// Handle action field for status changes (consolidates submit, approve, reject, respond)
+	if updateReq.Action != nil {
+		switch *updateReq.Action {
+		case "submit":
+			err = rfiRepository.SubmitRFI(ctx, rfiID, nil, userID) // assignedTo can be nil for now
+		case "approve":
+			err = rfiRepository.ApproveRFI(ctx, rfiID, userID, updateReq.Notes)
+		case "reject":
+			if updateReq.Notes == "" {
+				return api.ErrorResponse(http.StatusBadRequest, "Rejection reason is required", logger), nil
+			}
+			err = rfiRepository.RejectRFI(ctx, rfiID, userID, updateReq.Notes)
+		case "respond":
+			if updateReq.ResponseText == "" {
+				return api.ErrorResponse(http.StatusBadRequest, "Response text is required", logger), nil
+			}
+			err = rfiRepository.RespondToRFI(ctx, rfiID, updateReq.ResponseText, userID)
+		default:
+			return api.ErrorResponse(http.StatusBadRequest, "Invalid action", logger), nil
+		}
+
+		if err != nil {
+			logger.WithError(err).Error("Failed to perform RFI action")
+			return api.ErrorResponse(http.StatusInternalServerError, "Failed to update RFI", logger), nil
+		}
+
+		// Add comment for action
+		if updateReq.Notes != "" {
+			comment := &models.RFIComment{
+				RFIID:       rfiID,
+				Comment:     updateReq.Notes,
+				CommentType: models.RFICommentTypeStatusChange,
+				CreatedBy:   userID,
+				UpdatedBy:   userID,
+			}
+			rfiRepository.AddRFIComment(ctx, comment)
+		}
+
+		return api.SuccessResponse(http.StatusOK, map[string]string{"message": "RFI updated successfully"}, logger), nil
+	}
+
+	// Regular update
+	updatedRFI, err := rfiRepository.UpdateRFI(ctx, rfiID, userID, claims.OrgID, &updateReq)
 	if err != nil {
 		if err.Error() == "RFI not found" {
-			return api.ErrorResponse(http.StatusNotFound, "RFI not found", logger)
-		}
-		if err.Error() == "RFI does not belong to your organization" {
-			return api.ErrorResponse(http.StatusForbidden, "RFI does not belong to your organization", logger)
-		}
-		if err.Error() == "Cannot update RFI in current status" {
-			return api.ErrorResponse(http.StatusForbidden, "Cannot update RFI in current status", logger)
+			return api.ErrorResponse(http.StatusNotFound, "RFI not found", logger), nil
 		}
 		logger.WithError(err).Error("Failed to update RFI")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update RFI", logger)
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update RFI", logger), nil
 	}
 
-	logger.WithFields(logrus.Fields{
-		"rfi_id":  rfiID,
-		"user_id": userID,
-		"org_id":  orgID,
-	}).Info("RFI updated successfully")
-
-	return api.SuccessResponse(http.StatusOK, updatedRFI, logger)
+	return api.SuccessResponse(http.StatusOK, updatedRFI, logger), nil
 }
 
-// handleUpdateRFIStatus handles updating RFI status
-func handleUpdateRFIStatus(ctx context.Context, rfiID, userID, orgID int64, body string) events.APIGatewayProxyResponse {
-	var req models.UpdateRFIStatusRequest
-	if err := json.Unmarshal([]byte(body), &req); err != nil {
-		logger.WithError(err).Error("Failed to parse update RFI status request")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
-	}
-
-	// Validate status
-	validStatuses := []string{
-		models.RFIStatusDraft,
-		models.RFIStatusSubmitted,
-		models.RFIStatusUnderReview,
-		models.RFIStatusAnswered,
-		models.RFIStatusClosed,
-		models.RFIStatusVoid,
-		models.RFIStatusRequiresRevision,
-	}
-
-	isValid := false
-	for _, s := range validStatuses {
-		if s == req.Status {
-			isValid = true
-			break
-		}
-	}
-
-	if !isValid {
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid status", logger)
-	}
-
-	// Update status
-	if err := rfiRepository.UpdateRFIStatus(ctx, rfiID, req.Status, userID, req.Comment); err != nil {
-		logger.WithError(err).Error("Failed to update RFI status")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update RFI status", logger)
-	}
-
-	logger.WithFields(logrus.Fields{
-		"rfi_id":     rfiID,
-		"new_status": req.Status,
-		"user_id":    userID,
-	}).Info("RFI status updated successfully")
-
-	return api.SuccessResponse(http.StatusOK, "RFI status updated successfully", logger)
-}
-
-// handleDeleteRFI handles deleting an RFI
-func handleDeleteRFI(ctx context.Context, rfiID, userID, orgID int64) events.APIGatewayProxyResponse {
-	// Check if RFI exists
-	existingRFI, err := rfiRepository.GetRFI(ctx, rfiID)
+// handleGetContextRFIs handles GET /contexts/{contextType}/{contextId}/rfis
+func handleGetContextRFIs(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
+	contextType := request.PathParameters["contextType"]
+	contextID, err := strconv.ParseInt(request.PathParameters["contextId"], 10, 64)
 	if err != nil {
-		if err.Error() == "RFI not found" {
-			return api.ErrorResponse(http.StatusNotFound, "RFI not found", logger)
-		}
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to retrieve RFI", logger)
+		logger.WithError(err).Error("Invalid context ID")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid context ID", logger), nil
 	}
 
-	// Check if user can delete (must be in draft status and user is submitter)
-	if existingRFI.Status != models.RFIStatusDraft || existingRFI.SubmittedBy != userID {
-		return api.ErrorResponse(http.StatusForbidden, "Cannot delete RFI in current status", logger)
+	// For now, only support project context
+	if contextType != "project" {
+		return api.ErrorResponse(http.StatusBadRequest, "Only project context is supported", logger), nil
 	}
 
-	// Delete RFI
-	if err := rfiRepository.DeleteRFI(ctx, rfiID, userID); err != nil {
-		logger.WithError(err).Error("Failed to delete RFI")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to delete RFI", logger)
+	filters := request.QueryStringParameters
+	if filters == nil {
+		filters = make(map[string]string)
 	}
 
-	logger.WithFields(logrus.Fields{
-		"rfi_id":  rfiID,
-		"user_id": userID,
-	}).Info("RFI deleted successfully")
+	rfis, err := rfiRepository.GetRFIsByProject(ctx, contextID, filters)
+	if err != nil {
+		logger.WithError(err).Error("Failed to get context RFIs")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get RFIs", logger), nil
+	}
 
-	return api.SuccessResponse(http.StatusOK, "RFI deleted successfully", logger)
+	response := map[string]interface{}{
+		"context_type": contextType,
+		"context_id":   contextID,
+		"rfis":         rfis,
+	}
+
+	return api.SuccessResponse(http.StatusOK, response, logger), nil
 }
 
-// handleSubmitRFI handles submitting an RFI for review
-func handleSubmitRFI(ctx context.Context, rfiID, userID int64, body string) events.APIGatewayProxyResponse {
-	var req models.SubmitRFIRequest
-	if body != "" {
-		if err := json.Unmarshal([]byte(body), &req); err != nil {
-			logger.WithError(err).Error("Failed to parse submit RFI request")
-			return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
-		}
+// handleAddRFIAttachment handles POST /rfis/{rfiId}/attachments
+func handleAddRFIAttachment(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
+	rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
+	if err != nil {
+		logger.WithError(err).Error("Invalid RFI ID")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
 	}
 
-	// Submit RFI
-	if err := rfiRepository.SubmitRFI(ctx, rfiID, req.AssignedTo, userID); err != nil {
-		logger.WithError(err).Error("Failed to submit RFI")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to submit RFI", logger)
+	var attachment models.RFIAttachment
+	if err := api.ParseJSONBody(request.Body, &attachment); err != nil {
+		logger.WithError(err).Error("Invalid request body for add attachment")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
 	}
 
-	// Add comment if provided
-	if req.Comment != "" {
-		comment := &models.RFIComment{
-			RFIID:       rfiID,
-			Comment:     req.Comment,
-			CommentType: models.RFICommentTypeStatusChange,
-			CreatedBy:   userID,
-			UpdatedBy:   userID,
-		}
-		rfiRepository.AddRFIComment(ctx, comment)
+	userID := claims.UserID
+	attachment.RFIID = rfiID
+	attachment.UploadedBy = userID
+	attachment.CreatedBy = userID
+	attachment.UpdatedBy = userID
+
+	createdAttachment, err := rfiRepository.AddRFIAttachment(ctx, &attachment)
+	if err != nil {
+		logger.WithError(err).Error("Failed to add RFI attachment")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to add attachment", logger), nil
 	}
 
-	logger.WithFields(logrus.Fields{
-		"rfi_id":  rfiID,
-		"user_id": userID,
-	}).Info("RFI submitted successfully")
-
-	return api.SuccessResponse(http.StatusOK, "RFI submitted successfully", logger)
+	return api.SuccessResponse(http.StatusCreated, createdAttachment, logger), nil
 }
 
-// handleRespondToRFI handles responding to an RFI
-func handleRespondToRFI(ctx context.Context, rfiID, userID int64, body string) events.APIGatewayProxyResponse {
-	var req models.RespondToRFIRequest
-	if err := json.Unmarshal([]byte(body), &req); err != nil {
-		logger.WithError(err).Error("Failed to parse respond to RFI request")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
+// handleAddRFIComment handles POST /rfis/{rfiId}/comments
+func handleAddRFIComment(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
+	rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
+	if err != nil {
+		logger.WithError(err).Error("Invalid RFI ID")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
 	}
 
-	if req.Response == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Response is required", logger)
-	}
-
-	// Respond to RFI
-	if err := rfiRepository.RespondToRFI(ctx, rfiID, req.Response, userID); err != nil {
-		logger.WithError(err).Error("Failed to respond to RFI")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to respond to RFI", logger)
-	}
-
-	// Add response comment
-	comment := &models.RFIComment{
-		RFIID:       rfiID,
-		Comment:     req.Response,
-		CommentType: models.RFICommentTypeResponse,
-		CreatedBy:   userID,
-		UpdatedBy:   userID,
-	}
-	rfiRepository.AddRFIComment(ctx, comment)
-
-	logger.WithFields(logrus.Fields{
-		"rfi_id":  rfiID,
-		"user_id": userID,
-	}).Info("RFI response added successfully")
-
-	return api.SuccessResponse(http.StatusOK, "RFI response added successfully", logger)
-}
-
-// handleApproveRFI handles approving an RFI
-func handleApproveRFI(ctx context.Context, rfiID, userID int64, body string) events.APIGatewayProxyResponse {
-	var req models.ApproveRFIRequest
-	if body != "" {
-		if err := json.Unmarshal([]byte(body), &req); err != nil {
-			logger.WithError(err).Error("Failed to parse approve RFI request")
-			return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
-		}
-	}
-
-	// Approve RFI
-	if err := rfiRepository.ApproveRFI(ctx, rfiID, userID, req.ApprovalComments); err != nil {
-		logger.WithError(err).Error("Failed to approve RFI")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to approve RFI", logger)
-	}
-
-	// Add approval comment
-	comment := &models.RFIComment{
-		RFIID:       rfiID,
-		Comment:     "RFI approved" + util.ConditionalString(req.ApprovalComments != "", ": "+req.ApprovalComments, ""),
-		CommentType: models.RFICommentTypeApproval,
-		CreatedBy:   userID,
-		UpdatedBy:   userID,
-	}
-	rfiRepository.AddRFIComment(ctx, comment)
-
-	logger.WithFields(logrus.Fields{
-		"rfi_id":  rfiID,
-		"user_id": userID,
-	}).Info("RFI approved successfully")
-
-	return api.SuccessResponse(http.StatusOK, "RFI approved successfully", logger)
-}
-
-// handleRejectRFI handles rejecting an RFI
-func handleRejectRFI(ctx context.Context, rfiID, userID int64, body string) events.APIGatewayProxyResponse {
-	var req models.RejectRFIRequest
-	if err := json.Unmarshal([]byte(body), &req); err != nil {
-		logger.WithError(err).Error("Failed to parse reject RFI request")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
-	}
-
-	if req.RejectionReason == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Rejection reason is required", logger)
-	}
-
-	// Reject RFI
-	if err := rfiRepository.RejectRFI(ctx, rfiID, userID, req.RejectionReason); err != nil {
-		logger.WithError(err).Error("Failed to reject RFI")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to reject RFI", logger)
-	}
-
-	// Add rejection comment
-	comment := &models.RFIComment{
-		RFIID:       rfiID,
-		Comment:     "RFI rejected: " + req.RejectionReason,
-		CommentType: models.RFICommentTypeRejection,
-		CreatedBy:   userID,
-		UpdatedBy:   userID,
-	}
-	rfiRepository.AddRFIComment(ctx, comment)
-
-	logger.WithFields(logrus.Fields{
-		"rfi_id":  rfiID,
-		"user_id": userID,
-	}).Info("RFI rejected successfully")
-
-	return api.SuccessResponse(http.StatusOK, "RFI rejected successfully", logger)
-}
-
-// handleAddRFIComment handles adding a comment to an RFI
-func handleAddRFIComment(ctx context.Context, rfiID, userID int64, body string) events.APIGatewayProxyResponse {
 	var req struct {
 		Comment string `json:"comment"`
 	}
-
-	if err := json.Unmarshal([]byte(body), &req); err != nil {
-		logger.WithError(err).Error("Failed to parse add comment request")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
+	if err := api.ParseJSONBody(request.Body, &req); err != nil {
+		logger.WithError(err).Error("Invalid request body for add comment")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
 	}
 
 	if req.Comment == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Comment is required", logger)
+		return api.ErrorResponse(http.StatusBadRequest, "Comment is required", logger), nil
 	}
 
+	userID := claims.UserID
 	comment := &models.RFIComment{
 		RFIID:       rfiID,
 		Comment:     req.Comment,
@@ -574,79 +310,10 @@ func handleAddRFIComment(ctx context.Context, rfiID, userID int64, body string) 
 
 	if err := rfiRepository.AddRFIComment(ctx, comment); err != nil {
 		logger.WithError(err).Error("Failed to add RFI comment")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to add comment", logger)
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to add comment", logger), nil
 	}
 
-	logger.WithFields(logrus.Fields{
-		"rfi_id":  rfiID,
-		"user_id": userID,
-	}).Info("RFI comment added successfully")
-
-	return api.SuccessResponse(http.StatusCreated, comment, logger)
-}
-
-// handleGetRFIComments handles getting all comments for an RFI
-func handleGetRFIComments(ctx context.Context, rfiID int64) events.APIGatewayProxyResponse {
-	comments, err := rfiRepository.GetRFIComments(ctx, rfiID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to get RFI comments")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to retrieve comments", logger)
-	}
-
-	logger.WithFields(logrus.Fields{
-		"rfi_id": rfiID,
-		"count":  len(comments),
-	}).Info("RFI comments retrieved successfully")
-
-	return api.SuccessResponse(http.StatusOK, comments, logger)
-}
-
-// handleAddRFIAttachment handles adding an attachment to an RFI
-func handleAddRFIAttachment(ctx context.Context, rfiID, userID int64, body string) events.APIGatewayProxyResponse {
-	var attachment models.RFIAttachment
-	if err := json.Unmarshal([]byte(body), &attachment); err != nil {
-		logger.WithError(err).Error("Failed to parse add attachment request")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
-	}
-
-	attachment.RFIID = rfiID
-	attachment.UploadedBy = userID
-	attachment.CreatedBy = userID
-	attachment.UpdatedBy = userID
-
-	if attachment.AttachmentType == "" {
-		attachment.AttachmentType = "document"
-	}
-
-	createdAttachment, err := rfiRepository.AddRFIAttachment(ctx, &attachment)
-	if err != nil {
-		logger.WithError(err).Error("Failed to add RFI attachment")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to add attachment", logger)
-	}
-
-	logger.WithFields(logrus.Fields{
-		"rfi_id":        rfiID,
-		"attachment_id": createdAttachment.ID,
-		"user_id":       userID,
-	}).Info("RFI attachment added successfully")
-
-	return api.SuccessResponse(http.StatusCreated, createdAttachment, logger)
-}
-
-// handleGetRFIAttachments handles getting all attachments for an RFI
-func handleGetRFIAttachments(ctx context.Context, rfiID int64) events.APIGatewayProxyResponse {
-	attachments, err := rfiRepository.GetRFIAttachments(ctx, rfiID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to get RFI attachments")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to retrieve attachments", logger)
-	}
-
-	logger.WithFields(logrus.Fields{
-		"rfi_id": rfiID,
-		"count":  len(attachments),
-	}).Info("RFI attachments retrieved successfully")
-
-	return api.SuccessResponse(http.StatusOK, attachments, logger)
+	return api.SuccessResponse(http.StatusCreated, comment, logger), nil
 }
 
 func init() {

@@ -40,29 +40,31 @@ type RoleDao struct {
 func (dao *RoleDao) CreateRole(ctx context.Context, orgID int64, role *models.Role) (*models.Role, error) {
 	var roleID int64
 	err := dao.DB.QueryRowContext(ctx, `
-		INSERT INTO iam.role (role_name, description, org_id)
-		VALUES ($1, $2, $3)
-		RETURNING role_id, created_at, updated_at
-	`, role.RoleName, role.Description, orgID).Scan(
+		INSERT INTO iam.roles (name, description, org_id, role_type, category, access_level, created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+		RETURNING id, created_at, updated_at
+	`, role.Name, role.Description, role.OrgID, role.RoleType, role.Category, role.AccessLevel, orgID).Scan(
 		&roleID, &role.CreatedAt, &role.UpdatedAt)
 
 	if err != nil {
 		dao.Logger.WithFields(logrus.Fields{
 			"org_id":    orgID,
-			"role_name": role.RoleName,
+			"role_name": role.Name,
 			"error":     err.Error(),
 		}).Error("Failed to create role")
 		return nil, fmt.Errorf("failed to create role: %w", err)
 	}
 
 	// Populate the response
-	role.RoleID = roleID
-	role.OrgID = orgID
+	role.ID = roleID
+	if role.RoleType == "custom" {
+		role.OrgID = &orgID
+	}
 
 	dao.Logger.WithFields(logrus.Fields{
 		"role_id":   roleID,
 		"org_id":    orgID,
-		"role_name": role.RoleName,
+		"role_name": role.Name,
 	}).Info("Successfully created role")
 
 	return role, nil
@@ -71,10 +73,10 @@ func (dao *RoleDao) CreateRole(ctx context.Context, orgID int64, role *models.Ro
 // GetRolesByOrg retrieves all roles for a specific organization
 func (dao *RoleDao) GetRolesByOrg(ctx context.Context, orgID int64) ([]models.Role, error) {
 	query := `
-		SELECT role_id, role_name, description, org_id, created_at, updated_at
-		FROM iam.role
-		WHERE org_id = $1
-		ORDER BY role_name ASC
+		SELECT id, name, description, org_id, role_type, category, access_level, created_at, updated_at
+		FROM iam.roles
+		WHERE (org_id = $1 OR role_type = 'standard') AND is_deleted = FALSE
+		ORDER BY name ASC
 	`
 
 	rows, err := dao.DB.QueryContext(ctx, query, orgID)
@@ -90,11 +92,14 @@ func (dao *RoleDao) GetRolesByOrg(ctx context.Context, orgID int64) ([]models.Ro
 	var roles []models.Role
 	for rows.Next() {
 		var role models.Role
-		err := rows.Scan(
-			&role.RoleID,
-			&role.RoleName,
+			err := rows.Scan(
+			&role.ID,
+			&role.Name,
 			&role.Description,
 			&role.OrgID,
+			&role.RoleType,
+			&role.Category,
+			&role.AccessLevel,
 			&role.CreatedAt,
 			&role.UpdatedAt,
 		)
@@ -122,16 +127,19 @@ func (dao *RoleDao) GetRolesByOrg(ctx context.Context, orgID int64) ([]models.Ro
 func (dao *RoleDao) GetRoleByID(ctx context.Context, roleID, orgID int64) (*models.Role, error) {
 	var role models.Role
 	query := `
-		SELECT role_id, role_name, description, org_id, created_at, updated_at
-		FROM iam.role
-		WHERE role_id = $1 AND org_id = $2
+		SELECT id, name, description, org_id, role_type, category, access_level, created_at, updated_at
+		FROM iam.roles
+		WHERE id = $1 AND org_id = $2 AND is_deleted = FALSE
 	`
 
 	err := dao.DB.QueryRowContext(ctx, query, roleID, orgID).Scan(
-		&role.RoleID,
-		&role.RoleName,
+		&role.ID,
+		&role.Name,
 		&role.Description,
 		&role.OrgID,
+		&role.RoleType,
+		&role.Category,
+		&role.AccessLevel,
 		&role.CreatedAt,
 		&role.UpdatedAt,
 	)
@@ -159,23 +167,26 @@ func (dao *RoleDao) GetRoleByID(ctx context.Context, roleID, orgID int64) (*mode
 // UpdateRole updates an existing role
 func (dao *RoleDao) UpdateRole(ctx context.Context, roleID, orgID int64, role *models.Role) (*models.Role, error) {
 	query := `
-		UPDATE iam.role 
-		SET role_name = $1, description = $2
-		WHERE role_id = $3 AND org_id = $4
-		RETURNING role_id, role_name, description, org_id, created_at, updated_at
+		UPDATE iam.roles
+		SET name = $1, description = $2, updated_at = NOW(), updated_by = 1
+		WHERE id = $3 AND org_id = $4 AND is_deleted = FALSE
+		RETURNING id, name, description, org_id, role_type, category, access_level, created_at, updated_at
 	`
 
 	var updatedRole models.Role
 	err := dao.DB.QueryRowContext(ctx, query,
-		role.RoleName,
+		role.Name,
 		role.Description,
 		roleID,
 		orgID,
 	).Scan(
-		&updatedRole.RoleID,
-		&updatedRole.RoleName,
+		&updatedRole.ID,
+		&updatedRole.Name,
 		&updatedRole.Description,
 		&updatedRole.OrgID,
+		&updatedRole.RoleType,
+		&updatedRole.Category,
+		&updatedRole.AccessLevel,
 		&updatedRole.CreatedAt,
 		&updatedRole.UpdatedAt,
 	)
@@ -200,7 +211,7 @@ func (dao *RoleDao) UpdateRole(ctx context.Context, roleID, orgID int64, role *m
 	dao.Logger.WithFields(logrus.Fields{
 		"role_id":   roleID,
 		"org_id":    orgID,
-		"role_name": updatedRole.RoleName,
+		"role_name": updatedRole.Name,
 	}).Info("Successfully updated role")
 
 	return &updatedRole, nil
@@ -231,7 +242,7 @@ func (dao *RoleDao) DeleteRole(ctx context.Context, roleID, orgID int64) error {
 
 	// Then delete the role (with org validation)
 	result, err := tx.ExecContext(ctx, `
-		DELETE FROM iam.role WHERE role_id = $1 AND org_id = $2
+		UPDATE iam.roles SET is_deleted = TRUE, updated_at = NOW(), updated_by = 1 WHERE id = $1 AND org_id = $2 AND is_deleted = FALSE
 	`, roleID, orgID)
 
 	if err != nil {

@@ -41,7 +41,7 @@ func (dao *RolePermissionDao) AssignPermissionToRole(ctx context.Context, roleID
 	
 	// Check role exists and belongs to org
 	err = tx.QueryRowContext(ctx, `
-		SELECT org_id FROM iam.role WHERE role_id = $1 AND org_id = $2
+		SELECT org_id FROM iam.roles WHERE id = $1 AND org_id = $2 AND is_deleted = FALSE
 	`, roleID, orgID).Scan(&roleOrgID)
 	
 	if err == sql.ErrNoRows {
@@ -118,9 +118,9 @@ func (dao *RolePermissionDao) UnassignPermissionFromRole(ctx context.Context, ro
 	var count int
 	err = tx.QueryRowContext(ctx, `
 		SELECT COUNT(*)
-		FROM iam.role r
+		FROM iam.roles r
 		JOIN iam.permission p ON p.org_id = r.org_id
-		WHERE r.role_id = $1 AND p.permission_id = $2 AND r.org_id = $3
+		WHERE r.id = $1 AND p.permission_id = $2 AND r.org_id = $3 AND r.is_deleted = FALSE
 	`, roleID, permissionID, orgID).Scan(&count)
 
 	if err != nil {
