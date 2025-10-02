@@ -79,6 +79,7 @@ export class SubStack extends NestedStack {
         const userManagementIntegration = new LambdaIntegration(this.lambdaConstruct.userManagementLambda);
         const issueManagementIntegration = new LambdaIntegration(this.lambdaConstruct.issueManagementLambda);
         const rfiManagementIntegration = new LambdaIntegration(this.lambdaConstruct.rfiManagementLambda);
+        const submittalManagementIntegration = new LambdaIntegration(this.lambdaConstruct.submittalManagementLambda);
         const assignmentManagementIntegration = new LambdaIntegration(this.lambdaConstruct.assignmentManagementLambda);
         // CORS Lambda integration removed - using API Gateway CORS instead
 
@@ -384,6 +385,58 @@ export class SubStack extends NestedStack {
         contextAssignmentsResource.addMethod('GET', assignmentManagementIntegration, {
             authorizer: cognitoAuthorizer
         });
+        // CORS handled at API Gateway level
+
+        // Context-based submittal queries (replaces /projects/{projectId}/submittals)
+        const contextSubmittalsResource = contextIdResource.addResource('submittals');
+        contextSubmittalsResource.addMethod('GET', submittalManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+
+        // Context submittal stats
+        const contextSubmittalStatsResource = contextSubmittalsResource.addResource('stats');
+        contextSubmittalStatsResource.addMethod('GET', submittalManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+
+        // Context submittal export
+        const contextSubmittalExportResource = contextSubmittalsResource.addResource('export');
+        contextSubmittalExportResource.addMethod('GET', submittalManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
+        // CONSOLIDATED SUBMITTAL MANAGEMENT (10 endpoints total)
+
+        // Core submittal CRUD operations
+        const submittalsResource = this.api.root.addResource('submittals');
+        submittalsResource.addMethod('POST', submittalManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
+        const submittalIdResource = submittalsResource.addResource('{submittalId}');
+        submittalIdResource.addMethod('GET', submittalManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        submittalIdResource.addMethod('PUT', submittalManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
+        // Submittal workflow operations
+        const submittalWorkflowResource = submittalIdResource.addResource('workflow');
+        submittalWorkflowResource.addMethod('POST', submittalManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
+        // Submittal attachments
+        const submittalAttachmentsResource = submittalIdResource.addResource('attachments');
+        submittalAttachmentsResource.addMethod('POST', submittalManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+
         // CORS handled at API Gateway level
 
         // Skip domain for LOCAL

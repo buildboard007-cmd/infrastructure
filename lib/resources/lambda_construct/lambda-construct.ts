@@ -14,6 +14,7 @@ import {InfrastructureUserManagement} from "../function_construct/infrastructure
 import {InfrastructureIssueManagement} from "../function_construct/infrastructure-issue-management";
 import {InfrastructureRFIManagement} from "../function_construct/infrastructure-rfi-management";
 import {InfrastructureAssignmentManagement} from "../function_construct/infrastructure-assignment-management";
+import {InfrastructureSubmittalManagement} from "../function_construct/infrastructure-submittal-management";
 
 export class LambdaConstruct extends Construct {
 
@@ -29,6 +30,7 @@ export class LambdaConstruct extends Construct {
     private readonly infrastructureIssueManagement: InfrastructureIssueManagement;
     private readonly infrastructureRFIManagement: InfrastructureRFIManagement;
     private readonly infrastructureAssignmentManagement: InfrastructureAssignmentManagement;
+    private readonly infrastructureSubmittalManagement: InfrastructureSubmittalManagement;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -50,6 +52,7 @@ export class LambdaConstruct extends Construct {
         this.infrastructureIssueManagement = new InfrastructureIssueManagement(this, 'InfrastructureIssueManagement', funcProps);
         this.infrastructureRFIManagement = new InfrastructureRFIManagement(this, 'InfrastructureRFIManagement', funcProps);
         this.infrastructureAssignmentManagement = new InfrastructureAssignmentManagement(this, 'InfrastructureAssignmentManagement', funcProps);
+        this.infrastructureSubmittalManagement = new InfrastructureSubmittalManagement(this, 'InfrastructureSubmittalManagement', funcProps);
     }
 
     get corsLambda(): GoFunction {
@@ -146,5 +149,13 @@ export class LambdaConstruct extends Construct {
 
     get assignmentManagementLambdaArn(): string {
         return this.infrastructureAssignmentManagement.lambdaFunction.functionArn;
+    }
+
+    get submittalManagementLambda(): GoFunction {
+        return this.infrastructureSubmittalManagement.function;
+    }
+
+    get submittalManagementLambdaArn(): string {
+        return this.infrastructureSubmittalManagement.functionArn;
     }
 }

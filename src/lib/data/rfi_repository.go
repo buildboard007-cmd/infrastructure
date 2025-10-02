@@ -1137,7 +1137,7 @@ func (dao *RFIDao) GenerateRFINumber(ctx context.Context, projectID int64) (stri
 		return "", fmt.Errorf("failed to get project details: %w", err)
 	}
 	
-	// Get the next sequence number for this project
+	// Get the next sequence number for this organization
 	var maxNumber int
 	sequenceQuery := `
 		SELECT COALESCE(MAX(
@@ -1145,9 +1145,11 @@ func (dao *RFIDao) GenerateRFINumber(ctx context.Context, projectID int64) (stri
 				SUBSTRING(rfi_number FROM '[0-9]+$') AS INTEGER
 			)
 		), 0)
-		FROM project.rfis
-		WHERE project_id = $1 AND rfi_number LIKE $2`
-	
+		FROM project.rfis r
+		JOIN project.projects p ON r.project_id = p.id
+		WHERE p.org_id = (SELECT org_id FROM project.projects WHERE id = $1)
+		AND rfi_number LIKE $2`
+
 	prefix := fmt.Sprintf("RFI-%d-", projectYear)
 	err = dao.DB.QueryRowContext(ctx, sequenceQuery, projectID, prefix+"%").Scan(&maxNumber)
 	if err != nil {

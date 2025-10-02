@@ -36,7 +36,7 @@ type RFI struct {
 	CostImpact              bool           `json:"cost_impact"`
 	ScheduleImpact          bool           `json:"schedule_impact"`
 	CostImpactAmount        *float64       `json:"cost_impact_amount,omitempty"`
-	ScheduleImpactDays      int            `json:"schedule_impact_days,omitempty"`
+	ScheduleImpactDays      *int           `json:"schedule_impact_days,omitempty"`
 	CostImpactDetails       *string `json:"cost_impact_details,omitempty"`
 	ScheduleImpactDetails   *string `json:"schedule_impact_details,omitempty"`
 	LocationDescription     *string `json:"location_description,omitempty"`
