@@ -1,0 +1,651 @@
+{
+	"info": {
+		"_postman_id": "bb8c5d1a-1234-5678-9abc-def123456789",
+		"name": "Attachment Management API",
+		"description": "Centralized attachment management for construction projects, issues, RFIs, and submittals using AWS S3 with presigned URLs.\n\n🎯 CENTRALIZED ATTACHMENT ENDPOINTS (6 total):\n\nUpload Operations:\n  - POST   /attachments/upload-url                     Generate presigned upload URL\n  - POST   /attachments/confirm                        Confirm upload completion\n\nDownload Operations:\n  - GET    /attachments/{id}                           Get attachment metadata\n  - GET    /attachments/{id}/download-url              Generate presigned download URL\n\nDelete Operations:\n  - DELETE /attachments/{id}                           Soft delete attachment\n\nEntity Queries:\n  - GET    /entities/{type}/{id}/attachments           List attachments for entity\n\n📁 HIERARCHICAL S3 STRUCTURE:\n{org_id}/{location_id}/{project_id}/{entity_type}/{entity_id}/{timestamp}_{filename}\n\nExamples:\n- 1/100/500/attachments/20250101120000_floor_plan.pdf (Project attachment)\n- 1/100/500/issues/1001/20250101120000_crack_photo.jpg (Issue attachment)\n- 1/100/500/rfis/2001/20250101120000_clarification.pdf (RFI attachment)\n- 1/100/500/submittals/3001/20250101120000_shop_drawing.pdf (Submittal attachment)\n\n🔐 SECURITY & VALIDATION:\n- JWT authentication required for all endpoints\n- Organization-based access control\n- File type validation (PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, DWG, etc.)\n- File size limits: 100MB max per file\n- Presigned URL expiry: 15 min (upload), 60 min (download)\n\n🎮 ENTITY TYPES SUPPORTED:\n- project: Project-level documents and drawings\n- issue: Before/after photos, issue documentation\n- rfi: Question documents, response attachments\n- submittal: Shop drawings, product data, samples, certificates\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- entity_type query parameter required for GET/DELETE operations\n- All files stored in buildboard-attachments-dev S3 bucket\n- Soft deletes preserve file metadata but mark as deleted",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Upload Operations",
+			"item": [
+				{
+					"name": "Generate Upload URL - Project",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entity_type\": \"project\",\n  \"entity_id\": 1,\n  \"project_id\": 1,\n  \"location_id\": 1,\n  \"file_name\": \"floor_plan_v2.pdf\",\n  \"file_size\": 2048576,\n  \"attachment_type\": \"drawing\"\n}"
+						},
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/upload-url",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"upload-url"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Generate Upload URL - Issue",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entity_type\": \"issue\",\n  \"entity_id\": 101,\n  \"project_id\": 1,\n  \"location_id\": 1,\n  \"file_name\": \"crack_photo.jpg\",\n  \"file_size\": 1048576,\n  \"attachment_type\": \"before_photo\"\n}"
+						},
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/upload-url",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"upload-url"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Generate Upload URL - RFI",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entity_type\": \"rfi\",\n  \"entity_id\": 201,\n  \"project_id\": 1,\n  \"location_id\": 1,\n  \"file_name\": \"clarification_request.docx\",\n  \"file_size\": 512000,\n  \"attachment_type\": \"document\"\n}"
+						},
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/upload-url",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"upload-url"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Generate Upload URL - Submittal",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entity_type\": \"submittal\",\n  \"entity_id\": 301,\n  \"project_id\": 1,\n  \"location_id\": 1,\n  \"file_name\": \"shop_drawings_steel.dwg\",\n  \"file_size\": 5242880,\n  \"attachment_type\": \"shop_drawing\"\n}"
+						},
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/upload-url",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"upload-url"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Confirm Upload",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"attachment_id\": {{attachment_id}}\n}"
+						},
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/confirm",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"confirm"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Download Operations",
+			"item": [
+				{
+					"name": "Get Attachment Metadata",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/{{attachment_id}}?entity_type=project",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"{{attachment_id}}"
+							],
+							"query": [
+								{
+									"key": "entity_type",
+									"value": "project",
+									"description": "Required: project, issue, rfi, or submittal"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Generate Download URL",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/{{attachment_id}}/download-url?entity_type=project",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"{{attachment_id}}",
+								"download-url"
+							],
+							"query": [
+								{
+									"key": "entity_type",
+									"value": "project",
+									"description": "Required: project, issue, rfi, or submittal"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Delete Operations",
+			"item": [
+				{
+					"name": "Soft Delete Attachment",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/{{attachment_id}}?entity_type=project",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"{{attachment_id}}"
+							],
+							"query": [
+								{
+									"key": "entity_type",
+									"value": "project",
+									"description": "Required: project, issue, rfi, or submittal"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Entity Attachments",
+			"item": [
+				{
+					"name": "List Project Attachments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/entities/project/{{project_id}}/attachments?page=1&limit=20",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"entities",
+								"project",
+								"{{project_id}}",
+								"attachments"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (optional, default: 1)"
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Page size (optional, default: 20, max: 100)"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Issue Attachments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/entities/issue/{{issue_id}}/attachments",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"entities",
+								"issue",
+								"{{issue_id}}",
+								"attachments"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List RFI Attachments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/entities/rfi/{{rfi_id}}/attachments",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"entities",
+								"rfi",
+								"{{rfi_id}}",
+								"attachments"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Submittal Attachments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/entities/submittal/{{submittal_id}}/attachments",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"entities",
+								"submittal",
+								"{{submittal_id}}",
+								"attachments"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Error Cases",
+			"item": [
+				{
+					"name": "Invalid Entity Type",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entity_type\": \"invalid_type\",\n  \"entity_id\": 1,\n  \"project_id\": 1,\n  \"location_id\": 1,\n  \"file_name\": \"test.pdf\",\n  \"file_size\": 1024,\n  \"attachment_type\": \"document\"\n}"
+						},
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/upload-url",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"upload-url"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "File Too Large",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entity_type\": \"project\",\n  \"entity_id\": 1,\n  \"project_id\": 1,\n  \"location_id\": 1,\n  \"file_name\": \"huge_file.pdf\",\n  \"file_size\": 104857601,\n  \"attachment_type\": \"project_document\"\n}"
+						},
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/upload-url",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"upload-url"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Invalid File Type",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entity_type\": \"project\",\n  \"entity_id\": 1,\n  \"project_id\": 1,\n  \"location_id\": 1,\n  \"file_name\": \"malicious_file.exe\",\n  \"file_size\": 1024,\n  \"attachment_type\": \"project_document\"\n}"
+						},
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/attachments/upload-url",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"attachments",
+								"upload-url"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "attachment_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "project_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "issue_id",
+			"value": "101",
+			"type": "string"
+		},
+		{
+			"key": "rfi_id",
+			"value": "201",
+			"type": "string"
+		},
+		{
+			"key": "submittal_id",
+			"value": "301",
+			"type": "string"
+		}
+	]
+}

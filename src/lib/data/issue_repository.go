@@ -29,6 +29,9 @@ type IssueRepository interface {
 	// DeleteIssue soft deletes an issue
 	DeleteIssue(ctx context.Context, issueID, userID int64) error
 
+	// GetIssueAttachments retrieves all attachments for an issue
+	GetIssueAttachments(ctx context.Context, issueID int64) ([]models.IssueAttachment, error)
+
 	// UpdateIssueStatus updates only the status of an issue
 	UpdateIssueStatus(ctx context.Context, issueID, userID int64, status string) error
 }
@@ -935,6 +938,67 @@ func (dao *IssueDao) UpdateIssueStatus(ctx context.Context, issueID, userID int6
 		"status":   status,
 		"user_id":  userID,
 	}).Info("Successfully updated issue status")
-	
+
 	return nil
+}
+
+// GetIssueAttachments retrieves all attachments for an issue
+func (dao *IssueDao) GetIssueAttachments(ctx context.Context, issueID int64) ([]models.IssueAttachment, error) {
+	query := `
+		SELECT
+			id, issue_id, file_name, file_path, file_size, file_type,
+			attachment_type, uploaded_by, created_at, created_by,
+			updated_at, updated_by, is_deleted
+		FROM project.issue_attachments
+		WHERE issue_id = $1 AND is_deleted = FALSE
+		ORDER BY created_at DESC`
+
+	rows, err := dao.DB.QueryContext(ctx, query, issueID)
+	if err != nil {
+		dao.Logger.WithError(err).Error("Failed to get issue attachments")
+		return nil, fmt.Errorf("failed to get issue attachments: %w", err)
+	}
+	defer rows.Close()
+
+	var attachments []models.IssueAttachment
+	for rows.Next() {
+		var attachment models.IssueAttachment
+		var fileSize sql.NullInt64
+		var fileType sql.NullString
+
+		err := rows.Scan(
+			&attachment.ID, &attachment.IssueID, &attachment.FileName,
+			&attachment.FilePath, &fileSize, &fileType,
+			&attachment.AttachmentType, &attachment.UploadedBy,
+			&attachment.CreatedAt, &attachment.CreatedBy,
+			&attachment.UpdatedAt, &attachment.UpdatedBy, &attachment.IsDeleted,
+		)
+
+		if err != nil {
+			dao.Logger.WithError(err).Error("Failed to scan issue attachment")
+			return nil, fmt.Errorf("failed to scan issue attachment: %w", err)
+		}
+
+		// Handle nullable fields
+		if fileSize.Valid {
+			attachment.FileSize = &fileSize.Int64
+		}
+		if fileType.Valid {
+			attachment.FileType = &fileType.String
+		}
+
+		attachments = append(attachments, attachment)
+	}
+
+	if err = rows.Err(); err != nil {
+		dao.Logger.WithError(err).Error("Error iterating issue attachment rows")
+		return nil, fmt.Errorf("error iterating issue attachments: %w", err)
+	}
+
+	dao.Logger.WithFields(logrus.Fields{
+		"issue_id":         issueID,
+		"attachments_count": len(attachments),
+	}).Debug("Retrieved attachments for issue")
+
+	return attachments, nil
 }

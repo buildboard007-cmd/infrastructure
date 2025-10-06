@@ -1033,14 +1033,14 @@ func (dao *RFIDao) GetRFIComments(ctx context.Context, rfiID int64) ([]models.RF
 func (dao *RFIDao) AddRFIAttachment(ctx context.Context, attachment *models.RFIAttachment) (*models.RFIAttachment, error) {
 	query := `
 		INSERT INTO project.rfi_attachments (
-			rfi_id, filename, file_type, file_size, description,
+			rfi_id, file_name, file_path, file_type, file_size, description,
 			s3_bucket, s3_key, s3_url, attachment_type,
 			uploaded_by, created_by, updated_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id, upload_date, created_at, updated_at`
-	
+
 	err := dao.DB.QueryRowContext(ctx, query,
-		attachment.RFIID, attachment.Filename, attachment.FileType,
+		attachment.RFIID, attachment.FileName, attachment.FilePath, attachment.FileType,
 		attachment.FileSize, attachment.Description,
 		attachment.S3Bucket, attachment.S3Key, attachment.S3URL,
 		attachment.AttachmentType, attachment.UploadedBy,
@@ -1058,30 +1058,30 @@ func (dao *RFIDao) AddRFIAttachment(ctx context.Context, attachment *models.RFIA
 // GetRFIAttachments retrieves all attachments for an RFI
 func (dao *RFIDao) GetRFIAttachments(ctx context.Context, rfiID int64) ([]models.RFIAttachment, error) {
 	query := `
-		SELECT 
-			id, rfi_id, filename, file_type, file_size, description,
+		SELECT
+			id, rfi_id, file_name, file_path, file_type, file_size, description,
 			s3_bucket, s3_key, s3_url, attachment_type,
 			uploaded_by, upload_date, created_at, created_by,
 			updated_at, updated_by
 		FROM project.rfi_attachments
 		WHERE rfi_id = $1 AND is_deleted = FALSE
 		ORDER BY created_at DESC`
-	
+
 	rows, err := dao.DB.QueryContext(ctx, query, rfiID)
 	if err != nil {
 		dao.Logger.WithError(err).Error("Failed to get RFI attachments")
 		return nil, fmt.Errorf("failed to get RFI attachments: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var attachments []models.RFIAttachment
 	for rows.Next() {
 		var attachment models.RFIAttachment
-		var fileType, description, s3Bucket, s3Key, s3URL sql.NullString
+		var filePath, fileType, description, s3Bucket, s3Key, s3URL sql.NullString
 		var fileSize sql.NullInt64
-		
+
 		err := rows.Scan(
-			&attachment.ID, &attachment.RFIID, &attachment.Filename,
+			&attachment.ID, &attachment.RFIID, &attachment.FileName, &filePath,
 			&fileType, &fileSize, &description,
 			&s3Bucket, &s3Key, &s3URL,
 			&attachment.AttachmentType, &attachment.UploadedBy,
@@ -1093,7 +1093,10 @@ func (dao *RFIDao) GetRFIAttachments(ctx context.Context, rfiID int64) ([]models
 			dao.Logger.WithError(err).Error("Failed to scan RFI attachment")
 			return nil, fmt.Errorf("failed to scan RFI attachment: %w", err)
 		}
-		
+
+		if filePath.Valid {
+			attachment.FilePath = filePath.String
+		}
 		if fileType.Valid {
 			attachment.FileType = fileType.String
 		}

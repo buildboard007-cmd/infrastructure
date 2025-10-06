@@ -136,7 +136,7 @@ type IssueRequest struct {
 	DistributionList []string `json:"distribution_list,omitempty"`
 
 	// Attachments
-	Attachments []string `json:"attachments,omitempty"`
+	Attachments []IssueAttachment `json:"attachments,omitempty"`
 
 	// Additional metadata
 	Tags           []string               `json:"tags,omitempty"`
@@ -233,6 +233,9 @@ type IssueResponse struct {
 	AssignedCompanyName string `json:"assigned_company_name,omitempty"`
 	DaysOpen            int    `json:"days_open,omitempty"`
 	IsOverdue           bool   `json:"is_overdue"`
+
+	// Attachments
+	Attachments []IssueAttachment `json:"attachments,omitempty"`
 }
 
 // IssueListResponse represents the response for listing issues
@@ -286,3 +289,20 @@ const (
 	IssueSeverityMinor    = "minor"
 	IssueSeverityCosmetic = "cosmetic"
 )
+
+// IssueAttachment represents a file attached to an issue
+type IssueAttachment struct {
+	ID             int64     `json:"id"`
+	IssueID        int64     `json:"issue_id"`
+	FileName       string    `json:"file_name"`
+	FilePath       string    `json:"file_path"`
+	FileSize       *int64    `json:"file_size,omitempty"`
+	FileType       *string   `json:"file_type,omitempty"`
+	AttachmentType string    `json:"attachment_type"`
+	UploadedBy     int64     `json:"uploaded_by"`
+	CreatedAt      time.Time `json:"created_at"`
+	CreatedBy      int64     `json:"created_by"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	UpdatedBy      int64     `json:"updated_by"`
+	IsDeleted      bool      `json:"is_deleted"`
+}

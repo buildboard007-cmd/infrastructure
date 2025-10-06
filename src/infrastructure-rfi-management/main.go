@@ -86,8 +86,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return handleGetContextRFIs(ctx, request, claims)
 
 	// Sub-resource operations
-	case request.Resource == "/rfis/{rfiId}/attachments" && request.HTTPMethod == "POST":
-		return handleAddRFIAttachment(ctx, request, claims)
+	// RFI attachments now handled by centralized attachment management service
 	case request.Resource == "/rfis/{rfiId}/comments" && request.HTTPMethod == "POST":
 		return handleAddRFIComment(ctx, request, claims)
 
@@ -250,34 +249,8 @@ func handleGetContextRFIs(ctx context.Context, request events.APIGatewayProxyReq
 	return api.SuccessResponse(http.StatusOK, response, logger), nil
 }
 
-// handleAddRFIAttachment handles POST /rfis/{rfiId}/attachments
-func handleAddRFIAttachment(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	rfiID, err := strconv.ParseInt(request.PathParameters["rfiId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid RFI ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid RFI ID", logger), nil
-	}
-
-	var attachment models.RFIAttachment
-	if err := api.ParseJSONBody(request.Body, &attachment); err != nil {
-		logger.WithError(err).Error("Invalid request body for add attachment")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
-	}
-
-	userID := claims.UserID
-	attachment.RFIID = rfiID
-	attachment.UploadedBy = userID
-	attachment.CreatedBy = userID
-	attachment.UpdatedBy = userID
-
-	createdAttachment, err := rfiRepository.AddRFIAttachment(ctx, &attachment)
-	if err != nil {
-		logger.WithError(err).Error("Failed to add RFI attachment")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to add attachment", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusCreated, createdAttachment, logger), nil
-}
+// RFI attachment handler removed - now handled by centralized attachment management service
+// Removed function: handleAddRFIAttachment
 
 // handleAddRFIComment handles POST /rfis/{rfiId}/comments
 func handleAddRFIComment(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {

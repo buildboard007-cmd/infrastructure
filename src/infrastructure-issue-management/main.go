@@ -252,13 +252,17 @@ func handleGetIssue(ctx context.Context, issueID, orgID int64) events.APIGateway
 	// Validate issue belongs to org
 	var projectOrgID int64
 	err = sqlDB.QueryRowContext(ctx, `
-		SELECT org_id FROM project.projects 
+		SELECT org_id FROM project.projects
 		WHERE id = $1 AND is_deleted = FALSE
 	`, issue.ProjectID).Scan(&projectOrgID)
-	
+
 	if err != nil || projectOrgID != orgID {
 		return api.ErrorResponse(http.StatusForbidden, "Issue does not belong to your organization", logger)
 	}
+
+	// Fetch attachments for the issue from issue_attachments table
+	attachments, _ := issueRepository.GetIssueAttachments(ctx, issueID)
+	issue.Attachments = attachments
 
 	return api.SuccessResponse(http.StatusOK, issue, logger)
 }

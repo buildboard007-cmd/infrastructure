@@ -15,6 +15,7 @@ import {InfrastructureIssueManagement} from "../function_construct/infrastructur
 import {InfrastructureRFIManagement} from "../function_construct/infrastructure-rfi-management";
 import {InfrastructureAssignmentManagement} from "../function_construct/infrastructure-assignment-management";
 import {InfrastructureSubmittalManagement} from "../function_construct/infrastructure-submittal-management";
+import {InfrastructureAttachmentManagement} from "../function_construct/infrastructure-attachment-management";
 
 export class LambdaConstruct extends Construct {
 
@@ -31,6 +32,7 @@ export class LambdaConstruct extends Construct {
     private readonly infrastructureRFIManagement: InfrastructureRFIManagement;
     private readonly infrastructureAssignmentManagement: InfrastructureAssignmentManagement;
     private readonly infrastructureSubmittalManagement: InfrastructureSubmittalManagement;
+    private readonly infrastructureAttachmentManagement: InfrastructureAttachmentManagement;
 
     constructor(scope: Construct, id: string, props: LambdaConstructProps) {
         super(scope, id);
@@ -53,6 +55,14 @@ export class LambdaConstruct extends Construct {
         this.infrastructureRFIManagement = new InfrastructureRFIManagement(this, 'InfrastructureRFIManagement', funcProps);
         this.infrastructureAssignmentManagement = new InfrastructureAssignmentManagement(this, 'InfrastructureAssignmentManagement', funcProps);
         this.infrastructureSubmittalManagement = new InfrastructureSubmittalManagement(this, 'InfrastructureSubmittalManagement', funcProps);
+
+        // Initialize attachment management only if S3 bucket is provided
+        if (props.attachmentBucket) {
+            this.infrastructureAttachmentManagement = new InfrastructureAttachmentManagement(this, 'InfrastructureAttachmentManagement', {
+                ...funcProps,
+                attachmentBucket: props.attachmentBucket
+            });
+        }
     }
 
     get corsLambda(): GoFunction {
@@ -157,5 +167,13 @@ export class LambdaConstruct extends Construct {
 
     get submittalManagementLambdaArn(): string {
         return this.infrastructureSubmittalManagement.functionArn;
+    }
+
+    get attachmentManagementLambda(): any {
+        return this.infrastructureAttachmentManagement?.function;
+    }
+
+    get attachmentManagementLambdaArn(): string {
+        return this.infrastructureAttachmentManagement?.function.functionArn;
     }
 }

@@ -66,7 +66,8 @@ type RFI struct {
 type RFIAttachment struct {
 	ID             int64      `json:"id"`
 	RFIID          int64      `json:"rfi_id"`
-	Filename       string     `json:"filename"`
+	FileName       string     `json:"file_name"`
+	FilePath       string     `json:"file_path,omitempty"`
 	FileType       string     `json:"file_type,omitempty"`
 	FileSize       int64      `json:"file_size,omitempty"`
 	Description    string     `json:"description,omitempty"`

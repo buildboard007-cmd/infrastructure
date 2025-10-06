@@ -68,15 +68,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return handleUpdateProject(ctx, request, claims)
 
 
-	// Project Attachment operations
-	case request.Resource == "/projects/{projectId}/attachments" && request.HTTPMethod == "POST":
-		return handleCreateProjectAttachment(ctx, request, claims)
-	case request.Resource == "/projects/{projectId}/attachments" && request.HTTPMethod == "GET":
-		return handleGetProjectAttachments(ctx, request, claims)
-	case request.Resource == "/projects/{projectId}/attachments/{attachmentId}" && request.HTTPMethod == "GET":
-		return handleGetProjectAttachment(ctx, request, claims)
-	case request.Resource == "/projects/{projectId}/attachments/{attachmentId}" && request.HTTPMethod == "DELETE":
-		return handleDeleteProjectAttachment(ctx, request, claims)
+	// Project attachment endpoints removed - now handled by centralized attachment management service
 
 	// Project User Role operations
 	case request.Resource == "/projects/{projectId}/users" && request.HTTPMethod == "POST":
@@ -229,101 +221,12 @@ func handleUpdateProject(ctx context.Context, request events.APIGatewayProxyRequ
 
 
 
-// handleCreateProjectAttachment handles POST /projects/{projectId}/attachments
-func handleCreateProjectAttachment(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	projectID, err := strconv.ParseInt(request.PathParameters["projectId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid project ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
-	}
-
-	var createRequest models.CreateProjectAttachmentRequest
-	if err := api.ParseJSONBody(request.Body, &createRequest); err != nil {
-		logger.WithError(err).Error("Invalid request body for create project attachment")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
-	}
-
-	userID := claims.UserID
-
-	attachment, err := projectRepository.CreateProjectAttachment(ctx, projectID, &createRequest, userID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to create project attachment")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create project attachment", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusCreated, attachment, logger), nil
-}
-
-// handleGetProjectAttachments handles GET /projects/{projectId}/attachments
-func handleGetProjectAttachments(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	projectID, err := strconv.ParseInt(request.PathParameters["projectId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid project ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
-	}
-
-	attachments, err := projectRepository.GetProjectAttachmentsByProject(ctx, projectID)
-	if err != nil {
-		logger.WithError(err).Error("Failed to get project attachments")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get project attachments", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusOK, attachments, logger), nil
-}
-
-// handleGetProjectAttachment handles GET /projects/{projectId}/attachments/{attachmentId}
-func handleGetProjectAttachment(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	projectID, err := strconv.ParseInt(request.PathParameters["projectId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid project ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
-	}
-
-	attachmentID, err := strconv.ParseInt(request.PathParameters["attachmentId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid attachment ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid attachment ID", logger), nil
-	}
-
-	attachment, err := projectRepository.GetProjectAttachmentByID(ctx, attachmentID, projectID)
-	if err != nil {
-		if err.Error() == "project attachment not found" {
-			return api.ErrorResponse(http.StatusNotFound, "Project attachment not found", logger), nil
-		}
-		logger.WithError(err).Error("Failed to get project attachment")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get project attachment", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusOK, attachment, logger), nil
-}
-
-// handleDeleteProjectAttachment handles DELETE /projects/{projectId}/attachments/{attachmentId}
-func handleDeleteProjectAttachment(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	projectID, err := strconv.ParseInt(request.PathParameters["projectId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid project ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
-	}
-
-	attachmentID, err := strconv.ParseInt(request.PathParameters["attachmentId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid attachment ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid attachment ID", logger), nil
-	}
-
-	userID := claims.UserID
-
-	err = projectRepository.DeleteProjectAttachment(ctx, attachmentID, projectID, userID)
-	if err != nil {
-		if err.Error() == "project attachment not found" {
-			return api.ErrorResponse(http.StatusNotFound, "Project attachment not found", logger), nil
-		}
-		logger.WithError(err).Error("Failed to delete project attachment")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to delete project attachment", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusNoContent, nil, logger), nil
-}
+// Project attachment handlers removed - now handled by centralized attachment management service
+// Removed functions:
+// - handleCreateProjectAttachment
+// - handleGetProjectAttachments
+// - handleGetProjectAttachment
+// - handleDeleteProjectAttachment
 
 // handleAssignUserToProject handles POST /projects/{projectId}/users
 func handleAssignUserToProject(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {

@@ -101,9 +101,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	case request.Resource == "/contexts/{contextType}/{contextId}/submittals/export" && request.HTTPMethod == "GET":
 		return handleExportSubmittals(ctx, request, claims)
 
-	// File management
-	case request.Resource == "/submittals/{submittalId}/attachments" && request.HTTPMethod == "POST":
-		return handleAddSubmittalAttachment(ctx, request, claims)
+	// Submittal attachments now handled by centralized attachment management service
 
 	default:
 		logger.WithFields(logrus.Fields{
@@ -314,34 +312,8 @@ func handleExportSubmittals(ctx context.Context, request events.APIGatewayProxyR
 	return api.ErrorResponse(http.StatusNotImplemented, "Export functionality not implemented", logger), nil
 }
 
-// handleAddSubmittalAttachment handles POST /submittals/{submittalId}/attachments
-func handleAddSubmittalAttachment(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	submittalID, err := strconv.ParseInt(request.PathParameters["submittalId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid submittal ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid submittal ID", logger), nil
-	}
-
-	var attachment models.SubmittalAttachment
-	if err := api.ParseJSONBody(request.Body, &attachment); err != nil {
-		logger.WithError(err).Error("Invalid request body for add attachment")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger), nil
-	}
-
-	userID := claims.UserID
-	attachment.SubmittalID = submittalID
-	attachment.UploadedBy = userID
-	attachment.CreatedBy = userID
-	attachment.UpdatedBy = userID
-
-	createdAttachment, err := submittalRepository.AddSubmittalAttachment(ctx, &attachment)
-	if err != nil {
-		logger.WithError(err).Error("Failed to add submittal attachment")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to add attachment", logger), nil
-	}
-
-	return api.SuccessResponse(http.StatusCreated, createdAttachment, logger), nil
-}
+// Submittal attachment handler removed - now handled by centralized attachment management service
+// Removed function: handleAddSubmittalAttachment
 
 
 func init() {

@@ -7,6 +7,7 @@ import {KeyConstruct} from "../key_construct/key-construct";
 import {LambdaConstruct} from "../lambda_construct/lambda-construct";
 import {LambdaConstructProps} from "../../types/lambda-construct-props";
 import {CognitoConstruct} from "../cognito_construct/cognito-construct";
+import {S3Construct} from "../s3_construct/s3-construct";
 import {BasePathMapping, DomainName, RestApi, LambdaIntegration, CognitoUserPoolsAuthorizer, Cors} from "aws-cdk-lib/aws-apigateway";
 import {GetAccountId} from "../../utils/account-utils";
 
@@ -17,6 +18,7 @@ interface KeyProps extends NestedStackProps {
 
 export class SubStack extends NestedStack {
     private readonly keyConstruct: KeyConstruct;
+    private readonly s3Construct: S3Construct;
     private readonly lambdaConstruct: LambdaConstruct;
     private readonly api: RestApi;
 
@@ -27,9 +29,16 @@ export class SubStack extends NestedStack {
         //     stageEnvironment: props.stageEnvironment,
         // });
 
+        // Create S3 construct for attachment storage
+        this.s3Construct = new S3Construct(this, "S3Construct", {
+            stageEnvironment: props.stageEnvironment,
+            options: props.options,
+        });
+
         const lambdaConstructProps: LambdaConstructProps = {
             options: props.options,
-            stageEnvironment: props.stageEnvironment
+            stageEnvironment: props.stageEnvironment,
+            attachmentBucket: this.s3Construct.attachmentBucket
         };
 
         this.lambdaConstruct = new LambdaConstruct(this, "LambdaConstruct", lambdaConstructProps);
@@ -81,6 +90,12 @@ export class SubStack extends NestedStack {
         const rfiManagementIntegration = new LambdaIntegration(this.lambdaConstruct.rfiManagementLambda);
         const submittalManagementIntegration = new LambdaIntegration(this.lambdaConstruct.submittalManagementLambda);
         const assignmentManagementIntegration = new LambdaIntegration(this.lambdaConstruct.assignmentManagementLambda);
+
+        // Attachment management integration (only if Lambda exists)
+        const attachmentManagementIntegration = this.lambdaConstruct.attachmentManagementLambda
+            ? new LambdaIntegration(this.lambdaConstruct.attachmentManagementLambda)
+            : null;
+
         // CORS Lambda integration removed - using API Gateway CORS instead
 
         // Create /org resource with Cognito authorization
@@ -196,25 +211,8 @@ export class SubStack extends NestedStack {
         // CORS handled at API Gateway level
 
 
-        // Create /projects/{projectId}/attachments resource for project attachment management
-        const projectAttachmentsResource = projectIdResource.addResource('attachments');
-        projectAttachmentsResource.addMethod('GET', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        projectAttachmentsResource.addMethod('POST', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // CORS handled at API Gateway level
-
-        // Create /projects/{projectId}/attachments/{attachmentId} resource for specific attachment operations
-        const projectAttachmentIdResource = projectAttachmentsResource.addResource('{attachmentId}');
-        projectAttachmentIdResource.addMethod('GET', projectManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
-        // projectAttachmentIdResource.addMethod('DELETE', projectManagementIntegration, {
-        //     authorizer: cognitoAuthorizer
-        // }); // Temporarily commented to avoid API Gateway limits
-        // CORS handled at API Gateway level
+        // Project attachments now handled by centralized attachment management service
+        // Removed: /projects/{projectId}/attachments and /projects/{projectId}/attachments/{attachmentId}
 
         // Create /projects/{projectId}/users resource for project user role management
         const projectUsersResource = projectIdResource.addResource('users');
@@ -337,11 +335,8 @@ export class SubStack extends NestedStack {
         });
         // CORS handled at API Gateway level
 
-        // Sub-resource operations
-        const rfiAttachmentsResource = rfiIdResource.addResource('attachments');
-        rfiAttachmentsResource.addMethod('POST', rfiManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // RFI attachments now handled by centralized attachment management service
+        // Removed: /rfis/{rfiId}/attachments
 
         const rfiCommentsResource = rfiIdResource.addResource('comments');
         rfiCommentsResource.addMethod('POST', rfiManagementIntegration, {
@@ -431,11 +426,51 @@ export class SubStack extends NestedStack {
         });
         // CORS handled at API Gateway level
 
-        // Submittal attachments
-        const submittalAttachmentsResource = submittalIdResource.addResource('attachments');
-        submittalAttachmentsResource.addMethod('POST', submittalManagementIntegration, {
-            authorizer: cognitoAuthorizer
-        });
+        // Submittal attachments now handled by centralized attachment management service
+        // Removed: /submittals/{submittalId}/attachments
+
+        // CORS handled at API Gateway level
+
+        // Centralized Attachment Management API Routes
+        if (attachmentManagementIntegration) {
+            // Core attachment operations
+            const attachmentsResource = this.api.root.addResource('attachments');
+
+            // Upload operations
+            const attachmentUploadUrlResource = attachmentsResource.addResource('upload-url');
+            attachmentUploadUrlResource.addMethod('POST', attachmentManagementIntegration, {
+                authorizer: cognitoAuthorizer
+            });
+
+            const attachmentConfirmResource = attachmentsResource.addResource('confirm');
+            attachmentConfirmResource.addMethod('POST', attachmentManagementIntegration, {
+                authorizer: cognitoAuthorizer
+            });
+
+            // Attachment operations by ID
+            const attachmentIdResource = attachmentsResource.addResource('{id}');
+            attachmentIdResource.addMethod('GET', attachmentManagementIntegration, {
+                authorizer: cognitoAuthorizer
+            });
+            attachmentIdResource.addMethod('DELETE', attachmentManagementIntegration, {
+                authorizer: cognitoAuthorizer
+            });
+
+            // Download URL generation
+            const attachmentDownloadUrlResource = attachmentIdResource.addResource('download-url');
+            attachmentDownloadUrlResource.addMethod('GET', attachmentManagementIntegration, {
+                authorizer: cognitoAuthorizer
+            });
+
+            // Entity-based attachment queries
+            const entitiesResource = this.api.root.addResource('entities');
+            const entityTypeResource = entitiesResource.addResource('{type}');
+            const entityIdResource = entityTypeResource.addResource('{id}');
+            const entityAttachmentsResource = entityIdResource.addResource('attachments');
+            entityAttachmentsResource.addMethod('GET', attachmentManagementIntegration, {
+                authorizer: cognitoAuthorizer
+            });
+        }
 
         // CORS handled at API Gateway level
 
