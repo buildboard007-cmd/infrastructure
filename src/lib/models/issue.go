@@ -235,7 +235,7 @@ type IssueResponse struct {
 	IsOverdue           bool   `json:"is_overdue"`
 
 	// Attachments
-	Attachments []IssueAttachment `json:"attachments,omitempty"`
+	Attachments []IssueAttachment `json:"attachments"`
 }
 
 // IssueListResponse represents the response for listing issues

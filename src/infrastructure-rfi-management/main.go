@@ -139,8 +139,17 @@ func handleGetRFI(ctx context.Context, request events.APIGatewayProxyRequest, cl
 	comments, _ := rfiRepository.GetRFIComments(ctx, rfiID)
 	attachments, _ := rfiRepository.GetRFIAttachments(ctx, rfiID)
 
-	rfi.Comments = comments
-	rfi.Attachments = attachments
+	if comments == nil {
+		rfi.Comments = []models.RFIComment{}
+	} else {
+		rfi.Comments = comments
+	}
+
+	if attachments == nil {
+		rfi.Attachments = []models.RFIAttachment{}
+	} else {
+		rfi.Attachments = attachments
+	}
 
 	return api.SuccessResponse(http.StatusOK, rfi, logger), nil
 }

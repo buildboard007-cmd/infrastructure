@@ -188,7 +188,7 @@ type SubmittalResponse struct {
 	AssignedToName        string               `json:"assigned_to_name,omitempty"`
 	ReviewerName          string               `json:"reviewer_name,omitempty"`
 	ApproverName          string               `json:"approver_name,omitempty"`
-	Attachments           []SubmittalAttachment `json:"attachments,omitempty"`
+	Attachments           []SubmittalAttachment `json:"attachments"`
 	Reviews               []SubmittalReview    `json:"reviews,omitempty"`
 	AttachmentCount       int                  `json:"attachment_count,omitempty"`
 	ReviewCount           int                  `json:"review_count,omitempty"`

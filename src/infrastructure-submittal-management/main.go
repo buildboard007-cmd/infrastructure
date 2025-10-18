@@ -136,7 +136,7 @@ func handleCreateSubmittal(ctx context.Context, request events.APIGatewayProxyRe
 	return api.SuccessResponse(http.StatusCreated, createdSubmittal, logger), nil
 }
 
-// handleGetSubmittal handles GET /submittals/{submittalId}
+// handleGetSubmittal handles GET /submittals/{submittalId} - returns submittal with all attachments
 func handleGetSubmittal(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
 	submittalID, err := strconv.ParseInt(request.PathParameters["submittalId"], 10, 64)
 	if err != nil {
@@ -151,6 +151,14 @@ func handleGetSubmittal(ctx context.Context, request events.APIGatewayProxyReque
 		}
 		logger.WithError(err).Error("Failed to get submittal")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get submittal", logger), nil
+	}
+
+	// Enrich with attachments
+	attachments, _ := submittalRepository.GetSubmittalAttachments(ctx, submittalID)
+	if attachments == nil {
+		submittal.Attachments = []models.SubmittalAttachment{}
+	} else {
+		submittal.Attachments = attachments
 	}
 
 	return api.SuccessResponse(http.StatusOK, submittal, logger), nil

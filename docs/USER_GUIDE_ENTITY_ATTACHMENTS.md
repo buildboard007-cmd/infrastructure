@@ -138,21 +138,19 @@ curl -X PUT "<upload_url>" \
 
 #### Step 2c: Confirm Upload
 
-**Endpoint:** `POST /attachments/{attachmentId}/confirm`
+**Endpoint:** `POST /attachments/confirm`
 
 **Request:**
 ```json
 {
-  "entity_type": "issue"
+  "attachment_id": 6
 }
 ```
 
 **Response:**
 ```json
 {
-  "message": "Upload confirmed successfully",
-  "attachment_id": 6,
-  "status": "active"
+  "status": "confirmed"
 }
 ```
 
@@ -281,12 +279,19 @@ curl -X PUT "<upload_url>" \
 
 #### Step 2c: Confirm Upload
 
-**Endpoint:** `POST /attachments/{attachmentId}/confirm`
+**Endpoint:** `POST /attachments/confirm`
 
 **Request:**
 ```json
 {
-  "entity_type": "rfi"
+  "attachment_id": 1
+}
+```
+
+**Response:**
+```json
+{
+  "status": "confirmed"
 }
 ```
 
@@ -418,12 +423,19 @@ curl -X PUT "<upload_url>" \
 
 #### Step 2c: Confirm Upload
 
-**Endpoint:** `POST /attachments/{attachmentId}/confirm`
+**Endpoint:** `POST /attachments/confirm`
 
 **Request:**
 ```json
 {
-  "entity_type": "submittal"
+  "attachment_id": 1
+}
+```
+
+**Response:**
+```json
+{
+  "status": "confirmed"
 }
 ```
 
@@ -464,13 +476,12 @@ curl -X PUT "<upload_url>" \
 
 To download an attachment, generate a download URL:
 
-**Endpoint:** `POST /attachments/{attachmentId}/download-url`
+**Endpoint:** `GET /attachments/{attachmentId}/download-url?entity_type={entityType}`
 
-**Request:**
-```json
-{
-  "entity_type": "issue"
-}
+**Example:**
+```bash
+curl -X GET "https://z1pbmjzrb6.execute-api.us-east-2.amazonaws.com/prod/attachments/6/download-url?entity_type=issue" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 **Response:**
@@ -479,7 +490,7 @@ To download an attachment, generate a download URL:
   "download_url": "https://s3.amazonaws.com/...",
   "file_name": "wall_crack_photo.jpg",
   "file_size": 524288,
-  "expires_in": 300
+  "expires_at": "2025-10-06T21:15:30Z"
 }
 ```
 
@@ -494,16 +505,18 @@ curl "<download_url>" -o wall_crack_photo.jpg
 
 To soft-delete an attachment:
 
-**Endpoint:** `DELETE /attachments/{attachmentId}`
+**Endpoint:** `DELETE /attachments/{attachmentId}?entity_type={entityType}`
 
-**Query Parameters:**
-- `entity_type=issue` (or `rfi`, `submittal`)
+**Example:**
+```bash
+curl -X DELETE "https://z1pbmjzrb6.execute-api.us-east-2.amazonaws.com/prod/attachments/6?entity_type=issue" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
 
 **Response:**
 ```json
 {
-  "message": "Attachment soft deleted successfully",
-  "attachment_id": 6
+  "status": "deleted"
 }
 ```
 
@@ -515,17 +528,23 @@ To soft-delete an attachment:
 
 **For Issues:**
 ```
-GET /attachments?entity_type=issue&entity_id=72
+GET /entities/issue/72/attachments
 ```
 
 **For RFIs:**
 ```
-GET /attachments?entity_type=rfi&entity_id=81
+GET /entities/rfi/81/attachments
 ```
 
 **For Submittals:**
 ```
-GET /attachments?entity_type=submittal&entity_id=9
+GET /entities/submittal/9/attachments
+```
+
+**Example:**
+```bash
+curl -X GET "https://z1pbmjzrb6.execute-api.us-east-2.amazonaws.com/prod/entities/issue/72/attachments" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 **Response:**
@@ -542,7 +561,11 @@ GET /attachments?entity_type=submittal&entity_id=9
       "created_at": "2025-10-06T20:15:30Z"
     }
   ],
-  "total_count": 1
+  "total_count": 1,
+  "page": 1,
+  "page_size": 20,
+  "has_next": false,
+  "has_prev": false
 }
 ```
 
@@ -681,13 +704,13 @@ async function createIssueWithAttachments(issueData, files) {
       });
 
       // Step 2c: Confirm upload
-      await fetch(`/attachments/${uploadData.attachment_id}/confirm`, {
+      await fetch('/attachments/confirm', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ entity_type: 'issue' })
+        body: JSON.stringify({ attachment_id: uploadData.attachment_id })
       });
 
       console.log('Attachment uploaded:', file.name);

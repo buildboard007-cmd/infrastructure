@@ -262,7 +262,11 @@ func handleGetIssue(ctx context.Context, issueID, orgID int64) events.APIGateway
 
 	// Fetch attachments for the issue from issue_attachments table
 	attachments, _ := issueRepository.GetIssueAttachments(ctx, issueID)
-	issue.Attachments = attachments
+	if attachments == nil {
+		issue.Attachments = []models.IssueAttachment{}
+	} else {
+		issue.Attachments = attachments
+	}
 
 	return api.SuccessResponse(http.StatusOK, issue, logger)
 }

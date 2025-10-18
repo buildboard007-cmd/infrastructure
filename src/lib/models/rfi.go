@@ -179,7 +179,7 @@ type RFIResponse struct {
 	AssignedToName        string          `json:"assigned_to_name,omitempty"`
 	ResponseByName        string          `json:"response_by_name,omitempty"`
 	ApprovedByName        string          `json:"approved_by_name,omitempty"`
-	Attachments           []RFIAttachment `json:"attachments,omitempty"`
+	Attachments           []RFIAttachment `json:"attachments"`
 	Comments              []RFIComment    `json:"comments,omitempty"`
 	CommentCount          int             `json:"comment_count,omitempty"`
 	AttachmentCount       int             `json:"attachment_count,omitempty"`

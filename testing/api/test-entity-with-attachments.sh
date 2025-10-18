@@ -16,13 +16,13 @@ NC='\033[0m' # No Color
 API_BASE="https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main"
 COGNITO_ENDPOINT="https://cognito-idp.us-east-2.amazonaws.com/"
 CLIENT_ID="3f0fb5mpivctnvj85tucusf88e"
-USERNAME="buildboard007+555@gmail.com"
-PASSWORD="Mayur@1234"
+USERNAME="kakadiyabhautik@gmail.com"
+PASSWORD="K@kadiya#25"
 
 # Test data
-PROJECT_ID=49
-LOCATION_ID=24
-USER_ID=19
+PROJECT_ID=59
+LOCATION_ID=38
+USER_ID=40
 
 echo -e "${BLUE}======================================================================${NC}"
 echo -e "${BLUE}     Entity Management with Attachments - Complete Workflow Test     ${NC}"
@@ -277,13 +277,9 @@ SUBMITTAL_RESPONSE=$(curl -s -X POST "$API_BASE/submittals" \
   -H "Content-Type: application/json" \
   -d "{
     \"project_id\": $PROJECT_ID,
-    \"title\": \"Test Submittal with Attachment\",
-    \"submittal_type\": \"SHOP_DRAWING\",
-    \"specification_section\": \"03 30 00\",
-    \"description\": \"Steel beam shop drawings for review\",
-    \"required_action\": \"REVIEW_AND_APPROVE\",
-    \"due_date\": \"2025-12-31\",
-    \"submitted_by\": $USER_ID
+    \"title\": \"Test Submittal with Attachment - Steel Drawings\",
+    \"submittal_type\": \"shop_drawings\",
+    \"priority\": \"high\"
   }")
 
 SUBMITTAL_ID=$(echo "$SUBMITTAL_RESPONSE" | jq -r '.id // .ID // empty')

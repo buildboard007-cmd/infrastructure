@@ -470,6 +470,84 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "List Project Attachments - Documents Only",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/entities/project/{{project_id}}/attachments?attachment_type=document",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"entities",
+								"project",
+								"{{project_id}}",
+								"attachments"
+							],
+							"query": [
+								{
+									"key": "attachment_type",
+									"value": "document",
+									"description": "Filter by attachment type (e.g., document, drawing, logo)"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Project Attachments - Drawings Only",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/entities/project/{{project_id}}/attachments?attachment_type=drawing",
+							"protocol": "https",
+							"host": [
+								"74zc1md7sc",
+								"execute-api",
+								"us-east-2",
+								"amazonaws",
+								"com"
+							],
+							"path": [
+								"main",
+								"entities",
+								"project",
+								"{{project_id}}",
+								"attachments"
+							],
+							"query": [
+								{
+									"key": "attachment_type",
+									"value": "drawing",
+									"description": "Filter by attachment type (e.g., document, drawing, logo)"
+								}
+							]
+						}
+					},
+					"response": []
 				}
 			]
 		},

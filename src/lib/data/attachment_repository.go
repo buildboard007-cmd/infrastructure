@@ -146,16 +146,28 @@ func (dao *AttachmentDao) GetAttachmentsByEntity(ctx context.Context, entityType
 		return nil, fmt.Errorf("unsupported entity type: %s", entityType)
 	}
 
-	query := fmt.Sprintf(`
+	// Build query with optional attachment_type filter
+	baseQuery := fmt.Sprintf(`
 		SELECT
 			id, %s, file_name, file_path, file_size, file_type, attachment_type,
 			uploaded_by, created_at, created_by, updated_at, updated_by, is_deleted
 		FROM %s
 		WHERE %s = $1 AND is_deleted = false
-		ORDER BY created_at DESC
 	`, entityIDColumn, tableName, entityIDColumn)
 
-	rows, err := dao.DB.QueryContext(ctx, query, entityID)
+	var query string
+	var args []interface{}
+	args = append(args, entityID)
+
+	// Add attachment_type filter if provided
+	if attachmentType, exists := filters["attachment_type"]; exists && attachmentType != "" {
+		query = baseQuery + " AND attachment_type = $2 ORDER BY created_at DESC"
+		args = append(args, attachmentType)
+	} else {
+		query = baseQuery + " ORDER BY created_at DESC"
+	}
+
+	rows, err := dao.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		dao.Logger.WithError(err).WithFields(logrus.Fields{
 			"entity_type": entityType,
