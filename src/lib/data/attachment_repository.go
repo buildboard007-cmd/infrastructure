@@ -48,8 +48,16 @@ func (dao *AttachmentDao) CreateAttachment(ctx context.Context, attachment *mode
 	var id int64
 	var createdAt, updatedAt time.Time
 
+	// For issue_comment entity type, use NULL if entity_id is 0 (temporary attachment)
+	var entityIDValue interface{}
+	if attachment.EntityType == models.EntityTypeIssueComment && attachment.EntityID == 0 {
+		entityIDValue = nil
+	} else {
+		entityIDValue = attachment.EntityID
+	}
+
 	err := dao.DB.QueryRowContext(ctx, query,
-		attachment.EntityID,
+		entityIDValue,
 		attachment.FileName,
 		attachment.FilePath,
 		attachment.FileSize,
@@ -289,22 +297,60 @@ func (dao *AttachmentDao) SoftDeleteAttachment(ctx context.Context, attachmentID
 }
 
 // VerifyAttachmentAccess verifies that the user's organization has access to the attachment
+// Returns (hasAccess, error)
+// - If attachment doesn't exist: returns (false, "attachment not found" error)
+// - If attachment exists but user has no access: returns (false, "access denied" error)
+// - If database error: returns (false, database error)
+// - If user has access: returns (true, nil)
 func (dao *AttachmentDao) VerifyAttachmentAccess(ctx context.Context, attachmentID int64, entityType string, orgID int64) (bool, error) {
-	// Get the project_id associated with this attachment through the entity
+	tableName := models.GetTableName(entityType)
+	if tableName == "" {
+		return false, fmt.Errorf("unsupported entity type: %s", entityType)
+	}
+
+	// First, check if attachment exists at all (without org check)
+	var existsQuery string
+	switch entityType {
+	case models.EntityTypeProject:
+		existsQuery = `SELECT EXISTS(SELECT 1 FROM project.project_attachments WHERE id = $1 AND is_deleted = false)`
+	case models.EntityTypeIssue:
+		existsQuery = `SELECT EXISTS(SELECT 1 FROM project.issue_attachments WHERE id = $1 AND is_deleted = false)`
+	case models.EntityTypeRFI:
+		existsQuery = `SELECT EXISTS(SELECT 1 FROM project.rfi_attachments WHERE id = $1 AND is_deleted = false)`
+	case models.EntityTypeSubmittal:
+		existsQuery = `SELECT EXISTS(SELECT 1 FROM project.submittal_attachments WHERE id = $1 AND is_deleted = false)`
+	case models.EntityTypeIssueComment:
+		existsQuery = `SELECT EXISTS(SELECT 1 FROM project.issue_comment_attachments WHERE id = $1 AND is_deleted = false)`
+	}
+
+	var exists bool
+	err := dao.DB.QueryRowContext(ctx, existsQuery, attachmentID).Scan(&exists)
+	if err != nil {
+		dao.Logger.WithError(err).WithFields(logrus.Fields{
+			"attachment_id": attachmentID,
+			"entity_type":   entityType,
+		}).Error("Database error while checking attachment existence")
+		return false, fmt.Errorf("database error: %w", err)
+	}
+
+	if !exists {
+		return false, fmt.Errorf("attachment not found")
+	}
+
+	// Attachment exists, now check if user's org has access to it
 	var projectID int64
-	var query string
+	var accessQuery string
 
 	switch entityType {
 	case models.EntityTypeProject:
-		// For project attachments, check directly in projects table
-		query = `
+		accessQuery = `
 			SELECT p.id
 			FROM project.projects p
 			JOIN project.project_attachments pa ON p.id = pa.project_id
 			WHERE pa.id = $1 AND p.org_id = $2 AND pa.is_deleted = false
 		`
 	case models.EntityTypeIssue:
-		query = `
+		accessQuery = `
 			SELECT p.id
 			FROM project.projects p
 			JOIN project.issues i ON p.id = i.project_id
@@ -312,7 +358,7 @@ func (dao *AttachmentDao) VerifyAttachmentAccess(ctx context.Context, attachment
 			WHERE ia.id = $1 AND p.org_id = $2 AND ia.is_deleted = false
 		`
 	case models.EntityTypeRFI:
-		query = `
+		accessQuery = `
 			SELECT p.id
 			FROM project.projects p
 			JOIN project.rfis r ON p.id = r.project_id
@@ -320,28 +366,35 @@ func (dao *AttachmentDao) VerifyAttachmentAccess(ctx context.Context, attachment
 			WHERE ra.id = $1 AND p.org_id = $2 AND ra.is_deleted = false
 		`
 	case models.EntityTypeSubmittal:
-		query = `
+		accessQuery = `
 			SELECT p.id
 			FROM project.projects p
 			JOIN project.submittals s ON p.id = s.project_id
 			JOIN project.submittal_attachments sa ON s.id = sa.submittal_id
 			WHERE sa.id = $1 AND p.org_id = $2 AND sa.is_deleted = false
 		`
-	default:
-		return false, fmt.Errorf("unsupported entity type: %s", entityType)
+	case models.EntityTypeIssueComment:
+		accessQuery = `
+			SELECT p.id
+			FROM project.projects p
+			JOIN project.issues i ON p.id = i.project_id
+			JOIN project.issue_comments ic ON i.id = ic.issue_id
+			JOIN project.issue_comment_attachments ica ON ic.id = ica.comment_id
+			WHERE ica.id = $1 AND p.org_id = $2 AND ica.is_deleted = false
+		`
 	}
 
-	err := dao.DB.QueryRowContext(ctx, query, attachmentID, orgID).Scan(&projectID)
+	err = dao.DB.QueryRowContext(ctx, accessQuery, attachmentID, orgID).Scan(&projectID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return false, nil // No access
+			return false, fmt.Errorf("access denied")
 		}
 		dao.Logger.WithError(err).WithFields(logrus.Fields{
 			"attachment_id": attachmentID,
 			"entity_type":   entityType,
 			"org_id":        orgID,
-		}).Error("Failed to verify attachment access")
-		return false, err
+		}).Error("Database error while verifying attachment access")
+		return false, fmt.Errorf("database error: %w", err)
 	}
 
 	return true, nil

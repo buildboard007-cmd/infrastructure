@@ -20,12 +20,13 @@ import (
 )
 
 var (
-	logger            *logrus.Logger
-	isLocal           bool
-	ssmRepository     data.SSMRepository
-	ssmParams         map[string]string
-	sqlDB             *sql.DB
-	projectRepository data.ProjectRepository
+	logger               *logrus.Logger
+	isLocal              bool
+	ssmRepository        data.SSMRepository
+	ssmParams            map[string]string
+	sqlDB                *sql.DB
+	projectRepository    data.ProjectRepository
+	assignmentRepository data.AssignmentRepository
 )
 
 // Handler processes API Gateway requests for project management operations
@@ -127,35 +128,144 @@ func handleCreateProject(ctx context.Context, request events.APIGatewayProxyRequ
 	return api.SuccessResponse(http.StatusCreated, response, logger), nil
 }
 
-// handleGetProjects handles GET /projects with optional location_id query parameter
+// handleGetProjects handles GET /projects with optional location_id query parameter and access control
 func handleGetProjects(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
+	userID := claims.UserID
 	orgID := claims.OrgID
+	isSuperAdmin := claims.IsSuperAdmin
+
+	logger.WithFields(logrus.Fields{
+		"user_id":        userID,
+		"org_id":         orgID,
+		"is_super_admin": isSuperAdmin,
+		"operation":      "handleGetProjects",
+	}).Debug("Processing GET /projects request with access control")
 
 	// Check if location_id query parameter is provided
 	locationIDStr, hasLocationID := request.QueryStringParameters["location_id"]
-	
-	var projects []models.Project
-	var err error
-	
+	var locationID int64
 	if hasLocationID && locationIDStr != "" {
-		// Get projects by location ID
-		locationID, parseErr := strconv.ParseInt(locationIDStr, 10, 64)
+		var parseErr error
+		locationID, parseErr = strconv.ParseInt(locationIDStr, 10, 64)
 		if parseErr != nil {
 			logger.WithError(parseErr).Error("Invalid location_id parameter")
 			return api.ErrorResponse(http.StatusBadRequest, "Invalid location_id parameter", logger), nil
 		}
-		
-		projects, err = projectRepository.GetProjectsByLocationID(ctx, locationID, orgID)
+	}
+
+	var projects []models.Project
+	var err error
+
+	// Super admin sees everything
+	if isSuperAdmin {
+		logger.Debug("User is super admin - returning all projects")
+		if hasLocationID && locationIDStr != "" {
+			projects, err = projectRepository.GetProjectsByLocationID(ctx, locationID, orgID)
+		} else {
+			projects, err = projectRepository.GetProjectsByOrg(ctx, orgID)
+		}
 		if err != nil {
-			logger.WithError(err).Error("Failed to get projects by location")
-			return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects by location", logger), nil
+			logger.WithError(err).Error("Failed to get projects for super admin")
+			return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects", logger), nil
 		}
 	} else {
-		// Get all projects for organization
-		projects, err = projectRepository.GetProjectsByOrg(ctx, orgID)
+		// Check user's access level via assignments
+
+		// 1. Check for organization-level assignment
+		orgContexts, err := assignmentRepository.GetUserContexts(ctx, userID, "organization", orgID)
 		if err != nil {
-			logger.WithError(err).Error("Failed to get projects")
-			return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects", logger), nil
+			logger.WithError(err).Error("Failed to check org-level assignments")
+			return api.ErrorResponse(http.StatusInternalServerError, "Failed to check permissions", logger), nil
+		}
+
+		if len(orgContexts) > 0 {
+			// User has org-level access - sees all projects
+			logger.Debug("User has org-level assignment - returning all projects")
+			if hasLocationID && locationIDStr != "" {
+				projects, err = projectRepository.GetProjectsByLocationID(ctx, locationID, orgID)
+			} else {
+				projects, err = projectRepository.GetProjectsByOrg(ctx, orgID)
+			}
+			if err != nil {
+				logger.WithError(err).Error("Failed to get projects for org-level user")
+				return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects", logger), nil
+			}
+		} else {
+			// 2. Check for location-level assignment
+			locationContexts, err := assignmentRepository.GetUserContexts(ctx, userID, "location", orgID)
+			if err != nil {
+				logger.WithError(err).Error("Failed to check location-level assignments")
+				return api.ErrorResponse(http.StatusInternalServerError, "Failed to check permissions", logger), nil
+			}
+
+			if len(locationContexts) > 0 {
+				// User has location-level access
+				logger.WithField("location_count", len(locationContexts)).Debug("User has location-level assignments")
+
+				if hasLocationID && locationIDStr != "" {
+					// Check if user has access to this specific location
+					hasAccess := false
+					for _, locID := range locationContexts {
+						if locID == locationID {
+							hasAccess = true
+							break
+						}
+					}
+
+					if !hasAccess {
+						logger.Warn("User does not have access to requested location")
+						return api.ErrorResponse(http.StatusForbidden, "You do not have access to projects at this location", logger), nil
+					}
+
+					projects, err = projectRepository.GetProjectsByLocationID(ctx, locationID, orgID)
+				} else {
+					// Return projects from all locations user has access to
+					// Since user selects location first, this case should be rare
+					// For now, return empty list to force location selection
+					logger.Debug("Location filter required for location-level user")
+					projects = []models.Project{}
+				}
+
+				if err != nil {
+					logger.WithError(err).Error("Failed to get projects for location-level user")
+					return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects", logger), nil
+				}
+			} else {
+				// 3. Check for project-level assignment
+				projectContexts, err := assignmentRepository.GetUserContexts(ctx, userID, "project", orgID)
+				if err != nil {
+					logger.WithError(err).Error("Failed to check project-level assignments")
+					return api.ErrorResponse(http.StatusInternalServerError, "Failed to check permissions", logger), nil
+				}
+
+				if len(projectContexts) > 0 {
+					// User has project-level access - only sees assigned projects
+					logger.WithField("project_count", len(projectContexts)).Debug("User has project-level assignments")
+
+					if hasLocationID && locationIDStr != "" {
+						// Get all projects at the location
+						allProjects, err := projectRepository.GetProjectsByLocationID(ctx, locationID, orgID)
+						if err != nil {
+							logger.WithError(err).Error("Failed to get projects by location")
+							return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects", logger), nil
+						}
+
+						// Filter to only projects user has access to
+						projects = filterProjectsByIDs(allProjects, projectContexts)
+					} else {
+						// Get only assigned projects
+						projects, err = projectRepository.GetProjectsByIDs(ctx, projectContexts, orgID)
+						if err != nil {
+							logger.WithError(err).Error("Failed to get projects by IDs")
+							return api.ErrorResponse(http.StatusInternalServerError, "Failed to get projects", logger), nil
+						}
+					}
+				} else {
+					// No assignments at any level - user has no project access
+					logger.Warn("User has no assignments - no project access")
+					projects = []models.Project{}
+				}
+			}
 		}
 	}
 
@@ -164,7 +274,24 @@ func handleGetProjects(ctx context.Context, request events.APIGatewayProxyReques
 		Total:    len(projects),
 	}
 
+	logger.WithField("project_count", len(projects)).Debug("Returning projects")
 	return api.SuccessResponse(http.StatusOK, response, logger), nil
+}
+
+// filterProjectsByIDs filters a list of projects to only include those with IDs in the allowed list
+func filterProjectsByIDs(projects []models.Project, allowedIDs []int64) []models.Project {
+	idMap := make(map[int64]bool)
+	for _, id := range allowedIDs {
+		idMap[id] = true
+	}
+
+	filtered := []models.Project{}
+	for _, project := range projects {
+		if idMap[project.ProjectID] {
+			filtered = append(filtered, project)
+		}
+	}
+	return filtered
 }
 
 // handleGetProject handles GET /projects/{projectId}
@@ -244,7 +371,19 @@ func handleAssignUserToProject(ctx context.Context, request events.APIGatewayPro
 
 	userID := claims.UserID
 
-	assignment, err := projectRepository.AssignUserToProject(ctx, projectID, &createRequest, userID)
+	// Convert to assignment request
+	assignmentReq := &models.CreateAssignmentRequest{
+		UserID:      createRequest.UserID,
+		RoleID:      createRequest.RoleID,
+		ContextType: "project",
+		ContextID:   projectID,
+		TradeType:   createRequest.TradeType,
+		IsPrimary:   createRequest.IsPrimary,
+		StartDate:   createRequest.StartDate,
+		EndDate:     createRequest.EndDate,
+	}
+
+	assignment, err := assignmentRepository.CreateAssignment(ctx, assignmentReq, userID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to assign user to project")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to assign user to project", logger), nil
@@ -261,23 +400,20 @@ func handleGetProjectUserRoles(ctx context.Context, request events.APIGatewayPro
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
 	}
 
-	assignments, err := projectRepository.GetProjectUserRoles(ctx, projectID)
+	orgID := claims.OrgID
+
+	// Get all assignments for this project
+	result, err := assignmentRepository.GetContextAssignments(ctx, "project", projectID, orgID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get project user roles")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get project user roles", logger), nil
 	}
 
-	return api.SuccessResponse(http.StatusOK, assignments, logger), nil
+	return api.SuccessResponse(http.StatusOK, result.Assignments, logger), nil
 }
 
 // handleUpdateProjectUserRole handles PUT /projects/{projectId}/users/{assignmentId}
 func handleUpdateProjectUserRole(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	projectID, err := strconv.ParseInt(request.PathParameters["projectId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid project ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
-	}
-
 	assignmentID, err := strconv.ParseInt(request.PathParameters["assignmentId"], 10, 64)
 	if err != nil {
 		logger.WithError(err).Error("Invalid assignment ID")
@@ -292,11 +428,21 @@ func handleUpdateProjectUserRole(ctx context.Context, request events.APIGatewayP
 
 	userID := claims.UserID
 
-	assignment, err := projectRepository.UpdateProjectUserRole(ctx, assignmentID, projectID, &updateRequest, userID)
+	// Convert to assignment update request
+	// Need to convert values to pointers for UpdateAssignmentRequest
+	roleID := updateRequest.RoleID
+	isPrimary := updateRequest.IsPrimary
+
+	assignmentUpdateReq := &models.UpdateAssignmentRequest{
+		RoleID:    &roleID,
+		TradeType: updateRequest.TradeType,
+		IsPrimary: &isPrimary,
+		StartDate: updateRequest.StartDate,
+		EndDate:   updateRequest.EndDate,
+	}
+
+	assignment, err := assignmentRepository.UpdateAssignment(ctx, assignmentID, assignmentUpdateReq, userID)
 	if err != nil {
-		if err.Error() == "project user role assignment not found" {
-			return api.ErrorResponse(http.StatusNotFound, "Project user role assignment not found", logger), nil
-		}
 		logger.WithError(err).Error("Failed to update project user role")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update project user role", logger), nil
 	}
@@ -306,12 +452,6 @@ func handleUpdateProjectUserRole(ctx context.Context, request events.APIGatewayP
 
 // handleRemoveUserFromProject handles DELETE /projects/{projectId}/users/{assignmentId}
 func handleRemoveUserFromProject(ctx context.Context, request events.APIGatewayProxyRequest, claims *auth.Claims) (events.APIGatewayProxyResponse, error) {
-	projectID, err := strconv.ParseInt(request.PathParameters["projectId"], 10, 64)
-	if err != nil {
-		logger.WithError(err).Error("Invalid project ID")
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid project ID", logger), nil
-	}
-
 	assignmentID, err := strconv.ParseInt(request.PathParameters["assignmentId"], 10, 64)
 	if err != nil {
 		logger.WithError(err).Error("Invalid assignment ID")
@@ -320,11 +460,8 @@ func handleRemoveUserFromProject(ctx context.Context, request events.APIGatewayP
 
 	userID := claims.UserID
 
-	err = projectRepository.RemoveUserFromProject(ctx, assignmentID, projectID, userID)
+	err = assignmentRepository.DeleteAssignment(ctx, assignmentID, userID)
 	if err != nil {
-		if err.Error() == "project user role assignment not found" {
-			return api.ErrorResponse(http.StatusNotFound, "Project user role assignment not found", logger), nil
-		}
 		logger.WithError(err).Error("Failed to remove user from project")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to remove user from project", logger), nil
 	}
@@ -403,8 +540,9 @@ func init() {
 		}).Fatal("Error setting up PostgreSQL client")
 	}
 
-	// Initialize project repository
+	// Initialize repositories
 	projectRepository = data.NewProjectRepository(sqlDB)
+	assignmentRepository = data.NewAssignmentRepository(sqlDB)
 
 	logger.WithField("operation", "init").Error("Project Management Lambda initialization completed successfully")
 }

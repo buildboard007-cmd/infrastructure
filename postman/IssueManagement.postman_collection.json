@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "issue-management-api-collection-001",
     "name": "Issue Management API",
-    "description": "API collection for Issue Management service including issue creation, tracking, updates, and resolution.\n\n🎯 SERVICE SCOPE:\nThis collection contains endpoints that are actually implemented in the issue management service:\n- Issue CRUD operations (create, read, update, delete)\n- Project-specific issue listing\n- Issue status management\n- Assignment and tracking workflows\n\n✅ UNIFIED REQUEST STRUCTURE (v3.0 - UI Compatible):\n- Create Issue: POST /issues (flatter structure with location nested)\n- List Issues: GET /projects/{projectId}/issues (with filters)\n- Get Issue: GET /issues/{issueId} (detailed view)\n- Update Issue: PUT /issues/{issueId} (same structure as create)\n- Update Status: PATCH /issues/{issueId}/status (status only)\n- Delete Issue: DELETE /issues/{issueId} (soft delete)\n\n📋 REQUEST FORMAT (UI Compatible):\n```json\n{\n  \"project_id\": 123,\n  \"issue_category\": \"quality\",\n  \"category\": \"defect\",\n  \"title\": \"Issue Title\",\n  \"description\": \"Issue Description\",\n  \"priority\": \"high\",\n  \"severity\": \"major\",\n  \"location\": {\n    \"description\": \"Location details\",\n    \"coordinates\": { \"x\": 0, \"y\": 0 }\n  },\n  \"assigned_to\": 5,\n  \"due_date\": \"2025-09-30\",\n  \"distribution_list\": [\"email@example.com\"]\n}\n```\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Project validation happens server-side\n- Enhanced data integrity constraints\n\n📋 CATEGORIES & PRIORITIES:\n- Categories: safety, quality, schedule, cost, design, other\n- Priorities: critical, high, medium, low, planned\n- Severities: blocking, major, minor, cosmetic\n- Statuses: open, in_progress, ready_for_review, closed, rejected, on_hold\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure project_id exists before creating issues\n- All dates should use YYYY-MM-DD format\n- Location information is required for issue creation\n- Same request structure for create and update operations\n\n🏗️ CONSTRUCTION WORKFLOW:\n1. Field workers create issues during inspections\n2. Issues are assigned to responsible parties\n3. Status updates track progress to resolution\n4. Issues are reviewed and closed when complete\n\n📱 MOBILE-OPTIMIZED:\n- Designed for field workers using mobile devices\n- GPS coordinates support for precise location tracking\n- Photo attachments and distribution lists for communication",
+    "description": "API collection for Issue Management service including issue creation, tracking, updates, and resolution.\n\n🎯 SERVICE SCOPE:\nThis collection contains endpoints that are actually implemented in the issue management service:\n- Issue CRUD operations (create, read, update, delete)\n- Project-specific issue listing\n- Issue status management\n- Assignment and tracking workflows\n- Comments and activity feed for issues\n- Attachment support within comments\n\n✅ UNIFIED REQUEST STRUCTURE (v3.0 - UI Compatible):\n- Create Issue: POST /issues (flatter structure with location nested)\n- List Issues: GET /projects/{projectId}/issues (with filters)\n- Get Issue: GET /issues/{issueId} (detailed view with comments and activity)\n- Update Issue: PUT /issues/{issueId} (same structure as create)\n- Update Status: PATCH /issues/{issueId}/status (status only)\n- Delete Issue: DELETE /issues/{issueId} (soft delete)\n- Create Comment: POST /issues/{issueId}/comments (with optional attachments)\n- Get Comments: GET /issues/{issueId}/comments (includes activity log)\n\n📋 REQUEST FORMAT (UI Compatible):\n```json\n{\n  \"project_id\": 123,\n  \"issue_category\": \"quality\",\n  \"category\": \"defect\",\n  \"title\": \"Issue Title\",\n  \"description\": \"Issue Description\",\n  \"priority\": \"high\",\n  \"severity\": \"major\",\n  \"location\": {\n    \"description\": \"Location details\",\n    \"coordinates\": { \"x\": 0, \"y\": 0 }\n  },\n  \"assigned_to\": 5,\n  \"due_date\": \"2025-09-30\",\n  \"distribution_list\": [\"email@example.com\"]\n}\n```\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Project validation happens server-side\n- Enhanced data integrity constraints\n\n📋 CATEGORIES & PRIORITIES:\n- Categories: safety, quality, schedule, cost, design, other\n- Priorities: critical, high, medium, low, planned\n- Severities: blocking, major, minor, cosmetic\n- Statuses: open, in_progress, ready_for_review, closed, rejected, on_hold\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure project_id exists before creating issues\n- All dates should use YYYY-MM-DD format\n- Location information is required for issue creation\n- Same request structure for create and update operations\n\n🏗️ CONSTRUCTION WORKFLOW:\n1. Field workers create issues during inspections\n2. Issues are assigned to responsible parties\n3. Status updates track progress to resolution\n4. Issues are reviewed and closed when complete\n\n📱 MOBILE-OPTIMIZED:\n- Designed for field workers using mobile devices\n- GPS coordinates support for precise location tracking\n- Photo attachments and distribution lists for communication",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -669,6 +669,192 @@
               "value": "safety",
               "description": "Filter by safety category"
             }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create Issue Comment",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Comment created successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('issue_id');",
+              "    pm.expect(responseJson).to.have.property('comment');",
+              "    pm.expect(responseJson).to.have.property('comment_type');",
+              "    pm.expect(responseJson).to.have.property('created_by');",
+              "    pm.expect(responseJson).to.have.property('attachments');",
+              "    console.log('Created Comment:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"comment\": \"This issue has been inspected and repair work will begin tomorrow morning. Materials have been ordered and should arrive by end of day.\",\n    \"attachment_ids\": []\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues/{{issue_id}}/comments",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues",
+            "{{issue_id}}",
+            "comments"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create Comment with Attachments",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Comment with attachments created successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('comment');",
+              "    pm.expect(responseJson).to.have.property('attachments');",
+              "    pm.expect(responseJson.attachments).to.be.an('array');",
+              "    console.log('Created Comment with Attachments:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"comment\": \"Photos of the repair work in progress. See attached images showing before and after.\",\n    \"attachment_ids\": [123, 124]\n}"
+        },
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues/{{issue_id}}/comments",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues",
+            "{{issue_id}}",
+            "comments"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Issue Comments and Activity",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has comments array', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.be.an('array');",
+              "    ",
+              "    // Check comment structure if array is not empty",
+              "    if (responseJson.length > 0) {",
+              "        const firstComment = responseJson[0];",
+              "        pm.expect(firstComment).to.have.property('id');",
+              "        pm.expect(firstComment).to.have.property('issue_id');",
+              "        pm.expect(firstComment).to.have.property('comment');",
+              "        pm.expect(firstComment).to.have.property('comment_type');",
+              "        pm.expect(firstComment).to.have.property('created_by');",
+              "        pm.expect(firstComment).to.have.property('created_by_name');",
+              "        pm.expect(firstComment).to.have.property('attachments');",
+              "    }",
+              "    ",
+              "    console.log('Issue Comments and Activity:', JSON.stringify(responseJson, null, 2));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/issues/{{issue_id}}/comments",
+          "protocol": "https",
+          "host": [
+            "74zc1md7sc",
+            "execute-api",
+            "us-east-2",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "main",
+            "issues",
+            "{{issue_id}}",
+            "comments"
           ]
         }
       }

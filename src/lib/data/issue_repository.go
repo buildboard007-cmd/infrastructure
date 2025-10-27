@@ -34,6 +34,15 @@ type IssueRepository interface {
 
 	// UpdateIssueStatus updates only the status of an issue
 	UpdateIssueStatus(ctx context.Context, issueID, userID int64, status string) error
+
+	// CreateComment creates a new comment on an issue
+	CreateComment(ctx context.Context, issueID, userID int64, req *models.CreateCommentRequest) (*models.IssueComment, error)
+
+	// GetIssueComments retrieves all comments for an issue
+	GetIssueComments(ctx context.Context, issueID int64) ([]models.IssueComment, error)
+
+	// CreateActivityLog creates an activity log entry for status changes
+	CreateActivityLog(ctx context.Context, issueID, userID int64, activityMsg, previousValue, newValue string) error
 }
 
 // IssueDao implements IssueRepository interface using PostgreSQL
@@ -1001,4 +1010,256 @@ func (dao *IssueDao) GetIssueAttachments(ctx context.Context, issueID int64) ([]
 	}).Debug("Retrieved attachments for issue")
 
 	return attachments, nil
+}
+
+// CreateComment creates a new comment on an issue
+func (dao *IssueDao) CreateComment(ctx context.Context, issueID, userID int64, req *models.CreateCommentRequest) (*models.IssueComment, error) {
+	var comment models.IssueComment
+
+	err := dao.DB.QueryRowContext(ctx, `
+		INSERT INTO project.issue_comments (
+			issue_id, comment, comment_type,
+			created_by, updated_by
+		) VALUES (
+			$1, $2, $3, $4, $5
+		)
+		RETURNING id, issue_id, comment, comment_type, created_at, created_by, updated_at, updated_by, is_deleted
+	`,
+		issueID,
+		req.Comment,
+		models.CommentTypeComment,
+		userID,
+		userID,
+	).Scan(
+		&comment.ID,
+		&comment.IssueID,
+		&comment.Comment,
+		&comment.CommentType,
+		&comment.CreatedAt,
+		&comment.CreatedBy,
+		&comment.UpdatedAt,
+		&comment.UpdatedBy,
+		&comment.IsDeleted,
+	)
+
+	if err != nil {
+		dao.Logger.WithFields(logrus.Fields{
+			"issue_id": issueID,
+			"user_id":  userID,
+			"error":    err.Error(),
+		}).Error("Failed to create comment")
+		return nil, fmt.Errorf("failed to create comment: %w", err)
+	}
+
+	// Link attachments if provided
+	if len(req.AttachmentIDs) > 0 {
+		_, err = dao.DB.ExecContext(ctx, `
+			UPDATE project.issue_comment_attachments
+			SET comment_id = $1, updated_by = $2, updated_at = NOW()
+			WHERE id = ANY($3::bigint[])
+			AND comment_id IS NULL
+			AND created_by = $2
+			AND is_deleted = FALSE
+		`, comment.ID, userID, fmt.Sprintf("{%s}", strings.Trim(strings.Join(strings.Fields(fmt.Sprint(req.AttachmentIDs)), ","), "[]")))
+
+		if err != nil {
+			dao.Logger.WithError(err).Error("Failed to link attachments to comment")
+			// Don't fail the comment creation, just log the error
+		}
+	}
+
+	// Get user name
+	var userName sql.NullString
+	err = dao.DB.QueryRowContext(ctx, `
+		SELECT CONCAT(first_name, ' ', last_name)
+		FROM iam.users
+		WHERE id = $1
+	`, userID).Scan(&userName)
+
+	if err == nil && userName.Valid {
+		comment.CreatedByName = userName.String
+	}
+
+	// Fetch attachments for this comment
+	comment.Attachments = dao.getCommentAttachments(ctx, comment.ID)
+
+	dao.Logger.WithFields(logrus.Fields{
+		"comment_id": comment.ID,
+		"issue_id":   issueID,
+		"user_id":    userID,
+	}).Info("Successfully created comment")
+
+	return &comment, nil
+}
+
+// GetIssueComments retrieves all comments for an issue
+func (dao *IssueDao) GetIssueComments(ctx context.Context, issueID int64) ([]models.IssueComment, error) {
+	query := `
+		SELECT
+			c.id, c.issue_id, c.comment, c.comment_type,
+			c.previous_value, c.new_value,
+			c.created_at, c.created_by,
+			COALESCE(CONCAT(u.first_name, ' ', u.last_name), '') as created_by_name,
+			c.updated_at, c.updated_by, c.is_deleted
+		FROM project.issue_comments c
+		LEFT JOIN iam.users u ON c.created_by = u.id
+		WHERE c.issue_id = $1 AND c.is_deleted = FALSE
+		ORDER BY c.created_at DESC
+	`
+
+	rows, err := dao.DB.QueryContext(ctx, query, issueID)
+	if err != nil {
+		dao.Logger.WithError(err).Error("Failed to get issue comments")
+		return []models.IssueComment{}, fmt.Errorf("failed to get issue comments: %w", err)
+	}
+	defer rows.Close()
+
+	// Initialize with empty slice to ensure JSON marshals as [] instead of null
+	comments := make([]models.IssueComment, 0)
+	for rows.Next() {
+		var comment models.IssueComment
+		var previousValue, newValue sql.NullString
+
+		err := rows.Scan(
+			&comment.ID,
+			&comment.IssueID,
+			&comment.Comment,
+			&comment.CommentType,
+			&previousValue,
+			&newValue,
+			&comment.CreatedAt,
+			&comment.CreatedBy,
+			&comment.CreatedByName,
+			&comment.UpdatedAt,
+			&comment.UpdatedBy,
+			&comment.IsDeleted,
+		)
+
+		if err != nil {
+			dao.Logger.WithError(err).Error("Failed to scan comment row")
+			return nil, fmt.Errorf("failed to scan comment: %w", err)
+		}
+
+		// Handle nullable fields
+		if previousValue.Valid {
+			comment.PreviousValue = previousValue.String
+		}
+		if newValue.Valid {
+			comment.NewValue = newValue.String
+		}
+
+		// Fetch attachments for this comment
+		comment.Attachments = dao.getCommentAttachments(ctx, comment.ID)
+
+		comments = append(comments, comment)
+	}
+
+	if err = rows.Err(); err != nil {
+		dao.Logger.WithError(err).Error("Error iterating comment rows")
+		return nil, fmt.Errorf("error iterating comments: %w", err)
+	}
+
+	dao.Logger.WithFields(logrus.Fields{
+		"issue_id":      issueID,
+		"comment_count": len(comments),
+	}).Debug("Retrieved comments for issue")
+
+	return comments, nil
+}
+
+// CreateActivityLog creates an activity log entry for status changes and other system events
+func (dao *IssueDao) CreateActivityLog(ctx context.Context, issueID, userID int64, activityMsg, previousValue, newValue string) error {
+	_, err := dao.DB.ExecContext(ctx, `
+		INSERT INTO project.issue_comments (
+			issue_id, comment, comment_type,
+			previous_value, new_value,
+			created_by, updated_by
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7
+		)
+	`,
+		issueID,
+		activityMsg,
+		models.CommentTypeActivity,
+		sql.NullString{String: previousValue, Valid: previousValue != ""},
+		sql.NullString{String: newValue, Valid: newValue != ""},
+		userID,
+		userID,
+	)
+
+	if err != nil {
+		dao.Logger.WithFields(logrus.Fields{
+			"issue_id": issueID,
+			"user_id":  userID,
+			"error":    err.Error(),
+		}).Error("Failed to create activity log")
+		return fmt.Errorf("failed to create activity log: %w", err)
+	}
+
+	dao.Logger.WithFields(logrus.Fields{
+		"issue_id": issueID,
+		"user_id":  userID,
+		"activity": activityMsg,
+	}).Info("Successfully created activity log")
+
+	return nil
+}
+
+// getCommentAttachments retrieves all attachments for a comment
+func (dao *IssueDao) getCommentAttachments(ctx context.Context, commentID int64) []models.IssueCommentAttachment {
+	query := `
+		SELECT id, comment_id, file_name, file_path, file_size, file_type,
+		       attachment_type, uploaded_by, created_at, created_by,
+		       updated_at, updated_by, is_deleted
+		FROM project.issue_comment_attachments
+		WHERE comment_id = $1 AND is_deleted = FALSE
+		ORDER BY created_at ASC
+	`
+
+	rows, err := dao.DB.QueryContext(ctx, query, commentID)
+	if err != nil {
+		dao.Logger.WithError(err).Error("Failed to get comment attachments")
+		return []models.IssueCommentAttachment{}
+	}
+	defer rows.Close()
+
+	// Initialize with empty slice to ensure JSON marshals as [] instead of null
+	attachments := make([]models.IssueCommentAttachment, 0)
+	for rows.Next() {
+		var att models.IssueCommentAttachment
+		var fileSize sql.NullInt64
+		var fileType sql.NullString
+
+		err := rows.Scan(
+			&att.ID,
+			&att.CommentID,
+			&att.FileName,
+			&att.FilePath,
+			&fileSize,
+			&fileType,
+			&att.AttachmentType,
+			&att.UploadedBy,
+			&att.CreatedAt,
+			&att.CreatedBy,
+			&att.UpdatedAt,
+			&att.UpdatedBy,
+			&att.IsDeleted,
+		)
+
+		if err != nil {
+			dao.Logger.WithError(err).Error("Failed to scan attachment")
+			continue
+		}
+
+		if fileSize.Valid {
+			att.FileSize = &fileSize.Int64
+		}
+		if fileType.Valid {
+			att.FileType = &fileType.String
+		}
+
+		attachments = append(attachments, att)
+	}
+
+	return attachments
 }

@@ -117,8 +117,14 @@ func handleGenerateUploadURL(ctx context.Context, request events.APIGatewayProxy
 	uploadReq.OrgID = claims.OrgID
 
 	// Validate required fields
-	if uploadReq.EntityType == "" || uploadReq.EntityID == 0 || uploadReq.ProjectID == 0 || uploadReq.LocationID == 0 || uploadReq.FileName == "" {
+	// For issue_comment, entity_id can be 0 (will be updated after comment creation)
+	if uploadReq.EntityType == "" || uploadReq.ProjectID == 0 || uploadReq.LocationID == 0 || uploadReq.FileName == "" {
 		return api.ErrorResponse(http.StatusBadRequest, "Missing required fields", logger), nil
+	}
+
+	// For non-comment entity types, entity_id must be > 0
+	if uploadReq.EntityType != models.EntityTypeIssueComment && uploadReq.EntityID == 0 {
+		return api.ErrorResponse(http.StatusBadRequest, "entity_id is required for this entity type", logger), nil
 	}
 
 	// Validate file type
@@ -126,10 +132,29 @@ func handleGenerateUploadURL(ctx context.Context, request events.APIGatewayProxy
 		return api.ErrorResponse(http.StatusBadRequest, "File type not allowed", logger), nil
 	}
 
+	// Validate entity type is supported
+	if !isValidEntityType(uploadReq.EntityType) {
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid entity type", logger), nil
+	}
+
+	// Validate entity access (entity exists, belongs to project, project belongs to org and location)
+	if uploadReq.EntityType != models.EntityTypeIssueComment {
+		statusCode, errMsg := validateEntityAccess(ctx, uploadReq.EntityType, uploadReq.EntityID, uploadReq.ProjectID, uploadReq.LocationID, uploadReq.OrgID)
+		if errMsg != "" {
+			return api.ErrorResponse(statusCode, errMsg, logger), nil
+		}
+	} else {
+		// For issue_comment without entity_id, just validate project
+		statusCode, errMsg := validateProjectAccess(ctx, uploadReq.ProjectID, uploadReq.LocationID, uploadReq.OrgID)
+		if errMsg != "" {
+			return api.ErrorResponse(statusCode, errMsg, logger), nil
+		}
+	}
+
 	// Generate S3 key
 	s3Key := uploadReq.GenerateS3Key()
 	if s3Key == "" {
-		return api.ErrorResponse(http.StatusBadRequest, "Invalid entity type", logger), nil
+		return api.ErrorResponse(http.StatusBadRequest, "Failed to generate S3 key", logger), nil
 	}
 
 	// Create attachment record in database
@@ -156,6 +181,10 @@ func handleGenerateUploadURL(ctx context.Context, request events.APIGatewayProxy
 	createdAttachment, err := attachmentRepository.CreateAttachment(ctx, attachment)
 	if err != nil {
 		logger.WithError(err).Error("Failed to create attachment record")
+		// Parse specific database errors
+		if strings.Contains(err.Error(), "violates foreign key constraint") {
+			return api.ErrorResponse(http.StatusBadRequest, "Invalid reference: Entity or project does not exist", logger), nil
+		}
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create attachment", logger), nil
 	}
 
@@ -215,11 +244,26 @@ func handleGetAttachment(ctx context.Context, request events.APIGatewayProxyRequ
 	// Verify access
 	hasAccess, err := attachmentRepository.VerifyAttachmentAccess(ctx, attachmentID, entityType, claims.OrgID)
 	if err != nil {
-		logger.WithError(err).Error("Failed to verify attachment access")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to verify access", logger), nil
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "unsupported entity type") {
+			return api.ErrorResponse(http.StatusBadRequest, errMsg, logger), nil
+		}
+		if strings.Contains(errMsg, "attachment not found") {
+			return api.ErrorResponse(http.StatusNotFound, "Attachment not found", logger), nil
+		}
+		if strings.Contains(errMsg, "access denied") {
+			return api.ErrorResponse(http.StatusForbidden, "Access denied to this attachment", logger), nil
+		}
+		if strings.Contains(errMsg, "database error") {
+			logger.WithError(err).Error("Database error while verifying attachment access")
+			return api.ErrorResponse(http.StatusInternalServerError, "Database error occurred", logger), nil
+		}
+		// Fallback for any other unexpected errors
+		logger.WithError(err).Error("Unexpected error while verifying attachment access")
+		return api.ErrorResponse(http.StatusInternalServerError, "An unexpected error occurred", logger), nil
 	}
 	if !hasAccess {
-		return api.ErrorResponse(http.StatusForbidden, "Access denied", logger), nil
+		return api.ErrorResponse(http.StatusForbidden, "Access denied to this attachment", logger), nil
 	}
 
 	attachment, err := attachmentRepository.GetAttachment(ctx, attachmentID, entityType)
@@ -252,11 +296,26 @@ func handleGenerateDownloadURL(ctx context.Context, request events.APIGatewayPro
 	// Verify access
 	hasAccess, err := attachmentRepository.VerifyAttachmentAccess(ctx, attachmentID, entityType, claims.OrgID)
 	if err != nil {
-		logger.WithError(err).Error("Failed to verify attachment access")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to verify access", logger), nil
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "unsupported entity type") {
+			return api.ErrorResponse(http.StatusBadRequest, errMsg, logger), nil
+		}
+		if strings.Contains(errMsg, "attachment not found") {
+			return api.ErrorResponse(http.StatusNotFound, "Attachment not found", logger), nil
+		}
+		if strings.Contains(errMsg, "access denied") {
+			return api.ErrorResponse(http.StatusForbidden, "Access denied to this attachment", logger), nil
+		}
+		if strings.Contains(errMsg, "database error") {
+			logger.WithError(err).Error("Database error while verifying attachment access")
+			return api.ErrorResponse(http.StatusInternalServerError, "Database error occurred", logger), nil
+		}
+		// Fallback for any other unexpected errors
+		logger.WithError(err).Error("Unexpected error while verifying attachment access")
+		return api.ErrorResponse(http.StatusInternalServerError, "An unexpected error occurred", logger), nil
 	}
 	if !hasAccess {
-		return api.ErrorResponse(http.StatusForbidden, "Access denied", logger), nil
+		return api.ErrorResponse(http.StatusForbidden, "Access denied to this attachment", logger), nil
 	}
 
 	attachment, err := attachmentRepository.GetAttachment(ctx, attachmentID, entityType)
@@ -303,11 +362,26 @@ func handleDeleteAttachment(ctx context.Context, request events.APIGatewayProxyR
 	// Verify access
 	hasAccess, err := attachmentRepository.VerifyAttachmentAccess(ctx, attachmentID, entityType, claims.OrgID)
 	if err != nil {
-		logger.WithError(err).Error("Failed to verify attachment access")
-		return api.ErrorResponse(http.StatusInternalServerError, "Failed to verify access", logger), nil
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "unsupported entity type") {
+			return api.ErrorResponse(http.StatusBadRequest, errMsg, logger), nil
+		}
+		if strings.Contains(errMsg, "attachment not found") {
+			return api.ErrorResponse(http.StatusNotFound, "Attachment not found", logger), nil
+		}
+		if strings.Contains(errMsg, "access denied") {
+			return api.ErrorResponse(http.StatusForbidden, "Access denied to this attachment", logger), nil
+		}
+		if strings.Contains(errMsg, "database error") {
+			logger.WithError(err).Error("Database error while verifying attachment access")
+			return api.ErrorResponse(http.StatusInternalServerError, "Database error occurred", logger), nil
+		}
+		// Fallback for any other unexpected errors
+		logger.WithError(err).Error("Unexpected error while verifying attachment access")
+		return api.ErrorResponse(http.StatusInternalServerError, "An unexpected error occurred", logger), nil
 	}
 	if !hasAccess {
-		return api.ErrorResponse(http.StatusForbidden, "Access denied", logger), nil
+		return api.ErrorResponse(http.StatusForbidden, "Access denied to this attachment", logger), nil
 	}
 
 	err = attachmentRepository.SoftDeleteAttachment(ctx, attachmentID, entityType, claims.UserID)
@@ -383,6 +457,7 @@ func isValidEntityType(entityType string) bool {
 		models.EntityTypeIssue,
 		models.EntityTypeRFI,
 		models.EntityTypeSubmittal,
+		models.EntityTypeIssueComment,
 	}
 
 	for _, validType := range validTypes {
@@ -391,6 +466,95 @@ func isValidEntityType(entityType string) bool {
 		}
 	}
 	return false
+}
+
+// validateProjectAccess validates that project exists, belongs to org, and optionally belongs to location
+// Returns (statusCode, errorMessage) - errorMessage is empty string if validation passes
+func validateProjectAccess(ctx context.Context, projectID, locationID, orgID int64) (int, string) {
+	var projectOrgID, projectLocationID int64
+
+	err := sqlDB.QueryRowContext(ctx, `
+		SELECT org_id, location_id FROM project.projects
+		WHERE id = $1 AND is_deleted = FALSE
+	`, projectID).Scan(&projectOrgID, &projectLocationID)
+
+	if err == sql.ErrNoRows {
+		return http.StatusNotFound, "Project not found"
+	}
+	if err != nil {
+		logger.WithError(err).Error("Failed to validate project")
+		return http.StatusInternalServerError, "Failed to validate project"
+	}
+
+	// Validate project belongs to user's organization
+	if projectOrgID != orgID {
+		return http.StatusForbidden, "Project does not belong to your organization"
+	}
+
+	// Validate project belongs to specified location (if location validation is needed)
+	if locationID != 0 && projectLocationID != locationID {
+		return http.StatusBadRequest, fmt.Sprintf("Project does not belong to location %d. Expected location: %d", locationID, projectLocationID)
+	}
+
+	return 0, ""
+}
+
+// validateEntityAccess validates that entity exists, belongs to project, project belongs to org and location
+// Returns (statusCode, errorMessage) - errorMessage is empty string if validation passes
+func validateEntityAccess(ctx context.Context, entityType string, entityID, projectID, locationID, orgID int64) (int, string) {
+	// First validate project access
+	statusCode, errMsg := validateProjectAccess(ctx, projectID, locationID, orgID)
+	if errMsg != "" {
+		return statusCode, errMsg
+	}
+
+	// Now validate entity exists and belongs to the specified project
+	var entityProjectID int64
+	var entityDeleted bool
+	var query string
+
+	switch entityType {
+	case models.EntityTypeIssue:
+		query = "SELECT project_id, is_deleted FROM project.issues WHERE id = $1"
+	case models.EntityTypeRFI:
+		query = "SELECT project_id, is_deleted FROM project.rfis WHERE id = $1"
+	case models.EntityTypeSubmittal:
+		query = "SELECT project_id, is_deleted FROM project.submittals WHERE id = $1"
+	case models.EntityTypeProject:
+		// For project attachments, entity_id = project_id
+		if entityID != projectID {
+			return http.StatusBadRequest, "For project attachments, entity_id must equal project_id"
+		}
+		return 0, "" // Already validated project access above
+	default:
+		return http.StatusBadRequest, "Unsupported entity type for validation"
+	}
+
+	err := sqlDB.QueryRowContext(ctx, query, entityID).Scan(&entityProjectID, &entityDeleted)
+
+	if err == sql.ErrNoRows {
+		return http.StatusNotFound, fmt.Sprintf("%s not found", strings.Title(entityType))
+	}
+	if err != nil {
+		logger.WithError(err).WithFields(logrus.Fields{
+			"entity_type": entityType,
+			"entity_id":   entityID,
+		}).Error("Failed to validate entity")
+		return http.StatusInternalServerError, "Failed to validate entity"
+	}
+
+	// Check if entity is deleted
+	if entityDeleted {
+		return http.StatusNotFound, fmt.Sprintf("%s not found", strings.Title(entityType))
+	}
+
+	// Validate entity belongs to the specified project
+	if entityProjectID != projectID {
+		return http.StatusBadRequest, fmt.Sprintf("%s does not belong to project %d. Expected project: %d",
+			strings.Title(entityType), projectID, entityProjectID)
+	}
+
+	return 0, ""
 }
 
 func init() {

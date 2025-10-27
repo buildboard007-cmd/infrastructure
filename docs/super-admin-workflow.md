@@ -4,8 +4,49 @@
 
 This document describes the complete super admin signup and organization setup workflow for BuildBoard. The workflow handles the initial account creation, email verification, organization setup, and location setup for super administrator users.
 
+---
+
+## ⚡ Quick Reference (TL;DR)
+
+### The Complete Flow
+```
+1. User Signs Up → pending_org_setup + pending org
+2. User Sets Up Organization → org details updated
+3. User Creates Location → BOTH user & org become active
+4. User Access Dashboard → full access granted
+```
+
+### Status Transitions
+| Component | Initial | After Org Setup | After Location | Final |
+|-----------|---------|-----------------|----------------|-------|
+| User | `pending_org_setup` | `pending_org_setup` | `active` | `active` |
+| Organization | `pending` | `pending` | `active` | `active` |
+
+### Key Files
+```
+Backend: /src/lib/data/org_repository.go:checkAndUpdateUserStatus()
+Backend: /src/lib/data/location_repository.go:checkAndUpdateUserStatusAfterLocation()
+Frontend: /src/app/setup-organization/page.tsx
+Frontend: /src/app/setup-location/page.tsx
+```
+
+### Quick Debug Commands
+```bash
+# Start frontend
+cd /Users/mayur/git_personal/ui/frontend && npm run dev
+
+# Deploy infrastructure
+npm run build && cdk deploy --profile dev
+
+# Check logs
+aws logs tail /aws/lambda/infrastructure-organization-management --follow --profile dev
+```
+
+---
+
 ## Table of Contents
 
+- [Quick Reference](#-quick-reference-tldr)
 - [Architecture Overview](#architecture-overview)
 - [Complete Workflow](#complete-workflow)
 - [Technical Components](#technical-components)

@@ -50,6 +50,15 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Handle different routes
 	switch request.HTTPMethod {
 	case http.MethodPost:
+		// POST /issues/{issueId}/comments - Add comment to issue
+		if strings.Contains(request.Resource, "/issues/{issueId}/comments") {
+			issueID, err := strconv.ParseInt(request.PathParameters["issueId"], 10, 64)
+			if err != nil {
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid issue ID", logger), nil
+			}
+			return handleCreateComment(ctx, issueID, claims.UserID, claims.OrgID, request.Body), nil
+		}
+
 		// POST /issues - Create new issue (unified structure, orgID from JWT)
 		if request.Resource == "/issues" {
 			return handleCreateIssue(ctx, claims.UserID, claims.OrgID, request.Body), nil
@@ -70,7 +79,16 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			}
 			return handleGetProjectIssues(ctx, projectID, claims.OrgID, filters), nil
 		}
-		
+
+		// GET /issues/{issueId}/comments - Get comments for issue
+		if strings.Contains(request.Resource, "/issues/{issueId}/comments") {
+			issueID, err := strconv.ParseInt(request.PathParameters["issueId"], 10, 64)
+			if err != nil {
+				return api.ErrorResponse(http.StatusBadRequest, "Invalid issue ID", logger), nil
+			}
+			return handleGetIssueComments(ctx, issueID, claims.OrgID), nil
+		}
+
 		// GET /issues/{issueId} - Get specific issue
 		if strings.Contains(request.Resource, "/issues/{issueId}") {
 			issueID, err := strconv.ParseInt(request.PathParameters["issueId"], 10, 64)
@@ -79,7 +97,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			}
 			return handleGetIssue(ctx, issueID, claims.OrgID), nil
 		}
-		
+
 		return api.ErrorResponse(http.StatusNotFound, "Endpoint not found", logger), nil
 		
 	case http.MethodPut:
@@ -268,11 +286,30 @@ func handleGetIssue(ctx context.Context, issueID, orgID int64) events.APIGateway
 		issue.Attachments = attachments
 	}
 
+	// Fetch comments and activity log for the issue
+	comments, err := issueRepository.GetIssueComments(ctx, issueID)
+	if err != nil {
+		logger.WithError(err).Warn("Failed to fetch comments for issue")
+		issue.Comments = []models.IssueComment{}
+	} else {
+		issue.Comments = comments
+	}
+
 	return api.SuccessResponse(http.StatusOK, issue, logger)
 }
 
 // handleUpdateIssue handles PUT /issues/{issueId}
 func handleUpdateIssue(ctx context.Context, issueID, userID, orgID int64, body string) events.APIGatewayProxyResponse {
+	// Get current issue state for activity logging
+	oldIssue, err := issueRepository.GetIssueByID(ctx, issueID)
+	if err != nil {
+		if err.Error() == "issue not found" {
+			return api.ErrorResponse(http.StatusNotFound, "Issue not found", logger)
+		}
+		logger.WithError(err).Error("Failed to get issue")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get issue", logger)
+	}
+
 	// Parse unified request structure
 	var updateReq models.UpdateIssueRequest
 	if err := json.Unmarshal([]byte(body), &updateReq); err != nil {
@@ -291,6 +328,15 @@ func handleUpdateIssue(ctx context.Context, issueID, userID, orgID int64, body s
 		}
 		logger.WithError(err).Error("Failed to update issue")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update issue", logger)
+	}
+
+	// Log status change activity
+	if updateReq.Status != "" && oldIssue.Status != updateReq.Status {
+		activityMsg := fmt.Sprintf("Status changed from %s to %s", oldIssue.Status, updateReq.Status)
+		err := issueRepository.CreateActivityLog(ctx, issueID, userID, activityMsg, oldIssue.Status, updateReq.Status)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to log status change activity")
+		}
 	}
 
 	return api.SuccessResponse(http.StatusOK, updatedIssue, logger)
@@ -350,6 +396,9 @@ func handleUpdateIssueStatus(ctx context.Context, issueID, userID, orgID int64, 
 		return api.ErrorResponse(http.StatusBadRequest, "Invalid status value", logger)
 	}
 
+	// Store old status for activity logging
+	oldStatus := issue.Status
+
 	// Update status
 	err = issueRepository.UpdateIssueStatus(ctx, issueID, userID, statusReq.Status)
 	if err != nil {
@@ -358,6 +407,15 @@ func handleUpdateIssueStatus(ctx context.Context, issueID, userID, orgID int64, 
 		}
 		logger.WithError(err).Error("Failed to update issue status")
 		return api.ErrorResponse(http.StatusInternalServerError, "Failed to update issue status", logger)
+	}
+
+	// Log status change activity
+	if oldStatus != statusReq.Status {
+		activityMsg := fmt.Sprintf("Status changed from %s to %s", oldStatus, statusReq.Status)
+		err := issueRepository.CreateActivityLog(ctx, issueID, userID, activityMsg, oldStatus, statusReq.Status)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to log status change activity")
+		}
 	}
 
 	return api.SuccessResponse(http.StatusOK, map[string]string{
@@ -400,6 +458,85 @@ func handleDeleteIssue(ctx context.Context, issueID, userID, orgID int64) events
 	}
 
 	return api.SuccessResponse(http.StatusOK, map[string]string{"message": "Issue deleted successfully"}, logger)
+}
+
+// handleCreateComment handles POST /issues/{issueId}/comments
+func handleCreateComment(ctx context.Context, issueID, userID, orgID int64, body string) events.APIGatewayProxyResponse {
+	// First validate that issue exists and belongs to user's organization
+	issue, err := issueRepository.GetIssueByID(ctx, issueID)
+	if err != nil {
+		if err.Error() == "issue not found" {
+			return api.ErrorResponse(http.StatusNotFound, "Issue not found", logger)
+		}
+		logger.WithError(err).Error("Failed to get issue")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get issue", logger)
+	}
+
+	// Validate issue belongs to org
+	var projectOrgID int64
+	err = sqlDB.QueryRowContext(ctx, `
+		SELECT org_id FROM project.projects
+		WHERE id = $1 AND is_deleted = FALSE
+	`, issue.ProjectID).Scan(&projectOrgID)
+
+	if err != nil || projectOrgID != orgID {
+		return api.ErrorResponse(http.StatusForbidden, "Issue does not belong to your organization", logger)
+	}
+
+	// Parse comment request
+	var commentReq models.CreateCommentRequest
+	if err := json.Unmarshal([]byte(body), &commentReq); err != nil {
+		logger.WithError(err).Error("Failed to parse create comment request")
+		return api.ErrorResponse(http.StatusBadRequest, "Invalid request body", logger)
+	}
+
+	// Validate required fields
+	if commentReq.Comment == "" {
+		return api.ErrorResponse(http.StatusBadRequest, "Comment is required", logger)
+	}
+
+	// Create comment
+	comment, err := issueRepository.CreateComment(ctx, issueID, userID, &commentReq)
+	if err != nil {
+		logger.WithError(err).Error("Failed to create comment")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to create comment", logger)
+	}
+
+	return api.SuccessResponse(http.StatusCreated, comment, logger)
+}
+
+// handleGetIssueComments handles GET /issues/{issueId}/comments
+func handleGetIssueComments(ctx context.Context, issueID, orgID int64) events.APIGatewayProxyResponse {
+	// First validate that issue exists and belongs to user's organization
+	issue, err := issueRepository.GetIssueByID(ctx, issueID)
+	if err != nil {
+		if err.Error() == "issue not found" {
+			return api.ErrorResponse(http.StatusNotFound, "Issue not found", logger)
+		}
+		logger.WithError(err).Error("Failed to get issue")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get issue", logger)
+	}
+
+	// Validate issue belongs to org
+	var projectOrgID int64
+	err = sqlDB.QueryRowContext(ctx, `
+		SELECT org_id FROM project.projects
+		WHERE id = $1 AND is_deleted = FALSE
+	`, issue.ProjectID).Scan(&projectOrgID)
+
+	if err != nil || projectOrgID != orgID {
+		return api.ErrorResponse(http.StatusForbidden, "Issue does not belong to your organization", logger)
+	}
+
+	// Get comments
+	comments, err := issueRepository.GetIssueComments(ctx, issueID)
+	if err != nil {
+		logger.WithError(err).Error("Failed to get comments")
+		return api.ErrorResponse(http.StatusInternalServerError, "Failed to get comments", logger)
+	}
+
+	// Return comments array directly
+	return api.SuccessResponse(http.StatusOK, comments, logger)
 }
 
 // main is the Lambda function entry point

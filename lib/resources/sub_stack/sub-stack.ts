@@ -317,6 +317,16 @@ export class SubStack extends NestedStack {
         });
         // CORS handled at API Gateway level
 
+        // Create /issues/{issueId}/comments resource for issue comments
+        const issueCommentsResource = issueIdResource.addResource('comments');
+        issueCommentsResource.addMethod('POST', issueManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        issueCommentsResource.addMethod('GET', issueManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
         // CONSOLIDATED RFI MANAGEMENT (6 endpoints total)
 
         // Core RFI CRUD operations

@@ -18,6 +18,7 @@ type ProjectRepository interface {
 	CreateProjectLegacy(ctx context.Context, orgID int64, project *models.LegacyCreateProjectRequest, userID int64) (*models.Project, error)
 	GetProjectsByOrg(ctx context.Context, orgID int64) ([]models.Project, error)
 	GetProjectsByLocationID(ctx context.Context, locationID, orgID int64) ([]models.Project, error)
+	GetProjectsByIDs(ctx context.Context, projectIDs []int64, orgID int64) ([]models.Project, error)
 	GetProjectByID(ctx context.Context, projectID, orgID int64) (*models.Project, error)
 	UpdateProject(ctx context.Context, projectID, orgID int64, project *models.UpdateProjectRequest, userID int64) (*models.Project, error)
 	
@@ -462,6 +463,79 @@ func (dao *ProjectDao) GetProjectsByLocationID(ctx context.Context, locationID, 
 		"org_id":      orgID,
 		"count":       len(projects),
 	}).Debug("Successfully retrieved projects for location")
+
+	return projects, nil
+}
+
+// GetProjectsByIDs retrieves projects by a list of project IDs within an organization
+func (dao *ProjectDao) GetProjectsByIDs(ctx context.Context, projectIDs []int64, orgID int64) ([]models.Project, error) {
+	if len(projectIDs) == 0 {
+		return []models.Project{}, nil
+	}
+
+	// Build the IN clause with placeholders
+	placeholders := make([]string, len(projectIDs))
+	args := make([]interface{}, len(projectIDs)+1)
+	args[0] = orgID
+
+	for i, id := range projectIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+2)
+		args[i+1] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, org_id, location_id, project_number, name, description, project_type,
+		       project_stage, work_scope, project_sector, delivery_method, project_phase,
+		       start_date, planned_end_date, actual_start_date, actual_end_date,
+		       substantial_completion_date, project_finish_date, warranty_start_date, warranty_end_date,
+		       budget, contract_value, square_footage, address, city, state, zip_code,
+		       country, language, latitude, longitude, status, created_at, created_by, updated_at, updated_by
+		FROM project.projects
+		WHERE org_id = $1 AND id IN (%s) AND is_deleted = FALSE
+		ORDER BY created_at DESC
+	`, strings.Join(placeholders, ", "))
+
+	rows, err := dao.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		dao.Logger.WithFields(logrus.Fields{
+			"org_id":      orgID,
+			"project_ids": projectIDs,
+			"error":       err.Error(),
+		}).Error("Failed to query projects by IDs")
+		return nil, fmt.Errorf("failed to query projects by IDs: %w", err)
+	}
+	defer rows.Close()
+
+	var projects []models.Project
+	for rows.Next() {
+		var project models.Project
+		err := rows.Scan(
+			&project.ProjectID, &project.OrgID, &project.LocationID, &project.ProjectNumber,
+			&project.Name, &project.Description, &project.ProjectType, &project.ProjectStage,
+			&project.WorkScope, &project.ProjectSector, &project.DeliveryMethod, &project.ProjectPhase,
+			&project.StartDate, &project.PlannedEndDate, &project.ActualStartDate, &project.ActualEndDate,
+			&project.SubstantialCompletionDate, &project.ProjectFinishDate, &project.WarrantyStartDate, &project.WarrantyEndDate,
+			&project.Budget, &project.ContractValue, &project.SquareFootage, &project.Address,
+			&project.City, &project.State, &project.ZipCode, &project.Country, &project.Language,
+			&project.Latitude, &project.Longitude, &project.Status, &project.CreatedAt,
+			&project.CreatedBy, &project.UpdatedAt, &project.UpdatedBy,
+		)
+		if err != nil {
+			dao.Logger.WithError(err).Error("Failed to scan project row")
+			return nil, fmt.Errorf("failed to scan project: %w", err)
+		}
+		projects = append(projects, project)
+	}
+
+	if err = rows.Err(); err != nil {
+		dao.Logger.WithError(err).Error("Error iterating project rows")
+		return nil, fmt.Errorf("error iterating projects: %w", err)
+	}
+
+	dao.Logger.WithFields(logrus.Fields{
+		"org_id": orgID,
+		"count":  len(projects),
+	}).Debug("Successfully retrieved projects by IDs")
 
 	return projects, nil
 }

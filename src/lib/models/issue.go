@@ -74,6 +74,9 @@ type Issue struct {
 	CreatedBy int64     `json:"created_by"`
 	UpdatedAt time.Time `json:"updated_at"`
 	UpdatedBy int64     `json:"updated_by"`
+
+	// Comments and Activity Log
+	Comments []IssueComment `json:"comments,omitempty"`
 }
 
 // IssueLocationInfo represents location details within an issue
@@ -236,6 +239,9 @@ type IssueResponse struct {
 
 	// Attachments
 	Attachments []IssueAttachment `json:"attachments"`
+
+	// Comments and Activity Log
+	Comments []IssueComment `json:"comments,omitempty"`
 }
 
 // IssueListResponse represents the response for listing issues
@@ -306,3 +312,49 @@ type IssueAttachment struct {
 	UpdatedBy      int64     `json:"updated_by"`
 	IsDeleted      bool      `json:"is_deleted"`
 }
+
+// IssueCommentAttachment represents a file attached to a comment
+type IssueCommentAttachment struct {
+	ID             int64     `json:"id"`
+	CommentID      int64     `json:"comment_id"`
+	FileName       string    `json:"file_name"`
+	FilePath       string    `json:"file_path"`
+	FileSize       *int64    `json:"file_size,omitempty"`
+	FileType       *string   `json:"file_type,omitempty"`
+	AttachmentType string    `json:"attachment_type"`
+	UploadedBy     int64     `json:"uploaded_by"`
+	CreatedAt      time.Time `json:"created_at"`
+	CreatedBy      int64     `json:"created_by"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	UpdatedBy      int64     `json:"updated_by"`
+	IsDeleted      bool      `json:"is_deleted"`
+}
+
+// IssueComment represents a comment or activity on an issue
+type IssueComment struct {
+	ID            int64                    `json:"id"`
+	IssueID       int64                    `json:"issue_id"`
+	Comment       string                   `json:"comment"`
+	CommentType   string                   `json:"comment_type"` // 'comment' or 'activity'
+	PreviousValue string                   `json:"previous_value,omitempty"`
+	NewValue      string                   `json:"new_value,omitempty"`
+	Attachments   []IssueCommentAttachment `json:"attachments"`
+	CreatedAt     time.Time                `json:"created_at"`
+	CreatedBy     int64                    `json:"created_by"`
+	CreatedByName string                   `json:"created_by_name,omitempty"`
+	UpdatedAt     time.Time                `json:"updated_at"`
+	UpdatedBy     int64                    `json:"updated_by"`
+	IsDeleted     bool                     `json:"is_deleted"`
+}
+
+// CreateCommentRequest for adding a comment to an issue
+type CreateCommentRequest struct {
+	Comment       string  `json:"comment" binding:"required"`
+	AttachmentIDs []int64 `json:"attachment_ids,omitempty"`
+}
+
+// Comment Type Constants
+const (
+	CommentTypeComment  = "comment"
+	CommentTypeActivity = "activity"
+)
