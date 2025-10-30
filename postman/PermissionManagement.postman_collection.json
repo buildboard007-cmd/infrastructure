@@ -1,0 +1,217 @@
+{
+	"info": {
+		"name": "Permission Management",
+		"description": "Permission management endpoints - CRUD operations for permissions",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{id_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Create Permission",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Permission created with required fields', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('permission_id');",
+							"    pm.expect(responseJson).to.have.property('permission_name');",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    ",
+							"    pm.globals.set('permission_id', responseJson.permission_id);",
+							"    console.log('Created Permission:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"permission_name\": \"READ_REPORTS\",\n    \"description\": \"Permission to read and view reports\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"permissions"
+					]
+				},
+				"description": "Create a new permission."
+			}
+		},
+		{
+			"name": "Get All Permissions",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has permissions array', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('permissions');",
+							"    pm.expect(responseJson).to.have.property('total');",
+							"    pm.expect(responseJson.permissions).to.be.an('array');",
+							"    console.log('Permissions:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"permissions"
+					]
+				},
+				"description": "Get all permissions."
+			}
+		},
+		{
+			"name": "Get Permission by ID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has permission data', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('permission_id');",
+							"    pm.expect(responseJson).to.have.property('permission_name');",
+							"    console.log('Permission Details:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions/{{permission_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"permissions",
+						"{{permission_id}}"
+					]
+				},
+				"description": "Get permission details by ID."
+			}
+		},
+		{
+			"name": "Update Permission",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Permission updated successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('permission_id');",
+							"    pm.expect(responseJson).to.have.property('permission_name');",
+							"    console.log('Updated Permission:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"permission_name\": \"READ_ALL_REPORTS\",\n    \"description\": \"Permission to read all reports including sensitive ones\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/permissions/{{permission_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"permissions",
+						"{{permission_id}}"
+					]
+				},
+				"description": "Update permission details."
+			}
+		}
+	]
+}

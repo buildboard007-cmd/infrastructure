@@ -1,0 +1,116 @@
+{
+	"info": {
+		"name": "Organization Management",
+		"description": "Organization management endpoints - Get and update organization details",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{id_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Get Organization",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has organization data', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('org_id');",
+							"    pm.expect(responseJson).to.have.property('org_name');",
+							"    pm.expect(responseJson).to.have.property('created_at');",
+							"    console.log('Organization:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/org",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"org"
+					]
+				},
+				"description": "Get organization details for the authenticated user's organization."
+			}
+		},
+		{
+			"name": "Update Organization",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Organization updated successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('org_id');",
+							"    pm.expect(responseJson).to.have.property('org_name');",
+							"    console.log('Updated Organization:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"org_name\": \"Updated Organization Name\",\n    \"address\": \"123 Business Avenue\",\n    \"city\": \"New York\",\n    \"state\": \"NY\",\n    \"zip_code\": \"10001\",\n    \"country\": \"USA\",\n    \"phone\": \"+1234567890\",\n    \"website\": \"https://example.com\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/org",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"org"
+					]
+				},
+				"description": "Update organization details."
+			}
+		}
+	]
+}

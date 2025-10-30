@@ -1,607 +1,569 @@
 {
-  "info": {
-    "_postman_id": "submittal-management-api-collection-001",
-    "name": "Submittal Management API (CONSOLIDATED)",
-    "description": "CONSOLIDATED Submittal Management API collection with 8 streamlined endpoints for efficient submittal lifecycle management.\n\n🎯 CONSOLIDATED ENDPOINTS (8 total):\n\nCore CRUD Operations:\n  - GET    /submittals/{id}                                    Get submittal with all data (attachments, reviews)\n  - POST   /submittals                                         Create submittal\n  - PUT    /submittals/{id}                                    Update submittal (including soft delete)\n\nContext Query:\n  - GET    /contexts/{contextType}/{contextId}/submittals     Get submittals for project\n\nWorkflow Operations:\n  - POST   /submittals/{id}/workflow                          Execute workflow action\n\nStatistics & Export:\n  - GET    /contexts/{contextType}/{contextId}/submittals/stats Get submittal statistics\n  - GET    /contexts/{contextType}/{contextId}/submittals/export Export submittals\n\nFile Management:\n  - POST   /submittals/{id}/attachments                       Add attachment\n\n✅ ACTION-BASED WORKFLOW (Consolidated in PUT /submittals/{id} or POST /submittals/{id}/workflow):\n1. Create Submittal: POST /submittals (PENDING_SUBMISSION status)\n2. Submit for Review: POST /submittals/{id}/workflow with action=\"submit_for_review\"\n3. Approve: POST /submittals/{id}/workflow with action=\"approve\" + comments\n4. Approve as Noted: POST /submittals/{id}/workflow with action=\"approve_as_noted\" + comments + conditions\n5. Revise & Resubmit: POST /submittals/{id}/workflow with action=\"revise_resubmit\" + revision_notes (required)\n6. Reject: POST /submittals/{id}/workflow with action=\"reject\" + comments (required)\n7. Mark for Information: POST /submittals/{id}/workflow with action=\"mark_for_information\"\n8. Regular Update: PUT /submittals/{id} without action field\n\n📋 SUBMITTAL TYPES & STATUSES (UI Compatible):\n- Types: shop_drawings, product_data, samples, material_certificates, method_statements, test_reports, other\n- Priorities: critical, high, medium, low\n- Phases: preparation, review, approval, fabrication, delivery, installation, completed\n- Statuses: pending_submission, under_review, approved, approved_as_noted, revise_resubmit, rejected, for_information_only\n- Ball in Court: contractor, architect, engineer, owner, subcontractor, vendor\n- Actions: submit_for_review, approve, approve_as_noted, revise_resubmit, reject, mark_for_information\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Project validation happens server-side\n- Enhanced data integrity constraints\n- Unified request structure for create/update operations\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure project_id exists before creating submittals\n- All dates should use YYYY-MM-DD format\n- Submittal numbers are auto-generated if not provided\n- Uses snake_case field names to match UI expectations\n- Complex JSON objects for delivery_tracking, team_assignments, etc.\n\n🚀 CONSOLIDATION BENEFITS:\n- Reduced API endpoints from 15+ to 10\n- Action-based workflow changes consolidate submit/approve/reject/respond\n- Simplified maintenance and testing\n- Consistent with other management APIs (RFI, Issue, Assignment)\n- Respects API Gateway limits",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "item": [
-    {
-      "name": "Create Submittal",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 201', function () {",
-              "    pm.response.to.have.status(201);",
-              "});",
-              "",
-              "pm.test('Submittal created successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('id');",
-              "    pm.expect(responseJson).to.have.property('submittal_number');",
-              "    pm.expect(responseJson).to.have.property('project_id');",
-              "    pm.expect(responseJson).to.have.property('package_name');",
-              "    pm.expect(responseJson).to.have.property('title');",
-              "    pm.expect(responseJson).to.have.property('workflow_status');",
-              "    ",
-              "    // Store submittal_id for other requests",
-              "    pm.globals.set('submittal_id', responseJson.id);",
-              "    console.log('Created Submittal:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"project_id\": {{project_id}},\n    \"location_id\": {{location_id}},\n    \"package_name\": \"Structural Steel Package - Phase 1\",\n    \"csi_division\": \"05\",\n    \"csi_section\": \"05 12 00\",\n    \"title\": \"Shop Drawings for Steel Beam Connections\",\n    \"description\": \"Detailed shop drawings for structural steel beam-to-column connections including moment connections, shear connections, and bracing details for Phase 1 construction.\",\n    \"submittal_type\": \"shop_drawings\",\n    \"specification_section\": \"051200\",\n    \"priority\": \"high\",\n    \"current_phase\": \"preparation\",\n    \"ball_in_court\": \"contractor\",\n    \"workflow_status\": \"pending_submission\",\n    \"assigned_to\": 1,\n    \"reviewer\": 2,\n    \"approver\": 3,\n    \"required_approval_date\": \"2024-03-15\",\n    \"fabrication_start_date\": \"2024-04-01\",\n    \"installation_date\": \"2024-05-15\",\n    \"delivery_tracking\": {\n        \"anticipated_delivery_date\": \"2024-05-10\",\n        \"order_date\": \"2024-03-20\",\n        \"delivery_status\": \"not_ordered\",\n        \"vendor_info\": {\n            \"name\": \"Steel Fabricators Inc\",\n            \"contact_email\": \"contact@steelfab.com\",\n            \"contact_phone\": \"+1-555-0123\"\n        }\n    },\n    \"team_assignments\": {\n        \"lead_architect\": 2,\n        \"lead_engineer\": 4,\n        \"project_manager\": 1,\n        \"contractor_rep\": 5,\n        \"subcontractor_rep\": 6\n    },\n    \"linked_drawings\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\", \"S-201\"],\n        \"drawing_revisions\": [\"R1\", \"R1\", \"R2\"],\n        \"detail_references\": [\"DET-1\", \"DET-2\", \"DET-5\"]\n    },\n    \"references\": {\n        \"specification_sections\": [\"051200\", \"051300\"],\n        \"related_submittals\": [],\n        \"related_rfis\": [\"RFI-2024-001\"],\n        \"related_issues\": []\n    },\n    \"procurement_log\": {\n        \"item_category\": \"Structural Steel Components\",\n        \"manufacturer\": \"Steel Corp International\",\n        \"model_number\": \"SC-2024-BEAM-A\",\n        \"quantity\": 150,\n        \"unit_cost\": 275.00,\n        \"total_cost\": 41250.00,\n        \"lead_time_weeks\": 8,\n        \"procurement_method\": \"direct_purchase\",\n        \"budget_line_item\": \"05-001-STEEL\"\n    },\n    \"approval_actions\": {\n        \"action_required\": \"review_approve\",\n        \"review_comments\": \"Please verify connection details and weld specifications\",\n        \"conditions_of_approval\": \"\",\n        \"revision_requirements\": \"\"\n    },\n    \"distribution_list\": [\n        \"architect@company.com\",\n        \"engineer@company.com\",\n        \"contractor@company.com\",\n        \"pm@company.com\"\n    ],\n    \"notification_settings\": {\n        \"notify_on_status_change\": true,\n        \"notify_on_delivery_update\": true,\n        \"notify_on_approval\": true\n    },\n    \"tags\": [\"urgent\", \"structural\", \"phase1\"],\n    \"custom_fields\": {\n        \"fire_rating_required\": true,\n        \"seismic_category\": \"D\",\n        \"wind_load_category\": \"III\"\n    }\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "submittals"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get Submittals by Project (Context Query)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Response has submittals list', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('submittals');",
-              "    pm.expect(responseJson).to.have.property('total_count');",
-              "    pm.expect(responseJson).to.have.property('page');",
-              "    pm.expect(responseJson).to.have.property('page_size');",
-              "    console.log('Found', responseJson.submittals.length, 'submittals for project');",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          }
-        ],
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/contexts/project/{{project_id}}/submittals?page=1&limit=20&sort=created_at&order=desc",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "contexts",
-            "project",
-            "{{project_id}}",
-            "submittals"
-          ],
-          "query": [
-            {
-              "key": "page",
-              "value": "1"
-            },
-            {
-              "key": "limit",
-              "value": "20"
-            },
-            {
-              "key": "sort",
-              "value": "created_at"
-            },
-            {
-              "key": "order",
-              "value": "desc"
-            },
-            {
-              "key": "status",
-              "value": "pending_submission",
-              "disabled": true
-            },
-            {
-              "key": "priority",
-              "value": "high",
-              "disabled": true
-            },
-            {
-              "key": "csi_division",
-              "value": "05",
-              "disabled": true
-            },
-            {
-              "key": "ball_in_court",
-              "value": "contractor",
-              "disabled": true
-            },
-            {
-              "key": "search",
-              "value": "steel",
-              "disabled": true
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get Single Submittal",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Submittal details returned', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('id');",
-              "    pm.expect(responseJson).to.have.property('submittal_number');",
-              "    pm.expect(responseJson).to.have.property('package_name');",
-              "    pm.expect(responseJson).to.have.property('title');",
-              "    pm.expect(responseJson).to.have.property('workflow_status');",
-              "    pm.expect(responseJson).to.have.property('delivery_tracking');",
-              "    pm.expect(responseJson).to.have.property('team_assignments');",
-              "    pm.expect(responseJson).to.have.property('attachments');",
-              "    console.log('Submittal Details:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          }
-        ],
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "submittals",
-            "{{submittal_id}}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Update Submittal (Regular Update)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Submittal updated successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('id');",
-              "    pm.expect(responseJson).to.have.property('updated_at');",
-              "    console.log('Updated Submittal:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "PUT",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"package_name\": \"Structural Steel Package - Phase 1 (Updated)\",\n    \"csi_division\": \"05\",\n    \"csi_section\": \"05 12 00\",\n    \"title\": \"Updated: Shop Drawings for Steel Beam Connections - Rev A\",\n    \"description\": \"Updated detailed shop drawings for structural steel beam-to-column connections including moment connections, shear connections, and bracing details for Phase 1 construction. Revised per architect comments.\",\n    \"submittal_type\": \"shop_drawings\",\n    \"specification_section\": \"051200\",\n    \"priority\": \"critical\",\n    \"assigned_to\": 2,\n    \"reviewer\": 3,\n    \"approver\": 4,\n    \"required_approval_date\": \"2024-03-20\",\n    \"fabrication_start_date\": \"2024-04-05\",\n    \"installation_date\": \"2024-05-20\",\n    \"delivery_tracking\": {\n        \"anticipated_delivery_date\": \"2024-05-08\",\n        \"order_date\": \"2024-03-18\",\n        \"delivery_status\": \"ordered\",\n        \"tracking_number\": \"TRK-123456\",\n        \"vendor_info\": {\n            \"name\": \"Steel Fabricators Inc\",\n            \"contact_email\": \"contact@steelfab.com\",\n            \"contact_phone\": \"+1-555-0123\"\n        },\n        \"expected_arrival\": \"2024-05-15\"\n    },\n    \"team_assignments\": {\n        \"lead_architect\": 3,\n        \"lead_engineer\": 5,\n        \"project_manager\": 2,\n        \"contractor_rep\": 6,\n        \"subcontractor_rep\": 7,\n        \"qa_reviewer\": 4\n    },\n    \"linked_drawings\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\", \"S-201\", \"S-202\"],\n        \"drawing_revisions\": [\"R2\", \"R2\", \"R3\", \"R1\"],\n        \"detail_references\": [\"DET-1\", \"DET-2\", \"DET-5\", \"DET-6\"]\n    },\n    \"references\": {\n        \"specification_sections\": [\"051200\", \"051300\", \"051400\"],\n        \"related_submittals\": [\"SUB-2024-002\"],\n        \"related_rfis\": [\"RFI-2024-001\", \"RFI-2024-003\"],\n        \"related_issues\": [\"ISS-2024-005\"]\n    },\n    \"procurement_log\": {\n        \"item_category\": \"Structural Steel Components\",\n        \"manufacturer\": \"Steel Corp International\",\n        \"model_number\": \"SC-2024-BEAM-A-REV\",\n        \"quantity\": 155,\n        \"unit_cost\": 280.00,\n        \"total_cost\": 43400.00,\n        \"lead_time_weeks\": 7,\n        \"procurement_method\": \"direct_purchase\",\n        \"budget_line_item\": \"05-001-STEEL\",\n        \"vendor_po_number\": \"PO-2024-0156\"\n    },\n    \"approval_actions\": {\n        \"action_required\": \"review_approve\",\n        \"review_comments\": \"Updated per architectural review comments. Please verify updated connection details and weld specifications.\",\n        \"conditions_of_approval\": \"Subject to field verification of existing conditions\",\n        \"revision_requirements\": \"Update detail DET-3 per structural engineer comments\"\n    },\n    \"distribution_list\": [\n        \"architect@company.com\",\n        \"engineer@company.com\",\n        \"contractor@company.com\",\n        \"pm@company.com\",\n        \"qa@company.com\"\n    ],\n    \"notification_settings\": {\n        \"notify_on_status_change\": true,\n        \"notify_on_delivery_update\": true,\n        \"notify_on_approval\": true,\n        \"notify_on_revision\": true\n    },\n    \"tags\": [\"urgent\", \"structural\", \"phase1\", \"revised\", \"updated\"],\n    \"custom_fields\": {\n        \"fire_rating_required\": true,\n        \"seismic_category\": \"D\",\n        \"wind_load_category\": \"III\",\n        \"revision_reason\": \"Architectural comments\",\n        \"field_verified\": false\n    }\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "submittals",
-            "{{submittal_id}}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Submit for Review (Workflow Action)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Workflow action executed', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('workflow_status');",
-              "    pm.expect(responseJson.workflow_status).to.equal('under_review');",
-              "    pm.expect(responseJson.ball_in_court).to.equal('architect');",
-              "    console.log('Submittal submitted for review:', responseJson.workflow_status);",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"action\": \"submit_for_review\",\n    \"comments\": \"Submittal is ready for architectural review. All contractor comments have been addressed.\",\n    \"next_reviewer\": 2,\n    \"ball_in_court_transfer\": \"architect\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}/workflow",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "submittals",
-            "{{submittal_id}}",
-            "workflow"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Approve as Noted (Workflow Action)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Workflow action executed', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('workflow_status');",
-              "    pm.expect(responseJson.workflow_status).to.equal('approved_as_noted');",
-              "    console.log('Submittal approved as noted:', responseJson.workflow_status);",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"action\": \"approve_as_noted\",\n    \"comments\": \"Submittal approved with minor revisions noted. Please address the following items before fabrication.\",\n    \"conditions\": \"1. Verify weld symbols on Detail 3A match spec section 051200. 2. Add fireproofing notes to beam connections. 3. Confirm bolt grades meet seismic requirements.\",\n    \"ball_in_court_transfer\": \"contractor\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}/workflow",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "submittals",
-            "{{submittal_id}}",
-            "workflow"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Revise and Resubmit (Workflow Action)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Workflow action executed', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('workflow_status');",
-              "    pm.expect(responseJson.workflow_status).to.equal('revise_resubmit');",
-              "    console.log('Submittal requires revision:', responseJson.workflow_status);",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"action\": \"revise_resubmit\",\n    \"comments\": \"Several issues need to be addressed before approval can be granted.\",\n    \"revision_notes\": \"1. Connection details on Sheet S-3 do not match structural drawings. 2. Missing seismic bracing details for moment frames. 3. Weld specifications need to be updated to match latest code requirements. 4. Fire rating details are incomplete.\",\n    \"ball_in_court_transfer\": \"contractor\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}/workflow",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "submittals",
-            "{{submittal_id}}",
-            "workflow"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get Submittal Statistics",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Statistics returned', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('total');",
-              "    pm.expect(responseJson).to.have.property('by_status');",
-              "    pm.expect(responseJson).to.have.property('by_priority');",
-              "    pm.expect(responseJson).to.have.property('by_ball_in_court');",
-              "    pm.expect(responseJson).to.have.property('overdue');",
-              "    pm.expect(responseJson).to.have.property('delivery_summary');",
-              "    console.log('Submittal Stats:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          }
-        ],
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/contexts/project/{{project_id}}/submittals/stats",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "contexts",
-            "project",
-            "{{project_id}}",
-            "submittals",
-            "stats"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Add Submittal Attachment",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 201', function () {",
-              "    pm.response.to.have.status(201);",
-              "});",
-              "",
-              "pm.test('Attachment added successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('id');",
-              "    pm.expect(responseJson).to.have.property('file_name');",
-              "    pm.expect(responseJson).to.have.property('submittal_id');",
-              "    ",
-              "    // Store attachment_id for deletion test",
-              "    pm.globals.set('attachment_id', responseJson.id);",
-              "    console.log('Added Attachment:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"file_name\": \"steel_connection_details_rev_a.pdf\",\n    \"file_path\": \"/uploads/submittals/2024/steel_connection_details_rev_a.pdf\",\n    \"file_size\": 2548736,\n    \"file_type\": \"application/pdf\",\n    \"attachment_type\": \"shop_drawing\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}/attachments",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "submittals",
-            "{{submittal_id}}",
-            "attachments"
-          ]
-        }
-      }
-    }
-  ],
-  "variable": [
-    {
-      "key": "project_id",
-      "value": "47",
-      "type": "string"
-    },
-    {
-      "key": "location_id",
-      "value": "22",
-      "type": "string"
-    },
-    {
-      "key": "access_token",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "submittal_id",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "attachment_id",
-      "value": "",
-      "type": "string"
-    }
-  ]
+	"info": {
+		"_postman_id": "submittal-management-api-collection-001",
+		"name": "Submittal Management",
+		"description": "CONSOLIDATED Submittal Management API collection with 8 streamlined endpoints for efficient submittal lifecycle management.\n\n🎯 CONSOLIDATED ENDPOINTS (8 total):\n\nCore CRUD Operations:\n  - GET    /submittals/{id}                                    Get submittal with all data (attachments, reviews)\n  - POST   /submittals                                         Create submittal\n  - PUT    /submittals/{id}                                    Update submittal (including soft delete)\n\nContext Query:\n  - GET    /contexts/{contextType}/{contextId}/submittals     Get submittals for project\n\nWorkflow Operations:\n  - POST   /submittals/{id}/workflow                          Execute workflow action\n\nStatistics & Export:\n  - GET    /contexts/{contextType}/{contextId}/submittals/stats Get submittal statistics\n  - GET    /contexts/{contextType}/{contextId}/submittals/export Export submittals\n\nFile Management:\n  - POST   /submittals/{id}/attachments                       Add attachment\n\n✅ ACTION-BASED WORKFLOW (Consolidated in PUT /submittals/{id} or POST /submittals/{id}/workflow):\n1. Create Submittal: POST /submittals (PENDING_SUBMISSION status)\n2. Submit for Review: POST /submittals/{id}/workflow with action=\"submit_for_review\"\n3. Approve: POST /submittals/{id}/workflow with action=\"approve\" + comments\n4. Approve as Noted: POST /submittals/{id}/workflow with action=\"approve_as_noted\" + comments + conditions\n5. Revise & Resubmit: POST /submittals/{id}/workflow with action=\"revise_resubmit\" + revision_notes (required)\n6. Reject: POST /submittals/{id}/workflow with action=\"reject\" + comments (required)\n7. Mark for Information: POST /submittals/{id}/workflow with action=\"mark_for_information\"\n8. Regular Update: PUT /submittals/{id} without action field\n\n📋 SUBMITTAL TYPES & STATUSES (UI Compatible):\n- Types: shop_drawings, product_data, samples, material_certificates, method_statements, test_reports, other\n- Priorities: critical, high, medium, low\n- Phases: preparation, review, approval, fabrication, delivery, installation, completed\n- Statuses: pending_submission, under_review, approved, approved_as_noted, revise_resubmit, rejected, for_information_only\n- Ball in Court: contractor, architect, engineer, owner, subcontractor, vendor\n- Actions: submit_for_review, approve, approve_as_noted, revise_resubmit, reject, mark_for_information\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Project validation happens server-side\n- Enhanced data integrity constraints\n- Unified request structure for create/update operations\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure project_id exists before creating submittals\n- All dates should use YYYY-MM-DD format\n- Submittal numbers are auto-generated if not provided\n- Uses snake_case field names to match UI expectations\n- Complex JSON objects for delivery_tracking, team_assignments, etc.\n\n🚀 CONSOLIDATION BENEFITS:\n- Reduced API endpoints from 15+ to 10\n- Action-based workflow changes consolidate submit/approve/reject/respond\n- Simplified maintenance and testing\n- Consistent with other management APIs (RFI, Issue, Assignment)\n- Respects API Gateway limits",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Create Submittal",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Submittal created successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('submittal_number');",
+							"    pm.expect(responseJson).to.have.property('project_id');",
+							"    pm.expect(responseJson).to.have.property('package_name');",
+							"    pm.expect(responseJson).to.have.property('title');",
+							"    pm.expect(responseJson).to.have.property('workflow_status');",
+							"    ",
+							"    // Store submittal_id for other requests",
+							"    pm.globals.set('submittal_id', responseJson.id);",
+							"    console.log('Created Submittal:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"project_id\": {{project_id}},\n    \"location_id\": {{location_id}},\n    \"package_name\": \"Structural Steel Package - Phase 1\",\n    \"csi_division\": \"05\",\n    \"csi_section\": \"05 12 00\",\n    \"title\": \"Shop Drawings for Steel Beam Connections\",\n    \"description\": \"Detailed shop drawings for structural steel beam-to-column connections including moment connections, shear connections, and bracing details for Phase 1 construction.\",\n    \"submittal_type\": \"shop_drawings\",\n    \"specification_section\": \"051200\",\n    \"priority\": \"high\",\n    \"current_phase\": \"preparation\",\n    \"ball_in_court\": \"contractor\",\n    \"workflow_status\": \"pending_submission\",\n    \"assigned_to\": 1,\n    \"reviewer\": 2,\n    \"approver\": 3,\n    \"required_approval_date\": \"2024-03-15\",\n    \"fabrication_start_date\": \"2024-04-01\",\n    \"installation_date\": \"2024-05-15\",\n    \"delivery_tracking\": {\n        \"anticipated_delivery_date\": \"2024-05-10\",\n        \"order_date\": \"2024-03-20\",\n        \"delivery_status\": \"not_ordered\",\n        \"vendor_info\": {\n            \"name\": \"Steel Fabricators Inc\",\n            \"contact_email\": \"contact@steelfab.com\",\n            \"contact_phone\": \"+1-555-0123\"\n        }\n    },\n    \"team_assignments\": {\n        \"lead_architect\": 2,\n        \"lead_engineer\": 4,\n        \"project_manager\": 1,\n        \"contractor_rep\": 5,\n        \"subcontractor_rep\": 6\n    },\n    \"linked_drawings\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\", \"S-201\"],\n        \"drawing_revisions\": [\"R1\", \"R1\", \"R2\"],\n        \"detail_references\": [\"DET-1\", \"DET-2\", \"DET-5\"]\n    },\n    \"references\": {\n        \"specification_sections\": [\"051200\", \"051300\"],\n        \"related_submittals\": [],\n        \"related_rfis\": [\"RFI-2024-001\"],\n        \"related_issues\": []\n    },\n    \"procurement_log\": {\n        \"item_category\": \"Structural Steel Components\",\n        \"manufacturer\": \"Steel Corp International\",\n        \"model_number\": \"SC-2024-BEAM-A\",\n        \"quantity\": 150,\n        \"unit_cost\": 275.00,\n        \"total_cost\": 41250.00,\n        \"lead_time_weeks\": 8,\n        \"procurement_method\": \"direct_purchase\",\n        \"budget_line_item\": \"05-001-STEEL\"\n    },\n    \"approval_actions\": {\n        \"action_required\": \"review_approve\",\n        \"review_comments\": \"Please verify connection details and weld specifications\",\n        \"conditions_of_approval\": \"\",\n        \"revision_requirements\": \"\"\n    },\n    \"distribution_list\": [\n        \"architect@company.com\",\n        \"engineer@company.com\",\n        \"contractor@company.com\",\n        \"pm@company.com\"\n    ],\n    \"notification_settings\": {\n        \"notify_on_status_change\": true,\n        \"notify_on_delivery_update\": true,\n        \"notify_on_approval\": true\n    },\n    \"tags\": [\"urgent\", \"structural\", \"phase1\"],\n    \"custom_fields\": {\n        \"fire_rating_required\": true,\n        \"seismic_category\": \"D\",\n        \"wind_load_category\": \"III\"\n    }\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"submittals"
+					]
+				}
+			}
+		},
+		{
+			"name": "Get Submittals by Project (Context Query)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has submittals list', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('submittals');",
+							"    pm.expect(responseJson).to.have.property('total_count');",
+							"    pm.expect(responseJson).to.have.property('page');",
+							"    pm.expect(responseJson).to.have.property('page_size');",
+							"    console.log('Found', responseJson.submittals.length, 'submittals for project');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/contexts/project/{{project_id}}/submittals?page=1&limit=20&sort=created_at&order=desc",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"contexts",
+						"project",
+						"{{project_id}}",
+						"submittals"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1"
+						},
+						{
+							"key": "limit",
+							"value": "20"
+						},
+						{
+							"key": "sort",
+							"value": "created_at"
+						},
+						{
+							"key": "order",
+							"value": "desc"
+						},
+						{
+							"key": "status",
+							"value": "pending_submission",
+							"disabled": true
+						},
+						{
+							"key": "priority",
+							"value": "high",
+							"disabled": true
+						},
+						{
+							"key": "csi_division",
+							"value": "05",
+							"disabled": true
+						},
+						{
+							"key": "ball_in_court",
+							"value": "contractor",
+							"disabled": true
+						},
+						{
+							"key": "search",
+							"value": "steel",
+							"disabled": true
+						}
+					]
+				}
+			}
+		},
+		{
+			"name": "Get Single Submittal",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Submittal details returned', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('submittal_number');",
+							"    pm.expect(responseJson).to.have.property('package_name');",
+							"    pm.expect(responseJson).to.have.property('title');",
+							"    pm.expect(responseJson).to.have.property('workflow_status');",
+							"    pm.expect(responseJson).to.have.property('delivery_tracking');",
+							"    pm.expect(responseJson).to.have.property('team_assignments');",
+							"    pm.expect(responseJson).to.have.property('attachments');",
+							"    console.log('Submittal Details:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"submittals",
+						"{{submittal_id}}"
+					]
+				}
+			}
+		},
+		{
+			"name": "Update Submittal (Regular Update)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Submittal updated successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('updated_at');",
+							"    console.log('Updated Submittal:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"package_name\": \"Structural Steel Package - Phase 1 (Updated)\",\n    \"csi_division\": \"05\",\n    \"csi_section\": \"05 12 00\",\n    \"title\": \"Updated: Shop Drawings for Steel Beam Connections - Rev A\",\n    \"description\": \"Updated detailed shop drawings for structural steel beam-to-column connections including moment connections, shear connections, and bracing details for Phase 1 construction. Revised per architect comments.\",\n    \"submittal_type\": \"shop_drawings\",\n    \"specification_section\": \"051200\",\n    \"priority\": \"critical\",\n    \"assigned_to\": 2,\n    \"reviewer\": 3,\n    \"approver\": 4,\n    \"required_approval_date\": \"2024-03-20\",\n    \"fabrication_start_date\": \"2024-04-05\",\n    \"installation_date\": \"2024-05-20\",\n    \"delivery_tracking\": {\n        \"anticipated_delivery_date\": \"2024-05-08\",\n        \"order_date\": \"2024-03-18\",\n        \"delivery_status\": \"ordered\",\n        \"tracking_number\": \"TRK-123456\",\n        \"vendor_info\": {\n            \"name\": \"Steel Fabricators Inc\",\n            \"contact_email\": \"contact@steelfab.com\",\n            \"contact_phone\": \"+1-555-0123\"\n        },\n        \"expected_arrival\": \"2024-05-15\"\n    },\n    \"team_assignments\": {\n        \"lead_architect\": 3,\n        \"lead_engineer\": 5,\n        \"project_manager\": 2,\n        \"contractor_rep\": 6,\n        \"subcontractor_rep\": 7,\n        \"qa_reviewer\": 4\n    },\n    \"linked_drawings\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\", \"S-201\", \"S-202\"],\n        \"drawing_revisions\": [\"R2\", \"R2\", \"R3\", \"R1\"],\n        \"detail_references\": [\"DET-1\", \"DET-2\", \"DET-5\", \"DET-6\"]\n    },\n    \"references\": {\n        \"specification_sections\": [\"051200\", \"051300\", \"051400\"],\n        \"related_submittals\": [\"SUB-2024-002\"],\n        \"related_rfis\": [\"RFI-2024-001\", \"RFI-2024-003\"],\n        \"related_issues\": [\"ISS-2024-005\"]\n    },\n    \"procurement_log\": {\n        \"item_category\": \"Structural Steel Components\",\n        \"manufacturer\": \"Steel Corp International\",\n        \"model_number\": \"SC-2024-BEAM-A-REV\",\n        \"quantity\": 155,\n        \"unit_cost\": 280.00,\n        \"total_cost\": 43400.00,\n        \"lead_time_weeks\": 7,\n        \"procurement_method\": \"direct_purchase\",\n        \"budget_line_item\": \"05-001-STEEL\",\n        \"vendor_po_number\": \"PO-2024-0156\"\n    },\n    \"approval_actions\": {\n        \"action_required\": \"review_approve\",\n        \"review_comments\": \"Updated per architectural review comments. Please verify updated connection details and weld specifications.\",\n        \"conditions_of_approval\": \"Subject to field verification of existing conditions\",\n        \"revision_requirements\": \"Update detail DET-3 per structural engineer comments\"\n    },\n    \"distribution_list\": [\n        \"architect@company.com\",\n        \"engineer@company.com\",\n        \"contractor@company.com\",\n        \"pm@company.com\",\n        \"qa@company.com\"\n    ],\n    \"notification_settings\": {\n        \"notify_on_status_change\": true,\n        \"notify_on_delivery_update\": true,\n        \"notify_on_approval\": true,\n        \"notify_on_revision\": true\n    },\n    \"tags\": [\"urgent\", \"structural\", \"phase1\", \"revised\", \"updated\"],\n    \"custom_fields\": {\n        \"fire_rating_required\": true,\n        \"seismic_category\": \"D\",\n        \"wind_load_category\": \"III\",\n        \"revision_reason\": \"Architectural comments\",\n        \"field_verified\": false\n    }\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"submittals",
+						"{{submittal_id}}"
+					]
+				}
+			}
+		},
+		{
+			"name": "Submit for Review (Workflow Action)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Workflow action executed', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('workflow_status');",
+							"    pm.expect(responseJson.workflow_status).to.equal('under_review');",
+							"    pm.expect(responseJson.ball_in_court).to.equal('architect');",
+							"    console.log('Submittal submitted for review:', responseJson.workflow_status);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"action\": \"submit_for_review\",\n    \"comments\": \"Submittal is ready for architectural review. All contractor comments have been addressed.\",\n    \"next_reviewer\": 2,\n    \"ball_in_court_transfer\": \"architect\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}/workflow",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"submittals",
+						"{{submittal_id}}",
+						"workflow"
+					]
+				}
+			}
+		},
+		{
+			"name": "Approve as Noted (Workflow Action)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Workflow action executed', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('workflow_status');",
+							"    pm.expect(responseJson.workflow_status).to.equal('approved_as_noted');",
+							"    console.log('Submittal approved as noted:', responseJson.workflow_status);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"action\": \"approve_as_noted\",\n    \"comments\": \"Submittal approved with minor revisions noted. Please address the following items before fabrication.\",\n    \"conditions\": \"1. Verify weld symbols on Detail 3A match spec section 051200. 2. Add fireproofing notes to beam connections. 3. Confirm bolt grades meet seismic requirements.\",\n    \"ball_in_court_transfer\": \"contractor\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}/workflow",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"submittals",
+						"{{submittal_id}}",
+						"workflow"
+					]
+				}
+			}
+		},
+		{
+			"name": "Revise and Resubmit (Workflow Action)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Workflow action executed', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('workflow_status');",
+							"    pm.expect(responseJson.workflow_status).to.equal('revise_resubmit');",
+							"    console.log('Submittal requires revision:', responseJson.workflow_status);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"action\": \"revise_resubmit\",\n    \"comments\": \"Several issues need to be addressed before approval can be granted.\",\n    \"revision_notes\": \"1. Connection details on Sheet S-3 do not match structural drawings. 2. Missing seismic bracing details for moment frames. 3. Weld specifications need to be updated to match latest code requirements. 4. Fire rating details are incomplete.\",\n    \"ball_in_court_transfer\": \"contractor\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}/workflow",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"submittals",
+						"{{submittal_id}}",
+						"workflow"
+					]
+				}
+			}
+		},
+		{
+			"name": "Get Submittal Statistics",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Statistics returned', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('total');",
+							"    pm.expect(responseJson).to.have.property('by_status');",
+							"    pm.expect(responseJson).to.have.property('by_priority');",
+							"    pm.expect(responseJson).to.have.property('by_ball_in_court');",
+							"    pm.expect(responseJson).to.have.property('overdue');",
+							"    pm.expect(responseJson).to.have.property('delivery_summary');",
+							"    console.log('Submittal Stats:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/contexts/project/{{project_id}}/submittals/stats",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"contexts",
+						"project",
+						"{{project_id}}",
+						"submittals",
+						"stats"
+					]
+				}
+			}
+		},
+		{
+			"name": "Add Submittal Attachment",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Attachment added successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('file_name');",
+							"    pm.expect(responseJson).to.have.property('submittal_id');",
+							"    ",
+							"    // Store attachment_id for deletion test",
+							"    pm.globals.set('attachment_id', responseJson.id);",
+							"    console.log('Added Attachment:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"file_name\": \"steel_connection_details_rev_a.pdf\",\n    \"file_path\": \"/uploads/submittals/2024/steel_connection_details_rev_a.pdf\",\n    \"file_size\": 2548736,\n    \"file_type\": \"application/pdf\",\n    \"attachment_type\": \"shop_drawing\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/submittals/{{submittal_id}}/attachments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"submittals",
+						"{{submittal_id}}",
+						"attachments"
+					]
+				}
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "project_id",
+			"value": "47",
+			"type": "string"
+		},
+		{
+			"key": "location_id",
+			"value": "22",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "submittal_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "attachment_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{id_token}}",
+				"type": "string"
+			}
+		]
+	}
 }

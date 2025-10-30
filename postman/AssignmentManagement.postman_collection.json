@@ -1,9 +1,19 @@
 {
 	"info": {
 		"_postman_id": "assignment-management-api-collection-001",
-		"name": "Assignment Management API",
-		"description": "Simplified Assignment Management API with core CRUD operations and project team functionality.\n\nCORE ENDPOINTS:\n- GET /assignments/{id} - Get single assignment\n- POST /assignments - Create assignment\n- PUT /assignments/{id} - Update assignment\n- DELETE /assignments/{id} - Delete assignment\n- GET /contexts/{contextType}/{contextId}/assignments - Get project/location teams\n\nTESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Valid user IDs in org 7: 16, 21, 27, 29\n- Valid project IDs: 30, and others in your organization\n- All dates should use YYYY-MM-DD format",
+		"name": "Assignment Management",
+		"description": "Assignment management endpoints for user role assignments to projects, locations, and organizations.\n\nCORE ENDPOINTS:\n- POST /assignments - Create assignment\n- GET /assignments/{id} - Get single assignment\n- PUT /assignments/{id} - Update assignment\n- GET /contexts/{contextType}/{contextId}/assignments - Get project/location teams\n\nTESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- All dates should use YYYY-MM-DD format",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{id_token}}",
+				"type": "string"
+			}
+		]
 	},
 	"item": [
 		{
@@ -24,15 +34,12 @@
 							"    pm.expect(responseJson).to.have.property('role_id');",
 							"    pm.expect(responseJson).to.have.property('context_type');",
 							"    pm.expect(responseJson).to.have.property('context_id');",
-							"    ",
-							"    // Check enriched fields",
 							"    pm.expect(responseJson).to.have.property('user_name');",
 							"    pm.expect(responseJson).to.have.property('user_email');",
 							"    pm.expect(responseJson).to.have.property('role_name');",
 							"    pm.expect(responseJson).to.have.property('context_name');",
 							"    pm.expect(responseJson).to.have.property('org_id');",
 							"    ",
-							"    // Store assignment_id for other requests",
 							"    pm.globals.set('assignment_id', responseJson.id);",
 							"    console.log('Created Assignment:', JSON.stringify(responseJson, null, 2));",
 							"});"
@@ -44,11 +51,6 @@
 			"request": {
 				"method": "POST",
 				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer {{access_token}}",
-						"type": "text"
-					},
 					{
 						"key": "Content-Type",
 						"value": "application/json",
@@ -74,7 +76,7 @@
 						"assignments"
 					]
 				},
-				"description": "Create a new assignment for a user to a project, location, or other context."
+				"description": "Create a new assignment for a user to a project, location, or organization context."
 			}
 		},
 		{
@@ -95,8 +97,6 @@
 							"    pm.expect(responseJson).to.have.property('role_id');",
 							"    pm.expect(responseJson).to.have.property('context_type');",
 							"    pm.expect(responseJson).to.have.property('context_id');",
-							"    ",
-							"    // Check enriched fields",
 							"    pm.expect(responseJson).to.have.property('user_name');",
 							"    pm.expect(responseJson).to.have.property('user_email');",
 							"    pm.expect(responseJson).to.have.property('role_name');",
@@ -111,13 +111,7 @@
 			],
 			"request": {
 				"method": "GET",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer {{access_token}}",
-						"type": "text"
-					}
-				],
+				"header": [],
 				"url": {
 					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments/{{assignment_id}}",
 					"protocol": "https",
@@ -152,8 +146,6 @@
 							"    const responseJson = pm.response.json();",
 							"    pm.expect(responseJson).to.have.property('id');",
 							"    pm.expect(responseJson).to.have.property('updated_at');",
-							"    ",
-							"    // Check enriched fields are still present",
 							"    pm.expect(responseJson).to.have.property('user_name');",
 							"    pm.expect(responseJson).to.have.property('user_email');",
 							"    pm.expect(responseJson).to.have.property('role_name');",
@@ -169,11 +161,6 @@
 			"request": {
 				"method": "PUT",
 				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer {{access_token}}",
-						"type": "text"
-					},
 					{
 						"key": "Content-Type",
 						"value": "application/json",
@@ -204,7 +191,7 @@
 			}
 		},
 		{
-			"name": "Delete Assignment",
+			"name": "Get Context Assignments",
 			"event": [
 				{
 					"listen": "test",
@@ -214,64 +201,14 @@
 							"    pm.response.to.have.status(200);",
 							"});",
 							"",
-							"pm.test('Assignment deleted successfully', function () {",
+							"pm.test('Context assignments retrieved', function () {",
 							"    const responseJson = pm.response.json();",
-							"    pm.expect(responseJson).to.have.property('message');",
-							"    console.log('Delete Response:', JSON.stringify(responseJson, null, 2));",
-							"});"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "DELETE",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer {{access_token}}",
-						"type": "text"
-					}
-				],
-				"url": {
-					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/assignments/{{assignment_id}}",
-					"protocol": "https",
-					"host": [
-						"74zc1md7sc",
-						"execute-api",
-						"us-east-2",
-						"amazonaws",
-						"com"
-					],
-					"path": [
-						"main",
-						"assignments",
-						"{{assignment_id}}"
-					]
-				},
-				"description": "Delete an assignment."
-			}
-		},
-		{
-			"name": "Get Project Team",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test('Status code is 200', function () {",
-							"    pm.response.to.have.status(200);",
-							"});",
-							"",
-							"pm.test('Project team assignments retrieved', function () {",
-							"    const responseJson = pm.response.json();",
-							"    pm.expect(responseJson).to.have.property('context_type', 'project');",
+							"    pm.expect(responseJson).to.have.property('context_type');",
 							"    pm.expect(responseJson).to.have.property('context_id');",
 							"    pm.expect(responseJson).to.have.property('context_name');",
 							"    pm.expect(responseJson).to.have.property('org_id');",
 							"    pm.expect(responseJson).to.have.property('assignments');",
 							"    ",
-							"    // Check that each assignment has enriched fields",
 							"    if (responseJson.assignments && responseJson.assignments.length > 0) {",
 							"        const firstAssignment = responseJson.assignments[0];",
 							"        pm.expect(firstAssignment).to.have.property('user_name');",
@@ -279,7 +216,7 @@
 							"        pm.expect(firstAssignment).to.have.property('role_name');",
 							"        pm.expect(firstAssignment).to.have.property('org_id');",
 							"    }",
-							"    console.log('Project Team:', JSON.stringify(responseJson, null, 2));",
+							"    console.log('Context Assignments:', JSON.stringify(responseJson, null, 2));",
 							"});"
 						],
 						"type": "text/javascript"
@@ -288,13 +225,7 @@
 			],
 			"request": {
 				"method": "GET",
-				"header": [
-					{
-						"key": "Authorization",
-						"value": "Bearer {{access_token}}",
-						"type": "text"
-					}
-				],
+				"header": [],
 				"url": {
 					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/contexts/project/{{project_id}}/assignments",
 					"protocol": "https",
@@ -313,30 +244,8 @@
 						"assignments"
 					]
 				},
-				"description": "Get all assignments for a specific project - shows the project team."
+				"description": "Get all assignments for a specific context (project, location, or organization)."
 			}
-		}
-	],
-	"variable": [
-		{
-			"key": "access_token",
-			"value": "",
-			"description": "JWT ID Token from Cognito authentication"
-		},
-		{
-			"key": "project_id",
-			"value": "30",
-			"description": "Project ID for testing (default: 30)"
-		},
-		{
-			"key": "user_id",
-			"value": "16",
-			"description": "User ID for testing (default: 16)"
-		},
-		{
-			"key": "assignment_id",
-			"value": "",
-			"description": "Assignment ID (set automatically by create requests)"
 		}
 	]
 }

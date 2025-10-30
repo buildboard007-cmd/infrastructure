@@ -1,0 +1,193 @@
+{
+	"info": {
+		"name": "Authentication",
+		"description": "Authentication endpoints for BuildBoard - SuperAdmin signup, confirmation, and sign-in with JWT token extraction",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "noauth"
+	},
+	"item": [
+		{
+			"name": "SuperAdmin Signup",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('User sub returned', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('UserSub');",
+							"    pm.globals.set('user_sub', jsonData.UserSub);",
+							"    console.log('User Sub:', jsonData.UserSub);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"buildboard007+555@gmail.com\",\n    \"password\": \"Mayur@1234\",\n    \"first_name\": \"Test\",\n    \"last_name\": \"SuperAdmin\",\n    \"org_name\": \"Test Organization\",\n    \"custom:isSuperAdmin\": \"true\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/signup",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"signup"
+					]
+				},
+				"description": "Register a new SuperAdmin user. Sets custom:isSuperAdmin attribute for full system access."
+			}
+		},
+		{
+			"name": "Confirm Signup",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('User confirmed successfully', function () {",
+							"    const jsonData = pm.response.json();",
+							"    console.log('Confirmation response:', JSON.stringify(jsonData, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"buildboard007+555@gmail.com\",\n    \"confirmation_code\": \"123456\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/confirm",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"confirm"
+					]
+				},
+				"description": "Confirm user registration with verification code sent to email."
+			}
+		},
+		{
+			"name": "Sign In",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Authentication result exists', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('AuthenticationResult');",
+							"    ",
+							"    const authResult = jsonData.AuthenticationResult;",
+							"    pm.globals.set('access_token', authResult.AccessToken);",
+							"    pm.globals.set('id_token', authResult.IdToken);",
+							"    pm.globals.set('refresh_token', authResult.RefreshToken);",
+							"    ",
+							"    console.log('Tokens stored in globals for API calls');",
+							"    ",
+							"    try {",
+							"        const payload = authResult.IdToken.split('.')[1];",
+							"        const decoded = JSON.parse(atob(payload));",
+							"        console.log('JWT Claims:', JSON.stringify(decoded, null, 2));",
+							"        ",
+							"        pm.test('Token has custom claims', function () {",
+							"            pm.expect(decoded).to.have.property('user_id');",
+							"            pm.expect(decoded).to.have.property('org_id');",
+							"            pm.expect(decoded).to.have.property('isSuperAdmin');",
+							"        });",
+							"    } catch (e) {",
+							"        console.log('Failed to decode JWT token:', e);",
+							"    }",
+							"});",
+							"",
+							"console.log('Sign in successful with custom claims!');"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/x-amz-json-1.1",
+						"type": "text"
+					},
+					{
+						"key": "X-Amz-Target",
+						"value": "AWSCognitoIdentityProviderService.InitiateAuth",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"AuthFlow\": \"USER_PASSWORD_AUTH\",\n  \"ClientId\": \"3f0fb5mpivctnvj85tucusf88e\",\n  \"AuthParameters\": {\n    \"USERNAME\": \"buildboard007+555@gmail.com\",\n    \"PASSWORD\": \"Mayur@1234\"\n  }\n}"
+				},
+				"url": {
+					"raw": "https://cognito-idp.us-east-2.amazonaws.com/",
+					"protocol": "https",
+					"host": [
+						"cognito-idp",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						""
+					]
+				},
+				"description": "Authenticate directly with AWS Cognito. Returns JWT tokens including ID token with custom claims (user_id, org_id, isSuperAdmin) used for all subsequent API requests."
+			}
+		}
+	]
+}

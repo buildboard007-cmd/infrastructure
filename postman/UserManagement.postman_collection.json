@@ -1,0 +1,315 @@
+{
+	"info": {
+		"name": "User Management",
+		"description": "User management endpoints - CRUD operations, password reset, and location selection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{id_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Create User",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('User created with required fields', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson.data).to.have.property('user_id');",
+							"    pm.expect(responseJson.data).to.have.property('email');",
+							"    pm.expect(responseJson.data).to.have.property('cognito_id');",
+							"    pm.expect(responseJson).to.have.property('temporary_password');",
+							"    pm.expect(responseJson).to.have.property('message');",
+							"    pm.expect(responseJson.data).to.have.property('location_role_assignments');",
+							"    pm.expect(responseJson.data.location_role_assignments).to.be.an('array');",
+							"    ",
+							"    pm.globals.set('user_id', responseJson.data.user_id);",
+							"    console.log('Created User:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"phone\": \"+1234567890\",\n    \"mobile\": \"+1987654321\",\n    \"job_title\": \"Software Engineer\",\n    \"employee_id\": \"EMP001\",\n    \"avatar_url\": \"https://example.com/photos/john.jpg\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users"
+					]
+				},
+				"description": "Create a new user in the organization. User will be created in Cognito and database. Returns temporary password."
+			}
+		},
+		{
+			"name": "Get All Users",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has users array', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson.data).to.have.property('users');",
+							"    pm.expect(responseJson.data).to.have.property('total');",
+							"    pm.expect(responseJson.data.users).to.be.an('array');",
+							"    console.log('Users:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users"
+					]
+				},
+				"description": "Get all users in the organization."
+			}
+		},
+		{
+			"name": "Get User by ID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has user data with assignments', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson.data).to.have.property('user_id');",
+							"    pm.expect(responseJson.data).to.have.property('email');",
+							"    pm.expect(responseJson.data).to.have.property('location_role_assignments');",
+							"    pm.expect(responseJson.data.location_role_assignments).to.be.an('array');",
+							"    console.log('User Details:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users",
+						"{{user_id}}"
+					]
+				},
+				"description": "Get user details by ID including location role assignments."
+			}
+		},
+		{
+			"name": "Update User",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('User updated successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson.data).to.have.property('user_id');",
+							"    pm.expect(responseJson.data).to.have.property('email');",
+							"    console.log('Updated User:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"john.updated@example.com\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Smith\",\n    \"phone\": \"+1234567890\",\n    \"mobile\": \"+1987654321\",\n    \"job_title\": \"Senior Software Engineer\",\n    \"employee_id\": \"EMP001\",\n    \"avatar_url\": \"https://example.com/photos/john-updated.jpg\",\n    \"status\": \"active\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users",
+						"{{user_id}}"
+					]
+				},
+				"description": "Update user details. Use status field for soft delete (set to 'inactive')."
+			}
+		},
+		{
+			"name": "Reset User Password",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Password reset email sent', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson.data).to.have.property('message');",
+							"    console.log('Password Reset Response:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/reset-password",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users",
+						"{{user_id}}",
+						"reset-password"
+					]
+				},
+				"description": "Send password reset email to user."
+			}
+		},
+		{
+			"name": "Update User Selected Location",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Location updated successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson.data).to.have.property('message');",
+							"    pm.expect(responseJson.data).to.have.property('user_id');",
+							"    pm.expect(responseJson.data).to.have.property('location_id');",
+							"    pm.expect(responseJson.data.message).to.include('Selected location updated successfully');",
+							"    console.log('User selected location updated:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/users/{{user_id}}/selected-location/{{location_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"users",
+						"{{user_id}}",
+						"selected-location",
+						"{{location_id}}"
+					]
+				},
+				"description": "Update user's selected location preference. Used to track which location user has selected in UI dropdown."
+			}
+		}
+	]
+}

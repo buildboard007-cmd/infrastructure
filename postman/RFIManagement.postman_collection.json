@@ -1,624 +1,582 @@
 {
-  "info": {
-    "_postman_id": "rfi-management-api-collection-001",
-    "name": "RFI Management API (CONSOLIDATED)",
-    "description": "CONSOLIDATED RFI Management API collection with 6 streamlined endpoints for efficient RFI lifecycle management.\n\n🎯 CONSOLIDATED ENDPOINTS (6 total):\n\nCore CRUD Operations:\n  - GET    /rfis/{id}                                    Get RFI with all data (attachments, comments)\n  - POST   /rfis                                         Create RFI\n  - PUT    /rfis/{id}                                    Update RFI (including status changes via action field)\n\nContext Query:\n  - GET    /contexts/{contextType}/{contextId}/rfis     Get RFIs for project/location\n\nSub-resources:\n  - POST   /rfis/{id}/attachments                       Add attachment\n  - POST   /rfis/{id}/comments                          Add comment\n\n✅ ACTION-BASED WORKFLOW (Consolidated in PUT /rfis/{id}):\n1. Create RFI: POST /rfis (DRAFT status)\n2. Submit: PUT /rfis/{id} with action=\"submit\"\n3. Approve: PUT /rfis/{id} with action=\"approve\" + notes\n4. Reject: PUT /rfis/{id} with action=\"reject\" + notes (required)\n5. Respond: PUT /rfis/{id} with action=\"respond\" + response_text (required)\n6. Regular Update: PUT /rfis/{id} without action field\n\n📋 RFI CATEGORIES & STATUSES (UI Compatible):\n- Categories: DESIGN, SPECIFICATION, SCHEDULE, COORDINATION, GENERAL, SUBMITTAL, CHANGE_EVENT\n- Priorities: LOW, MEDIUM, HIGH, URGENT\n- Statuses: DRAFT, SUBMITTED, UNDER_REVIEW, ANSWERED, CLOSED, VOID, REQUIRES_REVISION\n- Actions: submit, approve, reject, respond\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Project validation happens server-side\n- Enhanced data integrity constraints\n- Unified request structure for create/update operations\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure project_id exists before creating RFIs\n- All dates should use YYYY-MM-DD format\n- RFI numbers are auto-generated if not provided\n- Uses snake_case field names to match UI expectations\n- References object with nested arrays for drawing/spec references\n\n🚀 CONSOLIDATION BENEFITS:\n- Reduced API endpoints from 15+ to 6\n- Action-based status changes consolidate submit/approve/reject/respond\n- Simplified maintenance and testing\n- Consistent with other management APIs (Assignment, Issue)\n- Respects API Gateway limits",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "item": [
-    {
-      "name": "Create RFI",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 201', function () {",
-              "    pm.response.to.have.status(201);",
-              "});",
-              "",
-              "pm.test('RFI created successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('id');",
-              "    pm.expect(responseJson).to.have.property('rfi_number');",
-              "    pm.expect(responseJson).to.have.property('project_id');",
-              "    pm.expect(responseJson).to.have.property('subject');",
-              "    pm.expect(responseJson).to.have.property('status');",
-              "    ",
-              "    // Store rfi_id for other requests",
-              "    pm.globals.set('rfi_id', responseJson.id);",
-              "    console.log('Created RFI:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"project_id\": {{project_id}},\n    \"location_id\": {{location_id}},\n    \"subject\": \"Clarification on Foundation Detail at Grid Line A-5\",\n    \"question\": \"The foundation detail shown in drawing S-101 at grid line A-5 conflicts with the specifications in section 03300. The drawing shows a 24-inch square footing, but the specification calls for a 30-inch square footing. Which requirement takes precedence?\",\n    \"description\": \"Need immediate clarification as we are ready to pour concrete footings in this area. The conflict affects the reinforcement layout and concrete quantity.\",\n    \"category\": \"DESIGN\",\n    \"discipline\": \"structural\",\n    \"trade_type\": \"concrete\",\n    \"project_phase\": \"construction\",\n    \"priority\": \"HIGH\",\n    \"distribution_list\": [\n        \"project.manager@company.com\",\n        \"structural.engineer@company.com\",\n        \"quality.control@company.com\"\n    ],\n    \"due_date\": \"2025-10-15\",\n    \"cost_impact_amount\": 2500.00,\n    \"schedule_impact_days\": 2,\n    \"location_description\": \"Building A, Foundation at Grid Line A-5\",\n    \"references\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\"],\n        \"specification_sections\": [\"Section 03300 - Cast-in-Place Concrete\"],\n        \"related_rfis\": []\n    },\n    \"attachments\": []\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "rfis"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get RFIs by Project (Context Query)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Response has RFIs list', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('rfis');",
-              "    pm.expect(responseJson).to.have.property('context_type');",
-              "    pm.expect(responseJson).to.have.property('context_id');",
-              "    pm.expect(responseJson.context_type).to.equal('project');",
-              "    console.log('Found', responseJson.rfis.length, 'RFIs for project', responseJson.context_id);",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          }
-        ],
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/contexts/project/{{project_id}}/rfis?status=SUBMITTED&priority=HIGH",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "contexts",
-            "project",
-            "{{project_id}}",
-            "rfis"
-          ],
-          "query": [
-            {
-              "key": "status",
-              "value": "SUBMITTED"
-            },
-            {
-              "key": "priority",
-              "value": "HIGH"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get RFI by ID",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Response has RFI details', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('id');",
-              "    pm.expect(responseJson).to.have.property('rfi_number');",
-              "    pm.expect(responseJson).to.have.property('subject');",
-              "    pm.expect(responseJson).to.have.property('question');",
-              "    pm.expect(responseJson).to.have.property('status');",
-              "    console.log('RFI Details:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          }
-        ],
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "rfis",
-            "{{rfi_id}}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Update RFI (Full Update)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('RFI updated successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('id');",
-              "    pm.expect(responseJson).to.have.property('subject');",
-              "    pm.expect(responseJson).to.have.property('status');",
-              "    console.log('Updated RFI:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "PUT",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"subject\": \"UPDATED: Clarification on Foundation Detail at Grid Line A-5\",\n    \"question\": \"Updated question: The foundation detail shown in drawing S-101 at grid line A-5 conflicts with the specifications in section 03300. The drawing shows a 24-inch square footing, but the specification calls for a 30-inch square footing. Which requirement takes precedence? Please also confirm the reinforcement schedule.\",\n    \"description\": \"UPDATED: Need immediate clarification as we are ready to pour concrete footings in this area. The conflict affects the reinforcement layout and concrete quantity. Site conditions show good bearing capacity.\",\n    \"priority\": \"URGENT\",\n    \"cost_impact_amount\": 3500.00,\n    \"schedule_impact_days\": 3,\n    \"location_description\": \"Building A, Foundation at Grid Line A-5 - Updated with site conditions\",\n    \"references\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\", \"S-105\"],\n        \"specification_sections\": [\"Section 03300 - Cast-in-Place Concrete\"],\n        \"related_rfis\": []\n    }\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "rfis",
-            "{{rfi_id}}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Submit RFI (Action-based)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('RFI submitted successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('message');",
-              "    pm.expect(responseJson.message).to.include('updated successfully');",
-              "    console.log('Submit Response:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "PUT",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"action\": \"submit\",\n    \"notes\": \"All required information and attachments have been provided. This RFI is ready for structural review.\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "rfis",
-            "{{rfi_id}}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Approve RFI (Action-based)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('RFI approved successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('message');",
-              "    pm.expect(responseJson.message).to.include('updated successfully');",
-              "    console.log('Approval Response:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "PUT",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"action\": \"approve\",\n    \"notes\": \"RFI response is comprehensive and addresses all concerns. The structural engineer's recommendation to use 30-inch footings is approved. Cost and schedule impacts are acceptable given the improved foundation performance. Proceed as recommended.\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "rfis",
-            "{{rfi_id}}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Reject RFI (Action-based)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('RFI rejected successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('message');",
-              "    pm.expect(responseJson.message).to.include('updated successfully');",
-              "    console.log('Rejection Response:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "PUT",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"action\": \"reject\",\n    \"notes\": \"Insufficient information provided. Please include soil bearing capacity test results and provide clearer site photos showing the actual conditions at grid line A-5. The current information is not sufficient to make an informed decision on the foundation size. Additional geotechnical data is critical for this determination.\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "rfis",
-            "{{rfi_id}}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Respond to RFI (Action-based)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 200', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('RFI response added successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('message');",
-              "    pm.expect(responseJson.message).to.include('updated successfully');",
-              "    console.log('Response Result:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "PUT",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"action\": \"respond\",\n    \"response_text\": \"After reviewing both the drawings and specifications, the specification takes precedence. Please use the 30-inch square footing as specified in section 03300. The drawing will be revised in the next update. Use the reinforcement schedule shown in drawing S-102 but adjust for the larger footing size. The 30-inch footing provides better load distribution for the actual soil conditions.\",\n    \"notes\": \"Response provided with detailed clarification on foundation requirements.\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "rfis",
-            "{{rfi_id}}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Add RFI Comment",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 201', function () {",
-              "    pm.response.to.have.status(201);",
-              "});",
-              "",
-              "pm.test('Comment added successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('id');",
-              "    pm.expect(responseJson).to.have.property('comment');",
-              "    console.log('Added Comment:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"comment\": \"Site visit completed today. Confirmed that the existing conditions match the drawing dimensions. However, the soil appears more compact than anticipated. Recommend geotechnical engineer visit before making final footing size determination.\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/comments",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "rfis",
-            "{{rfi_id}}",
-            "comments"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Add RFI Attachment",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status code is 201', function () {",
-              "    pm.response.to.have.status(201);",
-              "});",
-              "",
-              "pm.test('Attachment added successfully', function () {",
-              "    const responseJson = pm.response.json();",
-              "    pm.expect(responseJson).to.have.property('id');",
-              "    pm.expect(responseJson).to.have.property('filename');",
-              "    pm.expect(responseJson).to.have.property('s3_url');",
-              "    console.log('Added Attachment:', JSON.stringify(responseJson, null, 2));",
-              "});"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}",
-            "type": "text"
-          },
-          {
-            "key": "Content-Type",
-            "value": "application/json",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"filename\": \"foundation_detail_photo.jpg\",\n    \"file_type\": \"image/jpeg\",\n    \"file_size\": 2450000,\n    \"description\": \"Current foundation connection detail showing conflict with specifications\",\n    \"attachment_type\": \"photo\",\n    \"s3_bucket\": \"project-attachments-bucket\",\n    \"s3_key\": \"rfis/2024/foundation_detail_photo.jpg\"\n}"
-        },
-        "url": {
-          "raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/attachments",
-          "protocol": "https",
-          "host": [
-            "74zc1md7sc",
-            "execute-api",
-            "us-east-2",
-            "amazonaws",
-            "com"
-          ],
-          "path": [
-            "main",
-            "rfis",
-            "{{rfi_id}}",
-            "attachments"
-          ]
-        }
-      }
-    }
-  ],
-  "variable": [
-    {
-      "key": "base_url",
-      "value": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main"
-    },
-    {
-      "key": "project_id",
-      "value": "47",
-      "description": "Project ID for testing"
-    },
-    {
-      "key": "location_id",
-      "value": "22",
-      "description": "Location ID for testing"
-    },
-    {
-      "key": "rfi_id",
-      "value": "",
-      "description": "RFI ID - populated automatically after creating an RFI"
-    },
-    {
-      "key": "access_token",
-      "value": "",
-      "description": "JWT ID token for authentication (use ID token, not access token)"
-    }
-  ]
+	"info": {
+		"_postman_id": "rfi-management-api-collection-001",
+		"name": "RFI Management",
+		"description": "CONSOLIDATED RFI Management API collection with 6 streamlined endpoints for efficient RFI lifecycle management.\n\n🎯 CONSOLIDATED ENDPOINTS (6 total):\n\nCore CRUD Operations:\n  - GET    /rfis/{id}                                    Get RFI with all data (attachments, comments)\n  - POST   /rfis                                         Create RFI\n  - PUT    /rfis/{id}                                    Update RFI (including status changes via action field)\n\nContext Query:\n  - GET    /contexts/{contextType}/{contextId}/rfis     Get RFIs for project/location\n\nSub-resources:\n  - POST   /rfis/{id}/attachments                       Add attachment\n  - POST   /rfis/{id}/comments                          Add comment\n\n✅ ACTION-BASED WORKFLOW (Consolidated in PUT /rfis/{id}):\n1. Create RFI: POST /rfis (DRAFT status)\n2. Submit: PUT /rfis/{id} with action=\"submit\"\n3. Approve: PUT /rfis/{id} with action=\"approve\" + notes\n4. Reject: PUT /rfis/{id} with action=\"reject\" + notes (required)\n5. Respond: PUT /rfis/{id} with action=\"respond\" + response_text (required)\n6. Regular Update: PUT /rfis/{id} without action field\n\n📋 RFI CATEGORIES & STATUSES (UI Compatible):\n- Categories: DESIGN, SPECIFICATION, SCHEDULE, COORDINATION, GENERAL, SUBMITTAL, CHANGE_EVENT\n- Priorities: LOW, MEDIUM, HIGH, URGENT\n- Statuses: DRAFT, SUBMITTED, UNDER_REVIEW, ANSWERED, CLOSED, VOID, REQUIRES_REVISION\n- Actions: submit, approve, reject, respond\n\n🔐 SECURITY IMPROVEMENTS:\n- Organization ID extracted from JWT token (not request body)\n- Project validation happens server-side\n- Enhanced data integrity constraints\n- Unified request structure for create/update operations\n\n🔧 TESTING NOTES:\n- Use ID tokens (not access tokens) for API Gateway\n- Test with: buildboard007+555@gmail.com | Mayur@1234\n- Ensure project_id exists before creating RFIs\n- All dates should use YYYY-MM-DD format\n- RFI numbers are auto-generated if not provided\n- Uses snake_case field names to match UI expectations\n- References object with nested arrays for drawing/spec references\n\n🚀 CONSOLIDATION BENEFITS:\n- Reduced API endpoints from 15+ to 6\n- Action-based status changes consolidate submit/approve/reject/respond\n- Simplified maintenance and testing\n- Consistent with other management APIs (Assignment, Issue)\n- Respects API Gateway limits",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Create RFI",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('RFI created successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('rfi_number');",
+							"    pm.expect(responseJson).to.have.property('project_id');",
+							"    pm.expect(responseJson).to.have.property('subject');",
+							"    pm.expect(responseJson).to.have.property('status');",
+							"    ",
+							"    // Store rfi_id for other requests",
+							"    pm.globals.set('rfi_id', responseJson.id);",
+							"    console.log('Created RFI:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"project_id\": {{project_id}},\n    \"location_id\": {{location_id}},\n    \"subject\": \"Clarification on Foundation Detail at Grid Line A-5\",\n    \"question\": \"The foundation detail shown in drawing S-101 at grid line A-5 conflicts with the specifications in section 03300. The drawing shows a 24-inch square footing, but the specification calls for a 30-inch square footing. Which requirement takes precedence?\",\n    \"description\": \"Need immediate clarification as we are ready to pour concrete footings in this area. The conflict affects the reinforcement layout and concrete quantity.\",\n    \"category\": \"DESIGN\",\n    \"discipline\": \"structural\",\n    \"trade_type\": \"concrete\",\n    \"project_phase\": \"construction\",\n    \"priority\": \"HIGH\",\n    \"distribution_list\": [\n        \"project.manager@company.com\",\n        \"structural.engineer@company.com\",\n        \"quality.control@company.com\"\n    ],\n    \"due_date\": \"2025-10-15\",\n    \"cost_impact_amount\": 2500.00,\n    \"schedule_impact_days\": 2,\n    \"location_description\": \"Building A, Foundation at Grid Line A-5\",\n    \"references\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\"],\n        \"specification_sections\": [\"Section 03300 - Cast-in-Place Concrete\"],\n        \"related_rfis\": []\n    },\n    \"attachments\": []\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"rfis"
+					]
+				}
+			}
+		},
+		{
+			"name": "Get RFIs by Project (Context Query)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has RFIs list', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('rfis');",
+							"    pm.expect(responseJson).to.have.property('context_type');",
+							"    pm.expect(responseJson).to.have.property('context_id');",
+							"    pm.expect(responseJson.context_type).to.equal('project');",
+							"    console.log('Found', responseJson.rfis.length, 'RFIs for project', responseJson.context_id);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/contexts/project/{{project_id}}/rfis?status=SUBMITTED&priority=HIGH",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"contexts",
+						"project",
+						"{{project_id}}",
+						"rfis"
+					],
+					"query": [
+						{
+							"key": "status",
+							"value": "SUBMITTED"
+						},
+						{
+							"key": "priority",
+							"value": "HIGH"
+						}
+					]
+				}
+			}
+		},
+		{
+			"name": "Get RFI by ID",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has RFI details', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('rfi_number');",
+							"    pm.expect(responseJson).to.have.property('subject');",
+							"    pm.expect(responseJson).to.have.property('question');",
+							"    pm.expect(responseJson).to.have.property('status');",
+							"    console.log('RFI Details:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"rfis",
+						"{{rfi_id}}"
+					]
+				}
+			}
+		},
+		{
+			"name": "Update RFI (Full Update)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('RFI updated successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('subject');",
+							"    pm.expect(responseJson).to.have.property('status');",
+							"    console.log('Updated RFI:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"subject\": \"UPDATED: Clarification on Foundation Detail at Grid Line A-5\",\n    \"question\": \"Updated question: The foundation detail shown in drawing S-101 at grid line A-5 conflicts with the specifications in section 03300. The drawing shows a 24-inch square footing, but the specification calls for a 30-inch square footing. Which requirement takes precedence? Please also confirm the reinforcement schedule.\",\n    \"description\": \"UPDATED: Need immediate clarification as we are ready to pour concrete footings in this area. The conflict affects the reinforcement layout and concrete quantity. Site conditions show good bearing capacity.\",\n    \"priority\": \"URGENT\",\n    \"cost_impact_amount\": 3500.00,\n    \"schedule_impact_days\": 3,\n    \"location_description\": \"Building A, Foundation at Grid Line A-5 - Updated with site conditions\",\n    \"references\": {\n        \"drawing_numbers\": [\"S-101\", \"S-102\", \"S-105\"],\n        \"specification_sections\": [\"Section 03300 - Cast-in-Place Concrete\"],\n        \"related_rfis\": []\n    }\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"rfis",
+						"{{rfi_id}}"
+					]
+				}
+			}
+		},
+		{
+			"name": "Submit RFI (Action-based)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('RFI submitted successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('message');",
+							"    pm.expect(responseJson.message).to.include('updated successfully');",
+							"    console.log('Submit Response:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"action\": \"submit\",\n    \"notes\": \"All required information and attachments have been provided. This RFI is ready for structural review.\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"rfis",
+						"{{rfi_id}}"
+					]
+				}
+			}
+		},
+		{
+			"name": "Approve RFI (Action-based)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('RFI approved successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('message');",
+							"    pm.expect(responseJson.message).to.include('updated successfully');",
+							"    console.log('Approval Response:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"action\": \"approve\",\n    \"notes\": \"RFI response is comprehensive and addresses all concerns. The structural engineer's recommendation to use 30-inch footings is approved. Cost and schedule impacts are acceptable given the improved foundation performance. Proceed as recommended.\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"rfis",
+						"{{rfi_id}}"
+					]
+				}
+			}
+		},
+		{
+			"name": "Reject RFI (Action-based)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('RFI rejected successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('message');",
+							"    pm.expect(responseJson.message).to.include('updated successfully');",
+							"    console.log('Rejection Response:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"action\": \"reject\",\n    \"notes\": \"Insufficient information provided. Please include soil bearing capacity test results and provide clearer site photos showing the actual conditions at grid line A-5. The current information is not sufficient to make an informed decision on the foundation size. Additional geotechnical data is critical for this determination.\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"rfis",
+						"{{rfi_id}}"
+					]
+				}
+			}
+		},
+		{
+			"name": "Respond to RFI (Action-based)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('RFI response added successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('message');",
+							"    pm.expect(responseJson.message).to.include('updated successfully');",
+							"    console.log('Response Result:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"action\": \"respond\",\n    \"response_text\": \"After reviewing both the drawings and specifications, the specification takes precedence. Please use the 30-inch square footing as specified in section 03300. The drawing will be revised in the next update. Use the reinforcement schedule shown in drawing S-102 but adjust for the larger footing size. The 30-inch footing provides better load distribution for the actual soil conditions.\",\n    \"notes\": \"Response provided with detailed clarification on foundation requirements.\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"rfis",
+						"{{rfi_id}}"
+					]
+				}
+			}
+		},
+		{
+			"name": "Add RFI Comment",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Comment added successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('comment');",
+							"    console.log('Added Comment:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"comment\": \"Site visit completed today. Confirmed that the existing conditions match the drawing dimensions. However, the soil appears more compact than anticipated. Recommend geotechnical engineer visit before making final footing size determination.\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/comments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"rfis",
+						"{{rfi_id}}",
+						"comments"
+					]
+				}
+			}
+		},
+		{
+			"name": "Add RFI Attachment",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Attachment added successfully', function () {",
+							"    const responseJson = pm.response.json();",
+							"    pm.expect(responseJson).to.have.property('id');",
+							"    pm.expect(responseJson).to.have.property('filename');",
+							"    pm.expect(responseJson).to.have.property('s3_url');",
+							"    console.log('Added Attachment:', JSON.stringify(responseJson, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"filename\": \"foundation_detail_photo.jpg\",\n    \"file_type\": \"image/jpeg\",\n    \"file_size\": 2450000,\n    \"description\": \"Current foundation connection detail showing conflict with specifications\",\n    \"attachment_type\": \"photo\",\n    \"s3_bucket\": \"project-attachments-bucket\",\n    \"s3_key\": \"rfis/2024/foundation_detail_photo.jpg\"\n}"
+				},
+				"url": {
+					"raw": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main/rfis/{{rfi_id}}/attachments",
+					"protocol": "https",
+					"host": [
+						"74zc1md7sc",
+						"execute-api",
+						"us-east-2",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"main",
+						"rfis",
+						"{{rfi_id}}",
+						"attachments"
+					]
+				}
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://74zc1md7sc.execute-api.us-east-2.amazonaws.com/main"
+		},
+		{
+			"key": "project_id",
+			"value": "47",
+			"description": "Project ID for testing"
+		},
+		{
+			"key": "location_id",
+			"value": "22",
+			"description": "Location ID for testing"
+		},
+		{
+			"key": "rfi_id",
+			"value": "",
+			"description": "RFI ID - populated automatically after creating an RFI"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"description": "JWT ID token for authentication (use ID token, not access token)"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{id_token}}",
+				"type": "string"
+			}
+		]
+	}
 }

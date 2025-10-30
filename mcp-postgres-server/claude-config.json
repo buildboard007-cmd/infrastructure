@@ -8,7 +8,7 @@
         "DATABASE_PORT": "5432",
         "DATABASE_NAME": "appdb",
         "DATABASE_USER": "appdb_admin",
-        "DATABASE_PASSWORD": "India2025!!",
+        "DATABASE_PASSWORD": "${DATABASE_PASSWORD}",
         "DATABASE_SSL": "true"
       }
     }
