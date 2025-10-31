@@ -290,6 +290,13 @@ export class SubStack extends NestedStack {
         });
         // CORS handled at API Gateway level
 
+        // Create /projects/{projectId}/rfis resource for RFI management (simple, consistent with issues)
+        const projectRfisResource = projectIdResource.addResource('rfis');
+        projectRfisResource.addMethod('GET', rfiManagementIntegration, {
+            authorizer: cognitoAuthorizer
+        });
+        // CORS handled at API Gateway level
+
         // Create /issues resource for direct issue operations
         const issuesResource = this.api.root.addResource('issues');
         issuesResource.addMethod('POST', issueManagementIntegration, {

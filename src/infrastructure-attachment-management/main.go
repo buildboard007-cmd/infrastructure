@@ -117,13 +117,13 @@ func handleGenerateUploadURL(ctx context.Context, request events.APIGatewayProxy
 	uploadReq.OrgID = claims.OrgID
 
 	// Validate required fields
-	// For issue_comment, entity_id can be 0 (will be updated after comment creation)
+	// For issue_comment and rfi_comment, entity_id can be 0 (will be updated after comment creation)
 	if uploadReq.EntityType == "" || uploadReq.ProjectID == 0 || uploadReq.LocationID == 0 || uploadReq.FileName == "" {
 		return api.ErrorResponse(http.StatusBadRequest, "Missing required fields", logger), nil
 	}
 
 	// For non-comment entity types, entity_id must be > 0
-	if uploadReq.EntityType != models.EntityTypeIssueComment && uploadReq.EntityID == 0 {
+	if uploadReq.EntityType != models.EntityTypeIssueComment && uploadReq.EntityType != models.EntityTypeRFIComment && uploadReq.EntityID == 0 {
 		return api.ErrorResponse(http.StatusBadRequest, "entity_id is required for this entity type", logger), nil
 	}
 
@@ -138,13 +138,13 @@ func handleGenerateUploadURL(ctx context.Context, request events.APIGatewayProxy
 	}
 
 	// Validate entity access (entity exists, belongs to project, project belongs to org and location)
-	if uploadReq.EntityType != models.EntityTypeIssueComment {
+	if uploadReq.EntityType != models.EntityTypeIssueComment && uploadReq.EntityType != models.EntityTypeRFIComment {
 		statusCode, errMsg := validateEntityAccess(ctx, uploadReq.EntityType, uploadReq.EntityID, uploadReq.ProjectID, uploadReq.LocationID, uploadReq.OrgID)
 		if errMsg != "" {
 			return api.ErrorResponse(statusCode, errMsg, logger), nil
 		}
 	} else {
-		// For issue_comment without entity_id, just validate project
+		// For issue_comment/rfi_comment without entity_id, just validate project
 		statusCode, errMsg := validateProjectAccess(ctx, uploadReq.ProjectID, uploadReq.LocationID, uploadReq.OrgID)
 		if errMsg != "" {
 			return api.ErrorResponse(statusCode, errMsg, logger), nil
@@ -458,6 +458,7 @@ func isValidEntityType(entityType string) bool {
 		models.EntityTypeRFI,
 		models.EntityTypeSubmittal,
 		models.EntityTypeIssueComment,
+		models.EntityTypeRFIComment,
 	}
 
 	for _, validType := range validTypes {

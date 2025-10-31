@@ -32,8 +32,8 @@ type Attachment struct {
 
 // AttachmentUploadRequest represents a request to get an upload URL
 type AttachmentUploadRequest struct {
-	EntityType     string `json:"entity_type" binding:"required,oneof=project issue rfi submittal issue_comment"`
-	EntityID       int64  `json:"entity_id"` // Required for most types, can be 0 for issue_comment (updated after comment creation)
+	EntityType     string `json:"entity_type" binding:"required,oneof=project issue rfi submittal issue_comment rfi_comment"`
+	EntityID       int64  `json:"entity_id"` // Required for most types, can be 0 for issue_comment/rfi_comment (updated after comment creation)
 	ProjectID      int64  `json:"project_id" binding:"required"`
 	LocationID     int64  `json:"location_id" binding:"required"`
 	OrgID          int64  `json:"org_id,omitempty"` // Set from JWT claims
@@ -117,6 +117,7 @@ const (
 	EntityTypeRFI          = "rfi"
 	EntityTypeSubmittal    = "submittal"
 	EntityTypeIssueComment = "issue_comment"
+	EntityTypeRFIComment   = "rfi_comment"
 )
 
 // GenerateS3Key creates the S3 key based on the hierarchical path structure
@@ -146,6 +147,14 @@ func (req *AttachmentUploadRequest) GenerateS3Key() string {
 		}
 		return fmt.Sprintf("%d/%d/%d/comments/%d/%s_%s",
 			req.OrgID, req.LocationID, req.ProjectID, req.EntityID, timestamp, cleanFileName)
+	case EntityTypeRFIComment:
+		// For rfi_comment, entity_id will be 0 initially, will use temp path
+		if req.EntityID == 0 {
+			return fmt.Sprintf("%d/%d/%d/rfi_comments/temp/%s_%s",
+				req.OrgID, req.LocationID, req.ProjectID, timestamp, cleanFileName)
+		}
+		return fmt.Sprintf("%d/%d/%d/rfi_comments/%d/%s_%s",
+			req.OrgID, req.LocationID, req.ProjectID, req.EntityID, timestamp, cleanFileName)
 	default:
 		return ""
 	}
@@ -164,6 +173,8 @@ func GetTableName(entityType string) string {
 		return "project.submittal_attachments"
 	case EntityTypeIssueComment:
 		return "project.issue_comment_attachments"
+	case EntityTypeRFIComment:
+		return "project.rfi_comment_attachments"
 	default:
 		return ""
 	}
@@ -181,6 +192,8 @@ func GetEntityIDColumn(entityType string) string {
 	case EntityTypeSubmittal:
 		return "submittal_id"
 	case EntityTypeIssueComment:
+		return "comment_id"
+	case EntityTypeRFIComment:
 		return "comment_id"
 	default:
 		return ""

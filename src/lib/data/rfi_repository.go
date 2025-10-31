@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"infrastructure/lib/models"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,13 +18,8 @@ type RFIRepository interface {
 	GetRFI(ctx context.Context, rfiID int64) (*models.RFIResponse, error)
 	GetRFIsByProject(ctx context.Context, projectID int64, filters map[string]string) ([]models.RFIResponse, error)
 	UpdateRFI(ctx context.Context, rfiID, userID, orgID int64, req *models.UpdateRFIRequest) (*models.RFIResponse, error)
-	UpdateRFIStatus(ctx context.Context, rfiID int64, status string, updatedBy int64, comment string) error
 	DeleteRFI(ctx context.Context, rfiID int64, deletedBy int64) error
-	SubmitRFI(ctx context.Context, rfiID int64, assignedTo *int64, submittedBy int64) error
-	RespondToRFI(ctx context.Context, rfiID int64, response string, responseBy int64) error
-	ApproveRFI(ctx context.Context, rfiID int64, approvedBy int64, comments string) error
-	RejectRFI(ctx context.Context, rfiID int64, rejectedBy int64, reason string) error
-	AddRFIComment(ctx context.Context, comment *models.RFIComment) error
+	AddRFIComment(ctx context.Context, rfiID, userID int64, req *models.CreateRFICommentRequest) (*models.RFIComment, error)
 	GetRFIComments(ctx context.Context, rfiID int64) ([]models.RFIComment, error)
 	AddRFIAttachment(ctx context.Context, attachment *models.RFIAttachment) (*models.RFIAttachment, error)
 	GetRFIAttachments(ctx context.Context, rfiID int64) ([]models.RFIAttachment, error)
@@ -46,10 +40,60 @@ func NewRFIDao(db *sql.DB, logger *logrus.Logger) RFIRepository {
 	}
 }
 
+// Helper function to fetch user details as AssignedUser
+func (dao *RFIDao) getUserDetails(ctx context.Context, userID int64) (*models.AssignedUser, error) {
+	var user models.AssignedUser
+	err := dao.DB.QueryRowContext(ctx, `
+		SELECT id, CONCAT(first_name, ' ', last_name) as name
+		FROM iam.users
+		WHERE id = $1
+	`, userID).Scan(&user.ID, &user.Name)
+
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// Helper function to fetch multiple users as AssignedUser array
+func (dao *RFIDao) getUsersDetails(ctx context.Context, userIDs []int64) ([]models.AssignedUser, error) {
+	if len(userIDs) == 0 {
+		return []models.AssignedUser{}, nil
+	}
+
+	rows, err := dao.DB.QueryContext(ctx, `
+		SELECT id, CONCAT(first_name, ' ', last_name) as name
+		FROM iam.users
+		WHERE id = ANY($1)
+		ORDER BY first_name, last_name
+	`, pq.Array(userIDs))
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.AssignedUser
+	for rows.Next() {
+		var user models.AssignedUser
+		if err := rows.Scan(&user.ID, &user.Name); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
 // CreateRFI creates a new RFI
-// CreateRFI creates a new RFI in the database (UI Compatible with unified structure)
 func (dao *RFIDao) CreateRFI(ctx context.Context, projectID, userID, orgID int64, req *models.CreateRFIRequest) (*models.RFIResponse, error) {
-	// Validate project belongs to organization (same as issues)
+	dao.Logger.WithFields(logrus.Fields{
+		"project_id": projectID,
+		"user_id":    userID,
+		"org_id":     orgID,
+	}).Info("Starting RFI creation")
+
+	// Validate project belongs to organization
 	var projectOrgID int64
 	err := dao.DB.QueryRowContext(ctx, `
 		SELECT org_id FROM project.projects
@@ -57,22 +101,42 @@ func (dao *RFIDao) CreateRFI(ctx context.Context, projectID, userID, orgID int64
 	`, projectID).Scan(&projectOrgID)
 
 	if err == sql.ErrNoRows {
+		dao.Logger.WithField("project_id", projectID).Warn("Project not found")
 		return nil, fmt.Errorf("project not found")
 	}
 	if err != nil {
+		dao.Logger.WithError(err).WithField("project_id", projectID).Error("Failed to validate project")
 		return nil, fmt.Errorf("failed to validate project: %w", err)
 	}
 	if projectOrgID != orgID {
+		dao.Logger.WithFields(logrus.Fields{
+			"project_org_id": projectOrgID,
+			"user_org_id":    orgID,
+		}).Warn("Project does not belong to user's organization")
 		return nil, fmt.Errorf("project does not belong to your organization")
 	}
 
-	// Generate RFI number if not provided
-	rfiNumber := req.RFINumber
-	if rfiNumber == "" {
-		rfiNumber, err = dao.GenerateRFINumber(ctx, projectID)
+	dao.Logger.Info("Project validation successful")
+
+	// Determine status - default is DRAFT
+	status := models.RFIStatusDraft
+	if req.Status != "" {
+		status = req.Status
+	}
+
+	// Generate RFI number only if status is OPEN
+	// DRAFT RFIs don't get a number until they're moved to OPEN
+	var rfiNumber *string
+	if status == models.RFIStatusOpen {
+		generatedNumber, err := dao.GenerateRFINumber(ctx, projectID)
 		if err != nil {
+			dao.Logger.WithError(err).Error("Failed to generate RFI number")
 			return nil, fmt.Errorf("failed to generate RFI number: %w", err)
 		}
+		rfiNumber = &generatedNumber
+		dao.Logger.WithField("rfi_number", generatedNumber).Info("Generated RFI number for OPEN status")
+	} else {
+		dao.Logger.Info("DRAFT status - no RFI number generated")
 	}
 
 	// Parse due date
@@ -83,20 +147,19 @@ func (dao *RFIDao) CreateRFI(ctx context.Context, projectID, userID, orgID int64
 		}
 	}
 
-	// Handle assigned_to (convert string to int64 if provided)
-	var assignedTo sql.NullInt64
-	if req.AssignedTo != nil && *req.AssignedTo != "" {
-		if userID, err := strconv.ParseInt(*req.AssignedTo, 10, 64); err == nil {
-			assignedTo = sql.NullInt64{Int64: userID, Valid: true}
-		}
+	// Handle assigned_to array
+	assignedTo := req.AssignedTo
+	if assignedTo == nil {
+		assignedTo = []int64{}
 	}
 
-	// Handle references
-	var drawingRefs, specRefs, relatedRFIs []string
-	if req.References != nil {
-		drawingRefs = req.References.DrawingNumbers
-		specRefs = req.References.SpecificationSections
-		relatedRFIs = req.References.RelatedRFIs
+	// Handle nullable fields
+	var ballInCourt, receivedFrom sql.NullInt64
+	if req.BallInCourt != nil {
+		ballInCourt = sql.NullInt64{Int64: *req.BallInCourt, Valid: true}
+	}
+	if req.ReceivedFrom != nil {
+		receivedFrom = sql.NullInt64{Int64: *req.ReceivedFrom, Valid: true}
 	}
 
 	// Set defaults
@@ -108,12 +171,11 @@ func (dao *RFIDao) CreateRFI(ctx context.Context, projectID, userID, orgID int64
 	query := `
 		INSERT INTO project.rfis (
 			project_id, org_id, location_id, rfi_number, subject,
-			question, description, category, discipline, trade_type,
-			project_phase, priority, status, submitted_by, assigned_to,
-			cc_list, distribution_list, due_date,
-			cost_impact_amount, schedule_impact_days,
-			location_description, drawing_references,
-			specification_references, related_rfis,
+			description, category, discipline, project_phase, priority,
+			status, received_from, assigned_to, ball_in_court,
+			distribution_list, due_date, cost_impact, schedule_impact,
+			cost_impact_amount, schedule_impact_days, location_description,
+			drawing_numbers, specification_sections, related_rfis,
 			created_by, updated_by
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
@@ -124,908 +186,663 @@ func (dao *RFIDao) CreateRFI(ctx context.Context, projectID, userID, orgID int64
 	var rfiID int64
 	var createdAt, updatedAt time.Time
 
+	dao.Logger.WithFields(logrus.Fields{
+		"project_id":  projectID,
+		"org_id":      orgID,
+		"location_id": req.LocationID,
+		"rfi_number":  rfiNumber,
+		"status":      status,
+		"subject":     req.Subject,
+		"category":    req.Category,
+		"priority":    priority,
+	}).Info("Executing INSERT query")
+
 	err = dao.DB.QueryRowContext(ctx, query,
 		projectID, orgID, req.LocationID, rfiNumber, req.Subject,
-		req.Question, req.Description, req.Category, req.Discipline, req.TradeType,
-		req.ProjectPhase, priority, models.RFIStatusDraft, userID, assignedTo,
-		pq.Array([]string{}), pq.Array(req.DistributionList), dueDate,
-		req.CostImpactAmount, req.ScheduleImpactDays,
-		req.LocationDescription, strings.Join(drawingRefs, ","),
-		strings.Join(specRefs, ","), pq.Array(relatedRFIs),
+		req.Description, req.Category, req.Discipline, req.ProjectPhase, priority,
+		status, receivedFrom, pq.Array(assignedTo), ballInCourt,
+		pq.Array(req.DistributionList), dueDate, req.CostImpact, req.ScheduleImpact,
+		req.CostImpactAmount, req.ScheduleImpactDays, req.LocationDescription,
+		pq.Array(req.DrawingNumbers), pq.Array(req.SpecificationSections), pq.Array(req.RelatedRFIs),
 		userID, userID,
 	).Scan(&rfiID, &createdAt, &updatedAt)
 
 	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to create RFI")
+		dao.Logger.WithError(err).WithFields(logrus.Fields{
+			"project_id":  projectID,
+			"location_id": req.LocationID,
+			"sql_error":   err.Error(),
+		}).Error("Failed to execute INSERT query for RFI")
 		return nil, fmt.Errorf("failed to create RFI: %w", err)
 	}
 
-	// Return the created RFI
+	dao.Logger.WithField("rfi_id", rfiID).Info("RFI created successfully, fetching complete RFI data")
+
 	return dao.GetRFI(ctx, rfiID)
-}
-
-// CreateRFILegacy creates a new RFI in the database (legacy method)
-func (dao *RFIDao) CreateRFILegacy(ctx context.Context, rfi *models.RFI) (*models.RFI, error) {
-	query := `
-		INSERT INTO project.rfis (
-			project_id, org_id, location_id, rfi_number, subject,
-			question, description, category, discipline, trade_type,
-			project_phase, priority, status, submitted_by, assigned_to,
-			reviewer_email, approver_email, cc_list, distribution_list,
-			submitted_date, due_date, cost_impact, schedule_impact,
-			cost_impact_amount, schedule_impact_days, cost_impact_details,
-			schedule_impact_details, location_description, drawing_references,
-			specification_references, related_submittals, related_change_events,
-			related_rfis, workflow_type, requires_approval,
-			urgency_justification, business_justification,
-			created_by, updated_by
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-			$11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-			$21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-			$31, $32, $33, $34, $35, $36, $37, $38, $39
-		) RETURNING id, created_at, updated_at`
-	
-	err := dao.DB.QueryRowContext(ctx, query,
-		rfi.ProjectID, rfi.OrgID, rfi.LocationID, rfi.RFINumber, rfi.Subject,
-		rfi.Question, rfi.Description, rfi.Category, rfi.Discipline, rfi.TradeType,
-		rfi.ProjectPhase, rfi.Priority, rfi.Status, rfi.SubmittedBy, rfi.AssignedTo,
-		rfi.ReviewerEmail, rfi.ApproverEmail, pq.Array(rfi.CCList), pq.Array(rfi.DistributionList),
-		rfi.SubmittedDate, rfi.DueDate, rfi.CostImpact, rfi.ScheduleImpact,
-		rfi.CostImpactAmount, rfi.ScheduleImpactDays, rfi.CostImpactDetails,
-		rfi.ScheduleImpactDetails, rfi.LocationDescription, rfi.DrawingReferences,
-		rfi.SpecificationReferences, rfi.RelatedSubmittals, rfi.RelatedChangeEvents,
-		pq.Array(rfi.RelatedRFIs), rfi.WorkflowType, rfi.RequiresApproval,
-		rfi.UrgencyJustification, rfi.BusinessJustification,
-		rfi.CreatedBy, rfi.UpdatedBy,
-	).Scan(&rfi.ID, &rfi.CreatedAt, &rfi.UpdatedAt)
-	
-	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to create RFI")
-		return nil, fmt.Errorf("failed to create RFI: %w", err)
-	}
-	
-	dao.Logger.WithFields(logrus.Fields{
-		"rfi_id":     rfi.ID,
-		"project_id": rfi.ProjectID,
-	}).Info("RFI created successfully")
-	
-	return rfi, nil
 }
 
 // GetRFI retrieves a single RFI by ID
 func (dao *RFIDao) GetRFI(ctx context.Context, rfiID int64) (*models.RFIResponse, error) {
 	query := `
-		SELECT 
+		SELECT
 			r.id, r.project_id, r.org_id, r.location_id, r.rfi_number,
-			r.subject, r.question, r.description, r.category, r.discipline,
-			r.trade_type, r.project_phase, r.priority, r.status,
-			r.submitted_by, r.assigned_to, r.reviewer_email, r.approver_email,
-			r.cc_list, r.distribution_list, r.submitted_date, r.due_date,
-			r.response_date, r.closed_date, r.response, r.response_status,
+			r.subject, r.description, r.category, r.discipline,
+			r.project_phase, r.priority, r.status,
+			r.received_from, r.assigned_to, r.ball_in_court,
+			r.distribution_list, r.due_date, r.closed_date,
 			r.cost_impact, r.schedule_impact, r.cost_impact_amount,
-			r.schedule_impact_days, r.cost_impact_details, r.schedule_impact_details,
-			r.location_description, r.drawing_references, r.specification_references,
-			r.related_submittals, r.related_change_events, r.related_rfis,
-			r.workflow_type, r.requires_approval, r.approval_status,
-			r.approved_by, r.approval_date, r.approval_comments,
-			r.urgency_justification, r.business_justification,
-			r.days_open, r.is_overdue,
+			r.schedule_impact_days, r.location_description,
+			r.drawing_numbers, r.specification_sections, r.related_rfis,
 			r.created_at, r.created_by, r.updated_at, r.updated_by,
 			p.name as project_name,
-			l.name as location_name,
-			CONCAT(u1.first_name, ' ', u1.last_name) as submitted_by_name,
-			CONCAT(u2.first_name, ' ', u2.last_name) as assigned_to_name,
-			CONCAT(u3.first_name, ' ', u3.last_name) as response_by_name,
-			CONCAT(u4.first_name, ' ', u4.last_name) as approved_by_name,
-			(SELECT COUNT(*) FROM project.rfi_comments WHERE rfi_id = r.id AND is_deleted = FALSE) as comment_count,
-			(SELECT COUNT(*) FROM project.rfi_attachments WHERE rfi_id = r.id AND is_deleted = FALSE) as attachment_count
+			l.name as location_name
 		FROM project.rfis r
 		LEFT JOIN project.projects p ON r.project_id = p.id
 		LEFT JOIN iam.locations l ON r.location_id = l.id
-		LEFT JOIN iam.users u1 ON r.submitted_by = u1.id
-		LEFT JOIN iam.users u2 ON r.assigned_to = u2.id
-		LEFT JOIN iam.users u3 ON r.response_by = u3.id
-		LEFT JOIN iam.users u4 ON r.approved_by = u4.id
 		WHERE r.id = $1 AND r.is_deleted = FALSE`
-	
+
 	var rfi models.RFIResponse
-	var ccList, distributionList, relatedRFIs pq.StringArray
-	
-	// Nullable fields
-	var locationID, assignedTo, responseBy, approvedBy sql.NullInt64
-	var locationName, assignedToName, responseByName, approvedByName sql.NullString
-	var description, category, discipline, tradeType, projectPhase sql.NullString
-	var reviewerEmail, approverEmail, response, responseStatus sql.NullString
+	var locationID sql.NullInt64
+	var locationName sql.NullString
+	var rfiNumber sql.NullString
+	var discipline, projectPhase, locationDesc sql.NullString
 	var costImpactAmount sql.NullFloat64
-	var submittedDate, dueDate, responseDate, closedDate, approvalDate *time.Time
-	var locationDesc, drawingRefs, specRefs, relatedSub, relatedChange sql.NullString
-	var approvalStatus, approvalComments, urgencyJust, businessJust sql.NullString
-	var costImpactDetails, scheduleImpactDetails sql.NullString
-	
+	var scheduleImpactDays sql.NullInt32
+	var dueDate, closedDate *time.Time
+	var receivedFromID, ballInCourtID sql.NullInt64
+	var assignedToIDs pq.Int64Array
+	var distributionList, drawingNumbers, specSections, relatedRFIs pq.StringArray
+	var createdByID, updatedByID int64
+
 	err := dao.DB.QueryRowContext(ctx, query, rfiID).Scan(
-		&rfi.ID, &rfi.ProjectID, &rfi.OrgID, &locationID, &rfi.RFINumber,
-		&rfi.Subject, &rfi.Question, &description, &category, &discipline,
-		&tradeType, &projectPhase, &rfi.Priority, &rfi.Status,
-		&rfi.SubmittedBy, &assignedTo, &reviewerEmail, &approverEmail,
-		&ccList, &distributionList, &submittedDate, &dueDate,
-		&responseDate, &closedDate, &response, &responseStatus,
+		&rfi.ID, &rfi.ProjectID, &rfi.OrgID, &locationID, &rfiNumber,
+		&rfi.Subject, &rfi.Description, &rfi.Category, &discipline,
+		&projectPhase, &rfi.Priority, &rfi.Status,
+		&receivedFromID, &assignedToIDs, &ballInCourtID,
+		&distributionList, &dueDate, &closedDate,
 		&rfi.CostImpact, &rfi.ScheduleImpact, &costImpactAmount,
-		&rfi.ScheduleImpactDays, &costImpactDetails, &scheduleImpactDetails,
-		&locationDesc, &drawingRefs, &specRefs,
-		&relatedSub, &relatedChange, &relatedRFIs,
-		&rfi.WorkflowType, &rfi.RequiresApproval, &approvalStatus,
-		&approvedBy, &approvalDate, &approvalComments,
-		&urgencyJust, &businessJust,
-		&rfi.DaysOpen, &rfi.IsOverdue,
-		&rfi.CreatedAt, &rfi.CreatedBy, &rfi.UpdatedAt, &rfi.UpdatedBy,
-		&rfi.ProjectName,
-		&locationName,
-		&rfi.SubmittedByName,
-		&assignedToName,
-		&responseByName,
-		&approvedByName,
-		&rfi.CommentCount,
-		&rfi.AttachmentCount,
+		&scheduleImpactDays, &locationDesc,
+		&drawingNumbers, &specSections, &relatedRFIs,
+		&rfi.CreatedAt, &createdByID, &rfi.UpdatedAt, &updatedByID,
+		&rfi.ProjectName, &locationName,
 	)
-	
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("RFI not found")
+	}
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("RFI not found")
-		}
 		dao.Logger.WithError(err).Error("Failed to get RFI")
 		return nil, fmt.Errorf("failed to get RFI: %w", err)
 	}
-	
+
 	// Handle nullable fields
 	if locationID.Valid {
-		rfi.LocationID = &locationID.Int64
-	}
-	if assignedTo.Valid {
-		rfi.AssignedTo = &assignedTo.Int64
-	}
-	if responseBy.Valid {
-		rfi.ResponseBy = &responseBy.Int64
-	}
-	if approvedBy.Valid {
-		rfi.ApprovedBy = &approvedBy.Int64
+		rfi.LocationID = locationID.Int64
 	}
 	if locationName.Valid {
 		rfi.LocationName = locationName.String
 	}
-	if assignedToName.Valid {
-		rfi.AssignedToName = assignedToName.String
-	}
-	if responseByName.Valid {
-		rfi.ResponseByName = responseByName.String
-	}
-	if approvedByName.Valid {
-		rfi.ApprovedByName = approvedByName.String
-	}
-	
-	// Handle nullable string fields
-	if description.Valid {
-		rfi.Description = &description.String
-	}
-	if category.Valid {
-		rfi.Category = &category.String
+	if rfiNumber.Valid {
+		rfi.RFINumber = &rfiNumber.String
 	}
 	if discipline.Valid {
 		rfi.Discipline = &discipline.String
 	}
-	if tradeType.Valid {
-		rfi.TradeType = &tradeType.String
-	}
 	if projectPhase.Valid {
 		rfi.ProjectPhase = &projectPhase.String
-	}
-	if reviewerEmail.Valid {
-		rfi.ReviewerEmail = &reviewerEmail.String
-	}
-	if approverEmail.Valid {
-		rfi.ApproverEmail = &approverEmail.String
-	}
-	if response.Valid {
-		rfi.Response = &response.String
-	}
-	if responseStatus.Valid {
-		rfi.ResponseStatus = &responseStatus.String
-	}
-
-	if costImpactAmount.Valid {
-		rfi.CostImpactAmount = &costImpactAmount.Float64
-	}
-
-	if costImpactDetails.Valid {
-		rfi.CostImpactDetails = &costImpactDetails.String
-	}
-	if scheduleImpactDetails.Valid {
-		rfi.ScheduleImpactDetails = &scheduleImpactDetails.String
 	}
 	if locationDesc.Valid {
 		rfi.LocationDescription = &locationDesc.String
 	}
-	if drawingRefs.Valid {
-		rfi.DrawingReferences = &drawingRefs.String
+	if costImpactAmount.Valid {
+		rfi.CostImpactAmount = &costImpactAmount.Float64
 	}
-	if specRefs.Valid {
-		rfi.SpecificationReferences = &specRefs.String
-	}
-	if relatedSub.Valid {
-		rfi.RelatedSubmittals = &relatedSub.String
-	}
-	if relatedChange.Valid {
-		rfi.RelatedChangeEvents = &relatedChange.String
-	}
-	if approvalStatus.Valid {
-		rfi.ApprovalStatus = &approvalStatus.String
-	}
-	if approvalComments.Valid {
-		rfi.ApprovalComments = &approvalComments.String
-	}
-	if urgencyJust.Valid {
-		rfi.UrgencyJustification = &urgencyJust.String
-	}
-	if businessJust.Valid {
-		rfi.BusinessJustification = &businessJust.String
+	if scheduleImpactDays.Valid {
+		days := int(scheduleImpactDays.Int32)
+		rfi.ScheduleImpactDays = &days
 	}
 
-	// Handle time fields
-	rfi.SubmittedDate = submittedDate
 	rfi.DueDate = dueDate
-	rfi.ResponseDate = responseDate
 	rfi.ClosedDate = closedDate
-	rfi.ApprovalDate = approvalDate
-	
-	// Handle arrays
-	rfi.CCList = []string(ccList)
 	rfi.DistributionList = []string(distributionList)
+	rfi.DrawingNumbers = []string(drawingNumbers)
+	rfi.SpecificationSections = []string(specSections)
 	rfi.RelatedRFIs = []string(relatedRFIs)
-	
+
+	// Fetch user details for received_from
+	if receivedFromID.Valid {
+		if user, err := dao.getUserDetails(ctx, receivedFromID.Int64); err == nil {
+			rfi.ReceivedFrom = user
+		}
+	}
+
+	// Fetch user details for assigned_to
+	if len(assignedToIDs) > 0 {
+		if users, err := dao.getUsersDetails(ctx, []int64(assignedToIDs)); err == nil {
+			rfi.AssignedTo = users
+		}
+	} else {
+		rfi.AssignedTo = []models.AssignedUser{}
+	}
+
+	// Fetch user details for ball_in_court
+	if ballInCourtID.Valid {
+		if user, err := dao.getUserDetails(ctx, ballInCourtID.Int64); err == nil {
+			rfi.BallInCourt = user
+		}
+	}
+
+	// Fetch user details for created_by and updated_by
+	if user, err := dao.getUserDetails(ctx, createdByID); err == nil {
+		rfi.CreatedBy = *user
+	}
+	if user, err := dao.getUserDetails(ctx, updatedByID); err == nil {
+		rfi.UpdatedBy = *user
+	}
+
+	// Fetch attachments
+	attachments, err := dao.GetRFIAttachments(ctx, rfiID)
+	if err != nil {
+		dao.Logger.WithError(err).Warn("Failed to get RFI attachments")
+		attachments = []models.RFIAttachment{}
+	}
+	rfi.Attachments = attachments
+
+	// Fetch comments
+	comments, err := dao.GetRFIComments(ctx, rfiID)
+	if err != nil {
+		dao.Logger.WithError(err).Warn("Failed to get RFI comments")
+		comments = []models.RFIComment{}
+	}
+	rfi.Comments = comments
+
 	return &rfi, nil
 }
 
 // GetRFIsByProject retrieves all RFIs for a specific project with optional filters
 func (dao *RFIDao) GetRFIsByProject(ctx context.Context, projectID int64, filters map[string]string) ([]models.RFIResponse, error) {
 	query := `
-		SELECT 
+		SELECT
 			r.id, r.project_id, r.org_id, r.location_id, r.rfi_number,
-			r.subject, r.question, r.description, r.category, r.discipline,
-			r.trade_type, r.project_phase, r.priority, r.status,
-			r.submitted_by, r.assigned_to, r.reviewer_email, r.approver_email,
-			r.cc_list, r.distribution_list, r.submitted_date, r.due_date,
-			r.response_date, r.closed_date, r.response, r.response_status,
+			r.subject, r.description, r.category, r.discipline,
+			r.project_phase, r.priority, r.status,
+			r.received_from, r.assigned_to, r.ball_in_court,
+			r.distribution_list, r.due_date, r.closed_date,
 			r.cost_impact, r.schedule_impact, r.cost_impact_amount,
-			r.schedule_impact_days, r.cost_impact_details, r.schedule_impact_details,
-			r.location_description, r.drawing_references, r.specification_references,
-			r.related_submittals, r.related_change_events, r.related_rfis,
-			r.workflow_type, r.requires_approval, r.approval_status,
-			r.approved_by, r.approval_date, r.approval_comments,
-			r.urgency_justification, r.business_justification,
-			r.days_open, r.is_overdue,
+			r.schedule_impact_days, r.location_description,
+			r.drawing_numbers, r.specification_sections, r.related_rfis,
 			r.created_at, r.created_by, r.updated_at, r.updated_by,
 			p.name as project_name,
-			l.name as location_name,
-			CONCAT(u1.first_name, ' ', u1.last_name) as submitted_by_name,
-			CONCAT(u2.first_name, ' ', u2.last_name) as assigned_to_name,
-			CONCAT(u3.first_name, ' ', u3.last_name) as response_by_name,
-			CONCAT(u4.first_name, ' ', u4.last_name) as approved_by_name
+			l.name as location_name
 		FROM project.rfis r
 		LEFT JOIN project.projects p ON r.project_id = p.id
 		LEFT JOIN iam.locations l ON r.location_id = l.id
-		LEFT JOIN iam.users u1 ON r.submitted_by = u1.id
-		LEFT JOIN iam.users u2 ON r.assigned_to = u2.id
-		LEFT JOIN iam.users u3 ON r.response_by = u3.id
-		LEFT JOIN iam.users u4 ON r.approved_by = u4.id
 		WHERE r.project_id = $1 AND r.is_deleted = FALSE`
-	
-	// Add filters
+
 	args := []interface{}{projectID}
 	argIndex := 2
-	
+
+	// Add filters
 	if status, ok := filters["status"]; ok && status != "" {
 		query += fmt.Sprintf(" AND r.status = $%d", argIndex)
 		args = append(args, status)
 		argIndex++
 	}
-	
+
 	if priority, ok := filters["priority"]; ok && priority != "" {
 		query += fmt.Sprintf(" AND r.priority = $%d", argIndex)
 		args = append(args, priority)
 		argIndex++
 	}
-	
+
 	if category, ok := filters["category"]; ok && category != "" {
 		query += fmt.Sprintf(" AND r.category = $%d", argIndex)
 		args = append(args, category)
 		argIndex++
 	}
-	
-	if discipline, ok := filters["discipline"]; ok && discipline != "" {
-		query += fmt.Sprintf(" AND r.discipline = $%d", argIndex)
-		args = append(args, discipline)
-		argIndex++
-	}
-	
+
 	if assignedTo, ok := filters["assigned_to"]; ok && assignedTo != "" {
-		query += fmt.Sprintf(" AND r.assigned_to = $%d", argIndex)
+		query += fmt.Sprintf(" AND $%d = ANY(r.assigned_to)", argIndex)
 		args = append(args, assignedTo)
 		argIndex++
 	}
-	
-	if submittedBy, ok := filters["submitted_by"]; ok && submittedBy != "" {
-		query += fmt.Sprintf(" AND r.submitted_by = $%d", argIndex)
-		args = append(args, submittedBy)
-		argIndex++
-	}
-	
-	// Add ordering
+
 	query += " ORDER BY r.created_at DESC"
-	
+
 	rows, err := dao.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		dao.Logger.WithError(err).Error("Failed to query RFIs")
 		return nil, fmt.Errorf("failed to query RFIs: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var rfis []models.RFIResponse
 	for rows.Next() {
 		var rfi models.RFIResponse
-		var ccList, distributionList, relatedRFIs pq.StringArray
-		
-		// Nullable fields
-		var locationID, assignedTo, responseBy, approvedBy sql.NullInt64
-		var locationName, assignedToName, responseByName, approvedByName sql.NullString
-		var description, category, discipline, tradeType, projectPhase sql.NullString
-		var reviewerEmail, approverEmail, response, responseStatus sql.NullString
+		var locationID sql.NullInt64
+		var locationName sql.NullString
+		var rfiNumber sql.NullString
+		var discipline, projectPhase, locationDesc sql.NullString
 		var costImpactAmount sql.NullFloat64
-		var submittedDate, dueDate, responseDate, closedDate, approvalDate *time.Time
-		var locationDesc, drawingRefs, specRefs, relatedSub, relatedChange sql.NullString
-		var approvalStatus, approvalComments, urgencyJust, businessJust sql.NullString
-		
+		var scheduleImpactDays sql.NullInt32
+		var dueDate, closedDate *time.Time
+		var receivedFromID, ballInCourtID sql.NullInt64
+		var assignedToIDs pq.Int64Array
+		var distributionList, drawingNumbers, specSections, relatedRFIs pq.StringArray
+		var createdByID, updatedByID int64
+
 		err := rows.Scan(
-			&rfi.ID, &rfi.ProjectID, &rfi.OrgID, &locationID, &rfi.RFINumber,
-			&rfi.Subject, &rfi.Question, &description, &category, &discipline,
-			&tradeType, &projectPhase, &rfi.Priority, &rfi.Status,
-			&rfi.SubmittedBy, &assignedTo, &reviewerEmail, &approverEmail,
-			&ccList, &distributionList, &submittedDate, &dueDate,
-			&responseDate, &closedDate, &response, &responseStatus,
+			&rfi.ID, &rfi.ProjectID, &rfi.OrgID, &locationID, &rfiNumber,
+			&rfi.Subject, &rfi.Description, &rfi.Category, &discipline,
+			&projectPhase, &rfi.Priority, &rfi.Status,
+			&receivedFromID, &assignedToIDs, &ballInCourtID,
+			&distributionList, &dueDate, &closedDate,
 			&rfi.CostImpact, &rfi.ScheduleImpact, &costImpactAmount,
-			&rfi.ScheduleImpactDays, &rfi.CostImpactDetails, &rfi.ScheduleImpactDetails,
-			&locationDesc, &drawingRefs, &specRefs,
-			&relatedSub, &relatedChange, &relatedRFIs,
-			&rfi.WorkflowType, &rfi.RequiresApproval, &approvalStatus,
-			&approvedBy, &approvalDate, &approvalComments,
-			&urgencyJust, &businessJust,
-			&rfi.DaysOpen, &rfi.IsOverdue,
-			&rfi.CreatedAt, &rfi.CreatedBy, &rfi.UpdatedAt, &rfi.UpdatedBy,
-			&rfi.ProjectName,
-			&locationName,
-			&rfi.SubmittedByName,
-			&assignedToName,
-			&responseByName,
-			&approvedByName,
+			&scheduleImpactDays, &locationDesc,
+			&drawingNumbers, &specSections, &relatedRFIs,
+			&rfi.CreatedAt, &createdByID, &rfi.UpdatedAt, &updatedByID,
+			&rfi.ProjectName, &locationName,
 		)
-		
+
 		if err != nil {
 			dao.Logger.WithError(err).Error("Failed to scan RFI row")
 			return nil, fmt.Errorf("failed to scan RFI: %w", err)
 		}
-		
-		// Handle nullable fields (same as GetRFI)
+
+		// Handle nullable fields
 		if locationID.Valid {
-			rfi.LocationID = &locationID.Int64
-		}
-		if assignedTo.Valid {
-			rfi.AssignedTo = &assignedTo.Int64
-		}
-		if responseBy.Valid {
-			rfi.ResponseBy = &responseBy.Int64
-		}
-		if approvedBy.Valid {
-			rfi.ApprovedBy = &approvedBy.Int64
+			rfi.LocationID = locationID.Int64
 		}
 		if locationName.Valid {
 			rfi.LocationName = locationName.String
 		}
-		if assignedToName.Valid {
-			rfi.AssignedToName = assignedToName.String
-		}
-		if responseByName.Valid {
-			rfi.ResponseByName = responseByName.String
-		}
-		if approvedByName.Valid {
-			rfi.ApprovedByName = approvedByName.String
-		}
-		
-		// Handle nullable string fields
-		if description.Valid {
-			rfi.Description = &description.String
-		}
-		if category.Valid {
-			rfi.Category = &category.String
+		if rfiNumber.Valid {
+			rfi.RFINumber = &rfiNumber.String
 		}
 		if discipline.Valid {
 			rfi.Discipline = &discipline.String
 		}
-		if tradeType.Valid {
-			rfi.TradeType = &tradeType.String
-		}
 		if projectPhase.Valid {
 			rfi.ProjectPhase = &projectPhase.String
 		}
-		if reviewerEmail.Valid {
-			rfi.ReviewerEmail = &reviewerEmail.String
-		}
-		if approverEmail.Valid {
-			rfi.ApproverEmail = &approverEmail.String
-		}
-		if response.Valid {
-			rfi.Response = &response.String
-		}
-		if responseStatus.Valid {
-			rfi.ResponseStatus = &responseStatus.String
-		}
-
-		if costImpactAmount.Valid {
-			rfi.CostImpactAmount = &costImpactAmount.Float64
-		}
-
 		if locationDesc.Valid {
 			rfi.LocationDescription = &locationDesc.String
 		}
-		if drawingRefs.Valid {
-			rfi.DrawingReferences = &drawingRefs.String
+		if costImpactAmount.Valid {
+			rfi.CostImpactAmount = &costImpactAmount.Float64
 		}
-		if specRefs.Valid {
-			rfi.SpecificationReferences = &specRefs.String
+		if scheduleImpactDays.Valid {
+			days := int(scheduleImpactDays.Int32)
+			rfi.ScheduleImpactDays = &days
 		}
-		if relatedSub.Valid {
-			rfi.RelatedSubmittals = &relatedSub.String
-		}
-		if relatedChange.Valid {
-			rfi.RelatedChangeEvents = &relatedChange.String
-		}
-		if approvalStatus.Valid {
-			rfi.ApprovalStatus = &approvalStatus.String
-		}
-		if approvalComments.Valid {
-			rfi.ApprovalComments = &approvalComments.String
-		}
-		if urgencyJust.Valid {
-			rfi.UrgencyJustification = &urgencyJust.String
-		}
-		if businessJust.Valid {
-			rfi.BusinessJustification = &businessJust.String
-		}
-		
-		// Handle time fields
-		rfi.SubmittedDate = submittedDate
+
 		rfi.DueDate = dueDate
-		rfi.ResponseDate = responseDate
 		rfi.ClosedDate = closedDate
-		rfi.ApprovalDate = approvalDate
-		
-		// Handle arrays
-		rfi.CCList = []string(ccList)
 		rfi.DistributionList = []string(distributionList)
+		rfi.DrawingNumbers = []string(drawingNumbers)
+		rfi.SpecificationSections = []string(specSections)
 		rfi.RelatedRFIs = []string(relatedRFIs)
-		
+
+		// Fetch user details
+		if receivedFromID.Valid {
+			if user, err := dao.getUserDetails(ctx, receivedFromID.Int64); err == nil {
+				rfi.ReceivedFrom = user
+			}
+		}
+
+		if len(assignedToIDs) > 0 {
+			if users, err := dao.getUsersDetails(ctx, []int64(assignedToIDs)); err == nil {
+				rfi.AssignedTo = users
+			}
+		} else {
+			rfi.AssignedTo = []models.AssignedUser{}
+		}
+
+		if ballInCourtID.Valid {
+			if user, err := dao.getUserDetails(ctx, ballInCourtID.Int64); err == nil {
+				rfi.BallInCourt = user
+			}
+		}
+
+		if user, err := dao.getUserDetails(ctx, createdByID); err == nil {
+			rfi.CreatedBy = *user
+		}
+		if user, err := dao.getUserDetails(ctx, updatedByID); err == nil {
+			rfi.UpdatedBy = *user
+		}
+
+		// Fetch attachments and comments (lightweight for list view)
+		attachments, _ := dao.GetRFIAttachments(ctx, rfi.ID)
+		if attachments == nil {
+			attachments = []models.RFIAttachment{}
+		}
+		rfi.Attachments = attachments
+
+		comments, _ := dao.GetRFIComments(ctx, rfi.ID)
+		if comments == nil {
+			comments = []models.RFIComment{}
+		}
+		rfi.Comments = comments
+
 		rfis = append(rfis, rfi)
 	}
-	
+
 	if err = rows.Err(); err != nil {
 		dao.Logger.WithError(err).Error("Error iterating RFI rows")
 		return nil, fmt.Errorf("error iterating RFIs: %w", err)
 	}
-	
-	dao.Logger.WithFields(logrus.Fields{
-		"project_id": projectID,
-		"count":      len(rfis),
-	}).Debug("Successfully retrieved RFIs for project")
-	
+
 	return rfis, nil
 }
 
-// UpdateRFI updates an existing RFI with unified structure and orgID validation
+// UpdateRFI updates an existing RFI
 func (dao *RFIDao) UpdateRFI(ctx context.Context, rfiID, userID, orgID int64, req *models.UpdateRFIRequest) (*models.RFIResponse, error) {
 	// First check if RFI exists and belongs to org
 	rfi, err := dao.GetRFI(ctx, rfiID)
 	if err != nil {
-		if err.Error() == "RFI not found" {
-			return nil, fmt.Errorf("RFI not found")
-		}
-		return nil, fmt.Errorf("failed to get RFI: %w", err)
+		return nil, err
 	}
-
-	// Validate RFI belongs to org
-	var projectOrgID int64
-	err = dao.DB.QueryRowContext(ctx, `
-		SELECT org_id FROM project.projects
-		WHERE id = $1 AND is_deleted = FALSE
-	`, rfi.ProjectID).Scan(&projectOrgID)
-
-	if err != nil || projectOrgID != orgID {
+	if rfi.OrgID != orgID {
 		return nil, fmt.Errorf("RFI does not belong to your organization")
 	}
 
-	// Check if user can update (must be in draft or user is submitter)
-	if rfi.Status != models.RFIStatusDraft && rfi.SubmittedBy != userID {
-		return nil, fmt.Errorf("Cannot update RFI in current status")
-	}
-
-	// Call the legacy update method
-	err = dao.UpdateRFILegacy(ctx, rfiID, req, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Return the updated RFI
-	return dao.GetRFI(ctx, rfiID)
-}
-
-// UpdateRFILegacy updates an existing RFI (legacy method)
-func (dao *RFIDao) UpdateRFILegacy(ctx context.Context, rfiID int64, updates *models.UpdateRFIRequest, updatedBy int64) error {
 	var setClauses []string
 	var args []interface{}
 	argIndex := 1
 
-	// Build update query dynamically based on provided fields
-	if updates.Subject != "" {
+	// Build dynamic update query
+	if req.Subject != "" {
 		setClauses = append(setClauses, fmt.Sprintf("subject = $%d", argIndex))
-		args = append(args, updates.Subject)
+		args = append(args, req.Subject)
 		argIndex++
 	}
-	
-	if updates.Question != "" {
-		setClauses = append(setClauses, fmt.Sprintf("question = $%d", argIndex))
-		args = append(args, updates.Question)
-		argIndex++
-	}
-	
-	if updates.Description != "" {
+
+	if req.Description != "" {
 		setClauses = append(setClauses, fmt.Sprintf("description = $%d", argIndex))
-		args = append(args, updates.Description)
+		args = append(args, req.Description)
 		argIndex++
 	}
-	
-	if updates.Category != "" {
+
+	if req.Category != "" {
 		setClauses = append(setClauses, fmt.Sprintf("category = $%d", argIndex))
-		args = append(args, updates.Category)
+		args = append(args, req.Category)
 		argIndex++
 	}
-	
-	if updates.Discipline != "" {
-		setClauses = append(setClauses, fmt.Sprintf("discipline = $%d", argIndex))
-		args = append(args, updates.Discipline)
-		argIndex++
-	}
-	
-	if updates.Priority != "" {
+
+	if req.Priority != "" {
 		setClauses = append(setClauses, fmt.Sprintf("priority = $%d", argIndex))
-		args = append(args, updates.Priority)
+		args = append(args, req.Priority)
 		argIndex++
 	}
-	
-	if updates.AssignedTo != nil {
+
+	if req.Status != "" {
+		setClauses = append(setClauses, fmt.Sprintf("status = $%d", argIndex))
+		args = append(args, req.Status)
+		argIndex++
+
+		// Generate RFI number when transitioning from DRAFT to OPEN
+		if req.Status == models.RFIStatusOpen && (rfi.RFINumber == nil || *rfi.RFINumber == "") {
+			generatedNumber, err := dao.GenerateRFINumber(ctx, rfi.ProjectID)
+			if err != nil {
+				dao.Logger.WithError(err).Error("Failed to generate RFI number during status change")
+				return nil, fmt.Errorf("failed to generate RFI number: %w", err)
+			}
+			setClauses = append(setClauses, fmt.Sprintf("rfi_number = $%d", argIndex))
+			args = append(args, generatedNumber)
+			argIndex++
+			dao.Logger.WithField("rfi_number", generatedNumber).Info("Generated RFI number when changing status from DRAFT to OPEN")
+		}
+
+		// Set closed_date when status changes to CLOSE
+		if req.Status == models.RFIStatusClose {
+			setClauses = append(setClauses, fmt.Sprintf("closed_date = $%d", argIndex))
+			args = append(args, time.Now())
+			argIndex++
+		}
+	}
+
+	if req.Discipline != nil {
+		setClauses = append(setClauses, fmt.Sprintf("discipline = $%d", argIndex))
+		args = append(args, req.Discipline)
+		argIndex++
+	}
+
+	if req.ProjectPhase != nil {
+		setClauses = append(setClauses, fmt.Sprintf("project_phase = $%d", argIndex))
+		args = append(args, req.ProjectPhase)
+		argIndex++
+	}
+
+	if req.ReceivedFrom != nil {
+		setClauses = append(setClauses, fmt.Sprintf("received_from = $%d", argIndex))
+		args = append(args, *req.ReceivedFrom)
+		argIndex++
+	}
+
+	if req.AssignedTo != nil {
 		setClauses = append(setClauses, fmt.Sprintf("assigned_to = $%d", argIndex))
-		args = append(args, *updates.AssignedTo)
+		args = append(args, pq.Array(req.AssignedTo))
 		argIndex++
 	}
-	
-	if updates.DueDate != "" {
-		// Parse the date string and convert to time.Time
-		if parsedDate, err := time.Parse("2006-01-02", updates.DueDate); err == nil {
+
+	if req.BallInCourt != nil {
+		setClauses = append(setClauses, fmt.Sprintf("ball_in_court = $%d", argIndex))
+		args = append(args, *req.BallInCourt)
+		argIndex++
+	}
+
+	if req.DueDate != "" {
+		if parsedDate, err := time.Parse("2006-01-02", req.DueDate); err == nil {
 			setClauses = append(setClauses, fmt.Sprintf("due_date = $%d", argIndex))
 			args = append(args, parsedDate)
 			argIndex++
 		}
 	}
-	
-	// Always update updated_by and updated_at
-	setClauses = append(setClauses, fmt.Sprintf("updated_by = $%d", argIndex))
-	args = append(args, updatedBy)
+
+	if req.DistributionList != nil {
+		setClauses = append(setClauses, fmt.Sprintf("distribution_list = $%d", argIndex))
+		args = append(args, pq.Array(req.DistributionList))
+		argIndex++
+	}
+
+	if req.LocationDescription != nil {
+		setClauses = append(setClauses, fmt.Sprintf("location_description = $%d", argIndex))
+		args = append(args, req.LocationDescription)
+		argIndex++
+	}
+
+	if req.DrawingNumbers != nil {
+		setClauses = append(setClauses, fmt.Sprintf("drawing_numbers = $%d", argIndex))
+		args = append(args, pq.Array(req.DrawingNumbers))
+		argIndex++
+	}
+
+	if req.SpecificationSections != nil {
+		setClauses = append(setClauses, fmt.Sprintf("specification_sections = $%d", argIndex))
+		args = append(args, pq.Array(req.SpecificationSections))
+		argIndex++
+	}
+
+	if req.RelatedRFIs != nil {
+		setClauses = append(setClauses, fmt.Sprintf("related_rfis = $%d", argIndex))
+		args = append(args, pq.Array(req.RelatedRFIs))
+		argIndex++
+	}
+
+	setClauses = append(setClauses, fmt.Sprintf("cost_impact = $%d", argIndex))
+	args = append(args, req.CostImpact)
 	argIndex++
-	
+
+	setClauses = append(setClauses, fmt.Sprintf("schedule_impact = $%d", argIndex))
+	args = append(args, req.ScheduleImpact)
+	argIndex++
+
+	if req.CostImpactAmount != nil {
+		setClauses = append(setClauses, fmt.Sprintf("cost_impact_amount = $%d", argIndex))
+		args = append(args, *req.CostImpactAmount)
+		argIndex++
+	}
+
+	if req.ScheduleImpactDays != nil {
+		setClauses = append(setClauses, fmt.Sprintf("schedule_impact_days = $%d", argIndex))
+		args = append(args, *req.ScheduleImpactDays)
+		argIndex++
+	}
+
+	if len(setClauses) == 0 {
+		return dao.GetRFI(ctx, rfiID)
+	}
+
+	// Add updated_by and updated_at
+	setClauses = append(setClauses, fmt.Sprintf("updated_by = $%d", argIndex))
+	args = append(args, userID)
+	argIndex++
+
 	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argIndex))
 	args = append(args, time.Now())
 	argIndex++
-	
-	// Add WHERE clause
+
+	// Add WHERE clause parameters
 	args = append(args, rfiID)
-	
-	query := fmt.Sprintf(
-		"UPDATE project.rfis SET %s WHERE id = $%d AND is_deleted = FALSE",
-		strings.Join(setClauses, ", "),
-		argIndex,
-	)
-	
+
+	query := fmt.Sprintf(`
+		UPDATE project.rfis
+		SET %s
+		WHERE id = $%d AND is_deleted = FALSE
+	`, strings.Join(setClauses, ", "), argIndex)
+
 	result, err := dao.DB.ExecContext(ctx, query, args...)
 	if err != nil {
 		dao.Logger.WithError(err).Error("Failed to update RFI")
-		return fmt.Errorf("failed to update RFI: %w", err)
+		return nil, fmt.Errorf("failed to update RFI: %w", err)
 	}
-	
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("error checking rows affected: %w", err)
-	}
-	
-	if rowsAffected == 0 {
-		return fmt.Errorf("RFI not found or already deleted")
-	}
-	
-	dao.Logger.WithFields(logrus.Fields{
-		"rfi_id":     rfiID,
-		"updated_by": updatedBy,
-	}).Info("RFI updated successfully")
-	
-	return nil
-}
 
-// UpdateRFIStatus updates the status of an RFI
-func (dao *RFIDao) UpdateRFIStatus(ctx context.Context, rfiID int64, status string, updatedBy int64, comment string) error {
-	tx, err := dao.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("RFI not found or no changes made")
 	}
-	defer tx.Rollback()
-	
-	// Get current status
-	var currentStatus string
-	err = tx.QueryRowContext(ctx, 
-		"SELECT status FROM project.rfis WHERE id = $1 AND is_deleted = FALSE",
-		rfiID,
-	).Scan(&currentStatus)
-	
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("RFI not found")
-		}
-		return fmt.Errorf("failed to get current status: %w", err)
-	}
-	
-	// Update status
-	query := `
-		UPDATE project.rfis 
-		SET status = $1, updated_by = $2, updated_at = $3
-		WHERE id = $4 AND is_deleted = FALSE`
-	
-	_, err = tx.ExecContext(ctx, query, status, updatedBy, time.Now(), rfiID)
-	if err != nil {
-		return fmt.Errorf("failed to update status: %w", err)
-	}
-	
-	// Add status change comment
-	commentQuery := `
-		INSERT INTO project.rfi_comments (
-			rfi_id, comment, comment_type, previous_value, new_value,
-			created_by, updated_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)`
-	
-	commentText := comment
-	if commentText == "" {
-		commentText = fmt.Sprintf("Status changed from %s to %s", currentStatus, status)
-	}
-	
-	_, err = tx.ExecContext(ctx, commentQuery,
-		rfiID, commentText, models.RFICommentTypeStatusChange,
-		currentStatus, status, updatedBy, updatedBy,
-	)
-	
-	if err != nil {
-		return fmt.Errorf("failed to add status change comment: %w", err)
-	}
-	
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-	
-	dao.Logger.WithFields(logrus.Fields{
-		"rfi_id":        rfiID,
-		"old_status":    currentStatus,
-		"new_status":    status,
-		"updated_by":    updatedBy,
-	}).Info("RFI status updated successfully")
-	
-	return nil
+
+	return dao.GetRFI(ctx, rfiID)
 }
 
 // DeleteRFI soft deletes an RFI
 func (dao *RFIDao) DeleteRFI(ctx context.Context, rfiID int64, deletedBy int64) error {
 	query := `
-		UPDATE project.rfis 
+		UPDATE project.rfis
 		SET is_deleted = TRUE, updated_by = $1, updated_at = $2
 		WHERE id = $3 AND is_deleted = FALSE`
-	
+
 	result, err := dao.DB.ExecContext(ctx, query, deletedBy, time.Now(), rfiID)
 	if err != nil {
 		dao.Logger.WithError(err).Error("Failed to delete RFI")
 		return fmt.Errorf("failed to delete RFI: %w", err)
 	}
-	
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("error checking rows affected: %w", err)
-	}
-	
+
+	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("RFI not found or already deleted")
+		return fmt.Errorf("RFI not found")
 	}
-	
-	dao.Logger.WithFields(logrus.Fields{
-		"rfi_id":     rfiID,
-		"deleted_by": deletedBy,
-	}).Info("RFI deleted successfully")
-	
+
 	return nil
 }
 
-// SubmitRFI submits an RFI for review
-func (dao *RFIDao) SubmitRFI(ctx context.Context, rfiID int64, assignedTo *int64, submittedBy int64) error {
-	query := `
-		UPDATE project.rfis 
-		SET status = $1, submitted_date = $2, assigned_to = $3, updated_by = $4, updated_at = $5
-		WHERE id = $6 AND is_deleted = FALSE AND status = $7`
-	
-	result, err := dao.DB.ExecContext(ctx, query,
-		models.RFIStatusSubmitted, time.Now(), assignedTo, submittedBy, time.Now(),
-		rfiID, models.RFIStatusDraft,
-	)
-	
-	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to submit RFI")
-		return fmt.Errorf("failed to submit RFI: %w", err)
-	}
-	
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("error checking rows affected: %w", err)
-	}
-	
-	if rowsAffected == 0 {
-		return fmt.Errorf("RFI not found, already deleted, or not in draft status")
-	}
-	
-	return nil
-}
+// AddRFIComment adds a comment to an RFI with optional attachments
+func (dao *RFIDao) AddRFIComment(ctx context.Context, rfiID, userID int64, req *models.CreateRFICommentRequest) (*models.RFIComment, error) {
+	var comment models.RFIComment
 
-// RespondToRFI adds a response to an RFI
-func (dao *RFIDao) RespondToRFI(ctx context.Context, rfiID int64, response string, responseBy int64) error {
-	query := `
-		UPDATE project.rfis 
-		SET response = $1, response_by = $2, response_date = $3, 
-		    status = $4, updated_by = $5, updated_at = $6
-		WHERE id = $7 AND is_deleted = FALSE`
-	
-	_, err := dao.DB.ExecContext(ctx, query,
-		response, responseBy, time.Now(),
-		models.RFIStatusAnswered, responseBy, time.Now(),
-		rfiID,
-	)
-	
-	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to respond to RFI")
-		return fmt.Errorf("failed to respond to RFI: %w", err)
-	}
-	
-	return nil
-}
-
-// ApproveRFI approves an RFI
-func (dao *RFIDao) ApproveRFI(ctx context.Context, rfiID int64, approvedBy int64, comments string) error {
-	query := `
-		UPDATE project.rfis 
-		SET approval_status = 'approved', approved_by = $1, approval_date = $2,
-		    approval_comments = $3, updated_by = $4, updated_at = $5
-		WHERE id = $6 AND is_deleted = FALSE AND requires_approval = TRUE`
-	
-	_, err := dao.DB.ExecContext(ctx, query,
-		approvedBy, time.Now(), comments, approvedBy, time.Now(), rfiID,
-	)
-	
-	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to approve RFI")
-		return fmt.Errorf("failed to approve RFI: %w", err)
-	}
-	
-	return nil
-}
-
-// RejectRFI rejects an RFI
-func (dao *RFIDao) RejectRFI(ctx context.Context, rfiID int64, rejectedBy int64, reason string) error {
-	query := `
-		UPDATE project.rfis 
-		SET approval_status = 'rejected', approved_by = $1, approval_date = $2,
-		    approval_comments = $3, updated_by = $4, updated_at = $5
-		WHERE id = $6 AND is_deleted = FALSE AND requires_approval = TRUE`
-	
-	_, err := dao.DB.ExecContext(ctx, query,
-		rejectedBy, time.Now(), reason, rejectedBy, time.Now(), rfiID,
-	)
-	
-	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to reject RFI")
-		return fmt.Errorf("failed to reject RFI: %w", err)
-	}
-	
-	return nil
-}
-
-// AddRFIComment adds a comment to an RFI
-func (dao *RFIDao) AddRFIComment(ctx context.Context, comment *models.RFIComment) error {
 	query := `
 		INSERT INTO project.rfi_comments (
-			rfi_id, comment, comment_type, previous_value, new_value,
-			created_by, updated_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, created_at, updated_at`
-	
+			rfi_id, comment, comment_type, created_by, updated_by
+		) VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, rfi_id, comment, comment_type, created_at, created_by, updated_at, updated_by, is_deleted`
+
 	err := dao.DB.QueryRowContext(ctx, query,
-		comment.RFIID, comment.Comment, comment.CommentType,
-		comment.PreviousValue, comment.NewValue,
-		comment.CreatedBy, comment.UpdatedBy,
-	).Scan(&comment.ID, &comment.CreatedAt, &comment.UpdatedAt)
-	
+		rfiID, req.Comment, models.RFICommentTypeComment,
+		userID, userID,
+	).Scan(
+		&comment.ID, &comment.RFIID, &comment.Comment, &comment.CommentType,
+		&comment.CreatedAt, &comment.CreatedBy, &comment.UpdatedAt,
+		&comment.UpdatedBy, &comment.IsDeleted,
+	)
+
 	if err != nil {
 		dao.Logger.WithError(err).Error("Failed to add RFI comment")
-		return fmt.Errorf("failed to add RFI comment: %w", err)
+		return nil, fmt.Errorf("failed to add RFI comment: %w", err)
 	}
-	
-	return nil
+
+	// Link attachments if provided
+	if len(req.AttachmentIDs) > 0 {
+		_, err = dao.DB.ExecContext(ctx, `
+			UPDATE project.rfi_comment_attachments
+			SET comment_id = $1, updated_by = $2, updated_at = NOW()
+			WHERE id = ANY($3)
+			AND comment_id IS NULL
+			AND created_by = $2
+			AND is_deleted = FALSE
+		`, comment.ID, userID, pq.Array(req.AttachmentIDs))
+
+		if err != nil {
+			dao.Logger.WithError(err).Warn("Failed to link attachments to RFI comment")
+		}
+	}
+
+	// Fetch attachments for this comment
+	comment.Attachments = dao.getRFICommentAttachments(ctx, comment.ID)
+
+	// Fetch creator name
+	var createdByName string
+	err = dao.DB.QueryRowContext(ctx, `
+		SELECT CONCAT(first_name, ' ', last_name)
+		FROM iam.users
+		WHERE id = $1
+	`, userID).Scan(&createdByName)
+
+	if err == nil {
+		comment.CreatedByName = createdByName
+	}
+
+	return &comment, nil
 }
 
-// GetRFIComments retrieves all comments for an RFI
+// GetRFIComments retrieves all comments for an RFI with attachments
 func (dao *RFIDao) GetRFIComments(ctx context.Context, rfiID int64) ([]models.RFIComment, error) {
 	query := `
-		SELECT 
+		SELECT
 			c.id, c.rfi_id, c.comment, c.comment_type,
 			c.previous_value, c.new_value,
-			c.created_at, c.created_by, c.updated_at, c.updated_by,
-			CONCAT(u.first_name, ' ', u.last_name) as created_by_name
+			c.created_at, c.created_by,
+			CONCAT(u.first_name, ' ', u.last_name) as created_by_name,
+			c.updated_at, c.updated_by
 		FROM project.rfi_comments c
 		LEFT JOIN iam.users u ON c.created_by = u.id
 		WHERE c.rfi_id = $1 AND c.is_deleted = FALSE
 		ORDER BY c.created_at DESC`
-	
+
 	rows, err := dao.DB.QueryContext(ctx, query, rfiID)
 	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to get RFI comments")
 		return nil, fmt.Errorf("failed to get RFI comments: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var comments []models.RFIComment
 	for rows.Next() {
 		var comment models.RFIComment
-		var previousValue, newValue, createdByName sql.NullString
-		
 		err := rows.Scan(
 			&comment.ID, &comment.RFIID, &comment.Comment, &comment.CommentType,
-			&previousValue, &newValue,
-			&comment.CreatedAt, &comment.CreatedBy, &comment.UpdatedAt, &comment.UpdatedBy,
-			&createdByName,
+			&comment.PreviousValue, &comment.NewValue,
+			&comment.CreatedAt, &comment.CreatedBy, &comment.CreatedByName,
+			&comment.UpdatedAt, &comment.UpdatedBy,
 		)
-		
 		if err != nil {
-			dao.Logger.WithError(err).Error("Failed to scan RFI comment")
-			return nil, fmt.Errorf("failed to scan RFI comment: %w", err)
+			return nil, fmt.Errorf("failed to scan comment: %w", err)
 		}
-		
-		if previousValue.Valid {
-			comment.PreviousValue = previousValue.String
-		}
-		if newValue.Valid {
-			comment.NewValue = newValue.String
-		}
-		if createdByName.Valid {
-			comment.CreatedByName = createdByName.String
-		}
-		
+
+		// Fetch attachments for this comment
+		comment.Attachments = dao.getRFICommentAttachments(ctx, comment.ID)
+
 		comments = append(comments, comment)
 	}
-	
+
 	return comments, nil
 }
 
@@ -1033,25 +850,25 @@ func (dao *RFIDao) GetRFIComments(ctx context.Context, rfiID int64) ([]models.RF
 func (dao *RFIDao) AddRFIAttachment(ctx context.Context, attachment *models.RFIAttachment) (*models.RFIAttachment, error) {
 	query := `
 		INSERT INTO project.rfi_attachments (
-			rfi_id, file_name, file_path, file_type, file_size, description,
-			s3_bucket, s3_key, s3_url, attachment_type,
-			uploaded_by, created_by, updated_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		RETURNING id, upload_date, created_at, updated_at`
+			rfi_id, file_name, file_path, file_type, file_size,
+			description, s3_bucket, s3_key, s3_url, attachment_type,
+			uploaded_by, upload_date, created_by, updated_by
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		RETURNING id, created_at, updated_at`
 
 	err := dao.DB.QueryRowContext(ctx, query,
-		attachment.RFIID, attachment.FileName, attachment.FilePath, attachment.FileType,
-		attachment.FileSize, attachment.Description,
+		attachment.RFIID, attachment.FileName, attachment.FilePath,
+		attachment.FileType, attachment.FileSize, attachment.Description,
 		attachment.S3Bucket, attachment.S3Key, attachment.S3URL,
 		attachment.AttachmentType, attachment.UploadedBy,
-		attachment.CreatedBy, attachment.UpdatedBy,
-	).Scan(&attachment.ID, &attachment.UploadDate, &attachment.CreatedAt, &attachment.UpdatedAt)
-	
+		attachment.UploadDate, attachment.CreatedBy, attachment.CreatedBy,
+	).Scan(&attachment.ID, &attachment.CreatedAt, &attachment.UpdatedAt)
+
 	if err != nil {
 		dao.Logger.WithError(err).Error("Failed to add RFI attachment")
 		return nil, fmt.Errorf("failed to add RFI attachment: %w", err)
 	}
-	
+
 	return attachment, nil
 }
 
@@ -1059,8 +876,8 @@ func (dao *RFIDao) AddRFIAttachment(ctx context.Context, attachment *models.RFIA
 func (dao *RFIDao) GetRFIAttachments(ctx context.Context, rfiID int64) ([]models.RFIAttachment, error) {
 	query := `
 		SELECT
-			id, rfi_id, file_name, file_path, file_type, file_size, description,
-			s3_bucket, s3_key, s3_url, attachment_type,
+			id, rfi_id, file_name, file_path, file_type, file_size,
+			description, s3_bucket, s3_key, s3_url, attachment_type,
 			uploaded_by, upload_date, created_at, created_by,
 			updated_at, updated_by
 		FROM project.rfi_attachments
@@ -1069,103 +886,106 @@ func (dao *RFIDao) GetRFIAttachments(ctx context.Context, rfiID int64) ([]models
 
 	rows, err := dao.DB.QueryContext(ctx, query, rfiID)
 	if err != nil {
-		dao.Logger.WithError(err).Error("Failed to get RFI attachments")
 		return nil, fmt.Errorf("failed to get RFI attachments: %w", err)
 	}
 	defer rows.Close()
 
 	var attachments []models.RFIAttachment
 	for rows.Next() {
-		var attachment models.RFIAttachment
-		var filePath, fileType, description, s3Bucket, s3Key, s3URL sql.NullString
-		var fileSize sql.NullInt64
-
+		var att models.RFIAttachment
 		err := rows.Scan(
-			&attachment.ID, &attachment.RFIID, &attachment.FileName, &filePath,
-			&fileType, &fileSize, &description,
-			&s3Bucket, &s3Key, &s3URL,
-			&attachment.AttachmentType, &attachment.UploadedBy,
-			&attachment.UploadDate, &attachment.CreatedAt, &attachment.CreatedBy,
-			&attachment.UpdatedAt, &attachment.UpdatedBy,
+			&att.ID, &att.RFIID, &att.FileName, &att.FilePath,
+			&att.FileType, &att.FileSize, &att.Description,
+			&att.S3Bucket, &att.S3Key, &att.S3URL, &att.AttachmentType,
+			&att.UploadedBy, &att.UploadDate, &att.CreatedAt,
+			&att.CreatedBy, &att.UpdatedAt, &att.UpdatedBy,
 		)
-		
 		if err != nil {
-			dao.Logger.WithError(err).Error("Failed to scan RFI attachment")
-			return nil, fmt.Errorf("failed to scan RFI attachment: %w", err)
+			return nil, fmt.Errorf("failed to scan attachment: %w", err)
 		}
-
-		if filePath.Valid {
-			attachment.FilePath = filePath.String
-		}
-		if fileType.Valid {
-			attachment.FileType = fileType.String
-		}
-		if fileSize.Valid {
-			attachment.FileSize = fileSize.Int64
-		}
-		if description.Valid {
-			attachment.Description = description.String
-		}
-		if s3Bucket.Valid {
-			attachment.S3Bucket = s3Bucket.String
-		}
-		if s3Key.Valid {
-			attachment.S3Key = s3Key.String
-		}
-		if s3URL.Valid {
-			attachment.S3URL = s3URL.String
-		}
-		
-		attachments = append(attachments, attachment)
+		attachments = append(attachments, att)
 	}
-	
+
 	return attachments, nil
 }
 
 // GenerateRFINumber generates a unique RFI number for a project
 func (dao *RFIDao) GenerateRFINumber(ctx context.Context, projectID int64) (string, error) {
-	// Get project details
-	var projectNumber string
-	var projectYear int
-	
-	query := `
-		SELECT 
-			COALESCE(project_number, CAST(id AS VARCHAR)),
-			EXTRACT(YEAR FROM COALESCE(start_date, created_at))
-		FROM project.projects 
-		WHERE id = $1`
-	
-	err := dao.DB.QueryRowContext(ctx, query, projectID).Scan(&projectNumber, &projectYear)
-	if err != nil {
-		return "", fmt.Errorf("failed to get project details: %w", err)
-	}
-	
-	// Get the next sequence number for this organization
-	var maxNumber int
-	sequenceQuery := `
-		SELECT COALESCE(MAX(
-			CAST(
-				SUBSTRING(rfi_number FROM '[0-9]+$') AS INTEGER
-			)
-		), 0)
-		FROM project.rfis r
-		JOIN project.projects p ON r.project_id = p.id
-		WHERE p.org_id = (SELECT org_id FROM project.projects WHERE id = $1)
-		AND rfi_number LIKE $2`
+	var maxNumber sql.NullInt64
+	year := time.Now().Year()
 
-	prefix := fmt.Sprintf("RFI-%d-", projectYear)
-	err = dao.DB.QueryRowContext(ctx, sequenceQuery, projectID, prefix+"%").Scan(&maxNumber)
+	// Get the maximum RFI number for this project and year
+	// Extract the numeric part from rfi_number format: RFI-YYYY-NNNN
+	err := dao.DB.QueryRowContext(ctx, `
+		SELECT MAX(CAST(SUBSTRING(rfi_number FROM 'RFI-[0-9]+-([0-9]+)') AS INTEGER))
+		FROM project.rfis
+		WHERE project_id = $1
+		AND EXTRACT(YEAR FROM created_at) = $2
+		AND rfi_number IS NOT NULL
+		AND is_deleted = false
+	`, projectID, year).Scan(&maxNumber)
+
 	if err != nil {
-		return "", fmt.Errorf("failed to get max RFI number: %w", err)
+		return "", fmt.Errorf("failed to generate RFI number: %w", err)
 	}
-	
-	// Generate new RFI number
-	newNumber := fmt.Sprintf("%s%04d", prefix, maxNumber+1)
-	
-	dao.Logger.WithFields(logrus.Fields{
-		"project_id": projectID,
-		"rfi_number": newNumber,
-	}).Debug("Generated RFI number")
-	
-	return newNumber, nil
+
+	// Next number is max + 1, or 1 if no RFIs exist
+	nextNumber := int64(1)
+	if maxNumber.Valid {
+		nextNumber = maxNumber.Int64 + 1
+	}
+
+	return fmt.Sprintf("RFI-%d-%04d", year, nextNumber), nil
+}
+
+// getRFICommentAttachments retrieves all attachments for a specific comment
+func (dao *RFIDao) getRFICommentAttachments(ctx context.Context, commentID int64) []models.RFICommentAttachment {
+	query := `
+		SELECT id, comment_id, file_name, file_path, file_size, file_type,
+		       attachment_type, uploaded_by, created_at, created_by,
+		       updated_at, updated_by, is_deleted
+		FROM project.rfi_comment_attachments
+		WHERE comment_id = $1 AND is_deleted = FALSE
+		ORDER BY created_at ASC`
+
+	rows, err := dao.DB.QueryContext(ctx, query, commentID)
+	if err != nil {
+		dao.Logger.WithError(err).Warn("Failed to get RFI comment attachments")
+		return []models.RFICommentAttachment{}
+	}
+	defer rows.Close()
+
+	var attachments []models.RFICommentAttachment
+	for rows.Next() {
+		var att models.RFICommentAttachment
+		var fileSize sql.NullInt64
+		var fileType sql.NullString
+
+		err := rows.Scan(
+			&att.ID, &att.CommentID, &att.FileName, &att.FilePath,
+			&fileSize, &fileType, &att.AttachmentType,
+			&att.UploadedBy, &att.CreatedAt, &att.CreatedBy,
+			&att.UpdatedAt, &att.UpdatedBy, &att.IsDeleted,
+		)
+
+		if err != nil {
+			dao.Logger.WithError(err).Warn("Failed to scan RFI comment attachment")
+			continue
+		}
+
+		if fileSize.Valid {
+			att.FileSize = &fileSize.Int64
+		}
+		if fileType.Valid {
+			att.FileType = &fileType.String
+		}
+
+		attachments = append(attachments, att)
+	}
+
+	if attachments == nil {
+		return []models.RFICommentAttachment{}
+	}
+
+	return attachments
 }

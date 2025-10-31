@@ -29,7 +29,7 @@ IT AUTOMATICALLY HANDLES ALL DATABASE QUERIES IN NATURAL LANGUAGE.
 
 ## Testing & Deployment
 - Build: `npm run build`
-- Deploy: `npx cdk deploy "Infrastructure/Dev/Infrastructure-AppStage" --profile dev`
+- Deploy: **NEVER deploy without explicit user permission** - Ask user before deploying
 - Lint/Type checking: Always run before committing if commands are known
 
 ## API Testing
@@ -52,3 +52,4 @@ See `/testing/README.md` for full testing process and templates.
 4. Keep responses concise and to the point
 5. Use MCP for ALL database operations
 6. NEVER create test files in root - use `/testing/` directories
+7. **NEVER deploy without explicit user permission** - Always ask first

@@ -1213,6 +1213,19 @@ curl -X POST "$API_BASE/projects/29/issues" \
 
 **Base path:** `/rfis`
 
+RFIs (Request for Information) support a workflow where RFIs can be created as DRAFT (no RFI number) and then moved to OPEN status (generates RFI number automatically).
+
+#### RFI Number Generation Rules
+
+- **DRAFT status**: No RFI number assigned (`rfi_number: null`)
+- **OPEN status**: RFI number auto-generated when:
+  - Creating a new RFI with `"status": "OPEN"`
+  - Updating a DRAFT RFI to `"status": "OPEN"`
+- **Format**: `RFI-YYYY-NNNN` (e.g., `RFI-2025-0001`)
+- **Uniqueness**: Per project, per year
+
+#### Available Endpoints
+
 | Endpoint | Method | Description | Access Level |
 |----------|--------|-------------|--------------|
 | `POST /projects/{projectId}/rfis` | POST | Create RFI | Project members |
@@ -1220,6 +1233,269 @@ curl -X POST "$API_BASE/projects/29/issues" \
 | `GET /rfis/{rfiId}` | GET | Get RFI details | Project members |
 | `PUT /rfis/{rfiId}` | PUT | Update RFI | Project members |
 | `DELETE /rfis/{rfiId}` | DELETE | Soft delete RFI | Super Admin, RFI creator |
+| `POST /rfis/{rfiId}/comments` | POST | Add comment to RFI | Project members |
+| `GET /rfis/{rfiId}/comments` | GET | List RFI comments | Project members |
+
+#### 1. Create RFI (DRAFT Status)
+
+Creates an RFI without an RFI number (for internal review before official submission).
+
+**Request:**
+```bash
+POST /projects/{projectId}/rfis
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "location_id": 22,
+  "subject": "Question about structural beam specifications",
+  "description": "Need clarification on beam size requirements for second floor",
+  "category": "DESIGN",
+  "priority": "HIGH",
+  "status": "DRAFT",
+  "assigned_to": [15, 18],
+  "ball_in_court": 15,
+  "received_from": 12,
+  "due_date": "2025-11-15",
+  "distribution_list": ["john@example.com", "jane@example.com"],
+  "cost_impact": false,
+  "schedule_impact": true,
+  "schedule_impact_days": 5,
+  "location_description": "Second floor, grid lines B-C",
+  "drawing_numbers": ["S-201", "S-202"],
+  "specification_sections": ["05-12-00", "05-13-00"],
+  "related_rfis": ["RFI-2025-0001"]
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": 108,
+  "project_id": 47,
+  "org_id": 10,
+  "location_id": 22,
+  "location_name": "Main Building",
+  "rfi_number": null,
+  "subject": "Question about structural beam specifications",
+  "description": "Need clarification on beam size requirements for second floor",
+  "category": "DESIGN",
+  "discipline": null,
+  "project_phase": null,
+  "priority": "HIGH",
+  "status": "DRAFT",
+  "received_from": {
+    "id": 12,
+    "name": "John Smith"
+  },
+  "assigned_to": [
+    {"id": 15, "name": "Jane Doe"},
+    {"id": 18, "name": "Bob Wilson"}
+  ],
+  "ball_in_court": {
+    "id": 15,
+    "name": "Jane Doe"
+  },
+  "distribution_list": ["john@example.com", "jane@example.com"],
+  "due_date": "2025-11-15T00:00:00Z",
+  "closed_date": null,
+  "cost_impact": false,
+  "schedule_impact": true,
+  "cost_impact_amount": null,
+  "schedule_impact_days": 5,
+  "location_description": "Second floor, grid lines B-C",
+  "drawing_numbers": ["S-201", "S-202"],
+  "specification_sections": ["05-12-00", "05-13-00"],
+  "related_rfis": ["RFI-2025-0001"],
+  "created_at": "2025-10-30T10:30:00Z",
+  "created_by": {
+    "id": 19,
+    "name": "Current User"
+  },
+  "updated_at": "2025-10-30T10:30:00Z",
+  "updated_by": {
+    "id": 19,
+    "name": "Current User"
+  },
+  "attachments": [],
+  "comments": []
+}
+```
+
+#### 2. Create RFI (OPEN Status)
+
+Creates an RFI with an auto-generated RFI number for immediate official submission.
+
+**Request:**
+```bash
+POST /projects/{projectId}/rfis
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "location_id": 22,
+  "subject": "Question about electrical panel location",
+  "description": "Clarify exact placement of main electrical panel",
+  "category": "DESIGN",
+  "priority": "HIGH",
+  "status": "OPEN"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": 109,
+  "project_id": 47,
+  "org_id": 10,
+  "location_id": 22,
+  "location_name": "Main Building",
+  "rfi_number": "RFI-2025-0045",
+  "subject": "Question about electrical panel location",
+  "description": "Clarify exact placement of main electrical panel",
+  "category": "DESIGN",
+  "priority": "HIGH",
+  "status": "OPEN",
+  "assigned_to": [],
+  "created_at": "2025-10-30T10:35:00Z",
+  "created_by": {
+    "id": 19,
+    "name": "Current User"
+  },
+  "attachments": [],
+  "comments": []
+}
+```
+
+#### 3. Update DRAFT to OPEN (Generates RFI Number)
+
+When updating a DRAFT RFI to OPEN status, the system automatically generates an RFI number.
+
+**Request:**
+```bash
+PUT /rfis/{rfiId}
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "status": "OPEN"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 108,
+  "rfi_number": "RFI-2025-0046",
+  "status": "OPEN",
+  "subject": "Question about structural beam specifications",
+  "updated_at": "2025-10-30T11:00:00Z"
+}
+```
+
+#### 4. Get RFI Details
+
+**Request:**
+```bash
+GET /rfis/{rfiId}
+Authorization: Bearer {token}
+```
+
+**Response (200 OK):**
+Returns complete RFI with all fields, attachments, and comments.
+
+#### 5. List Project RFIs
+
+**Request:**
+```bash
+GET /projects/{projectId}/rfis?status=OPEN&priority=HIGH&category=DESIGN&assigned_to=15
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `status` - Filter by status (DRAFT, OPEN, CLOSE)
+- `priority` - Filter by priority (LOW, MEDIUM, HIGH, CRITICAL)
+- `category` - Filter by category
+- `assigned_to` - Filter by assigned user ID
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": 109,
+    "project_id": 47,
+    "rfi_number": "RFI-2025-0045",
+    "subject": "Question about electrical panel location",
+    "status": "OPEN",
+    "priority": "HIGH",
+    "category": "DESIGN"
+  }
+]
+```
+
+#### 6. Add Comment to RFI
+
+**Request:**
+```bash
+POST /rfis/{rfiId}/comments
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "comment": "Reviewed with structural engineer. Beam size confirmed.",
+  "attachment_ids": [45, 46]
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": 78,
+  "rfi_id": 108,
+  "comment": "Reviewed with structural engineer. Beam size confirmed.",
+  "comment_type": "comment",
+  "created_at": "2025-10-30T11:15:00Z",
+  "created_by": 19,
+  "created_by_name": "Current User",
+  "attachments": [
+    {
+      "id": 45,
+      "comment_id": 78,
+      "file_name": "beam_specs.pdf",
+      "file_path": "rfis/108/comments/beam_specs.pdf"
+    }
+  ]
+}
+```
+
+#### Field Enumerations
+
+**Status Values:**
+- `DRAFT` - Draft RFI (no number assigned)
+- `OPEN` - Open/active RFI (has RFI number)
+- `CLOSE` - Closed RFI
+
+**Priority Values:**
+- `LOW`
+- `MEDIUM`
+- `HIGH`
+- `CRITICAL`
+
+**Category Values:**
+- `DESIGN` - Design clarification
+- `SPECIFICATION` - Specification question
+- `SUBMITTAL` - Submittal related
+- `CONSTRUCTION` - Construction method
+- `SCHEDULE` - Schedule related
+- `COST` - Cost related
+- `SAFETY` - Safety concern
+- `QUALITY` - Quality issue
+- `OTHER` - Other
+
+**Comment Types:**
+- `comment` - Regular comment
+- `status_change` - Status change notification
+- `assignment` - Assignment change notification
 
 ### Submittal Management
 
